@@ -57,7 +57,7 @@ migrations/     SQL schema — dijalankan manual di Supabase SQL Editor, urutan 
 
 ## Deploy ke Render (free tier) untuk demo vendor
 
-Render dipakai karena free tier-nya cukup untuk demo: satu **Static Site** (frontend) + satu **Web Service** (backend). Supabase sudah di-setup dari langkah lokal di atas — kalau belum, lakukan itu dulu.
+Render dipakai karena free tier-nya cukup untuk demo: dua **Static Site** (frontend, landing) + satu **Web Service** (backend). Supabase sudah di-setup dari langkah lokal di atas — kalau belum, lakukan itu dulu.
 
 ### 1. Push ke GitHub
 
@@ -78,7 +78,7 @@ Di Render Dashboard → **New → Web Service** → hubungkan repo ini.
 Environment variables (Render → service ini → **Environment**):
 - `SUPABASE_URL` = URL project Supabase
 - `SUPABASE_PUBLISHABLE_KEY` = publishable key project Supabase
-- `FRONTEND_ORIGIN` = *(isi belakangan, setelah frontend dideploy dan tahu URL-nya — lihat langkah 4)*
+- `FRONTEND_ORIGIN` = *(isi belakangan, setelah frontend dideploy dan tahu URL-nya — lihat langkah 5)*
 
 > Catatan: `--include=dev` sengaja dipakai supaya `typescript` (devDependency, dibutuhkan buat build) tetap ke-install meski platform men-set `NODE_ENV=production`.
 
@@ -101,25 +101,42 @@ Environment variables (harus diisi **sebelum** build pertama, karena Vite meng-i
 
 Setelah deploy sukses, catat URL frontend-nya, contoh: `https://sewalog-frontend.onrender.com`.
 
-### 4. Sambungkan CORS backend → frontend
+### 4. Deploy landing page (Static Site)
 
-Balik ke service **backend** di Render → Environment → set `FRONTEND_ORIGIN` ke URL frontend dari langkah 3 (contoh: `https://sewalog-frontend.onrender.com`) → simpan (otomatis redeploy).
+Di Render Dashboard → **New → Static Site** → hubungkan repo yang sama lagi (jadi service ketiga, terpisah dari frontend).
 
-### 5. Update Supabase Auth URL Configuration
+| Setting | Nilai |
+|---|---|
+| Root Directory | *(kosongkan, biarkan root repo)* |
+| Build Command | `npm install --include=dev && npm run build --workspace landing` |
+| Publish Directory | `landing/dist` |
+
+Tidak ada environment variable yang perlu diisi — `landing/` murni statis, tanpa Supabase atau panggilan ke backend sama sekali (CTA-nya cuma link `wa.me`).
+
+> Ingat ganti nomor placeholder di `landing/src/lib/whatsapp.ts` (`62xxxxxxxxxx`) ke nomor WhatsApp asli sebelum atau langsung setelah deploy pertama — kalau lupa, tombol CTA akan mengarah ke nomor yang salah.
+
+Setelah deploy sukses, catat URL landing-nya, contoh: `https://sewalog.onrender.com`. Ini yang cocok dibagikan sebagai link utama ke calon vendor (lewat DM/kunjungan) — URL frontend dari langkah 3 di atas tetap tersedia terpisah untuk vendor yang sudah punya akun.
+
+### 5. Sambungkan CORS backend → frontend
+
+Balik ke service **backend** di Render → Environment → set `FRONTEND_ORIGIN` ke URL frontend dari langkah 3 (contoh: `https://sewalog-frontend.onrender.com`) → simpan (otomatis redeploy). Landing page tidak perlu ditambahkan ke sini karena tidak pernah memanggil backend.
+
+### 6. Update Supabase Auth URL Configuration
 
 Supabase Dashboard → Authentication → URL Configuration:
 - **Site URL** → isi URL frontend production
 - **Redirect URLs** → tambahkan URL frontend production juga
 
-### 6. Cek "Confirm email" sebelum demo ke vendor
+### 7. Cek "Confirm email" sebelum demo ke vendor
 
 Authentication → Providers → Email → toggle **Confirm email**. Untuk pilot awal ke vendor beneran, pertimbangkan **dinyalakan** (vendor daftar pakai email asli, biar tervalidasi) — beda dengan waktu development kemarin yang sengaja dimatikan untuk mempercepat testing. Ini keputusanmu, sesuaikan dengan seberapa terkontrol grup vendornya.
 
 ### Catatan soal free tier
 
-- **Static Site** (frontend) tidak pernah "tidur" — selalu langsung responsif.
+- **Static Site** (frontend, landing) tidak pernah "tidur" — selalu langsung responsif.
 - **Web Service** (backend) di free tier akan *spin down* setelah idle beberapa saat, dan butuh waktu untuk "bangun" lagi (cold start) di request pertama setelahnya — bisa terasa lambat beberapa puluh detik. Kalau mau demo langsung ke vendor, buka dulu halaman Kalender/Catat Transaksi/Jaminan & Denda beberapa menit sebelum sesi demo dimulai supaya backend sudah "bangun".
 - Login, onboarding, dan Kelola Alat memanggil Supabase langsung dari frontend (tidak lewat backend), jadi tidak kena cold start ini — hanya tiga fitur inti MVP yang lewat backend.
+- Landing page tidak kena cold start apa pun — full statis, tidak ada dependensi runtime.
 
 ## Keterbatasan yang disengaja (sesuai fase sekarang)
 
