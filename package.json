@@ -3,12 +3,15 @@
   "private": true,
   "workspaces": [
     "frontend",
-    "backend"
+    "backend",
+    "landing"
   ],
   "scripts": {
     "dev:frontend": "npm run dev --workspace frontend",
     "dev:backend": "npm run dev --workspace backend",
+    "dev:landing": "npm run dev --workspace landing",
     "build:frontend": "npm run build --workspace frontend",
-    "build:backend": "npm run build --workspace backend"
+    "build:backend": "npm run build --workspace backend",
+    "build:landing": "npm run build --workspace landing"
   }
 }

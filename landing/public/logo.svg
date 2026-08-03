@@ -1,0 +1,8 @@
+<svg width="200" height="200" viewBox="90 40 200 200" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Logo Sewalog</title>
+<rect x="90" y="40" width="200" height="200" rx="40" fill="#FBF2DA" stroke="#EAD9A8" stroke-width="2"/>
+<circle cx="236" cy="100" r="16" fill="#F0913F"/>
+<path d="M190 85 L135 205 L245 205 Z" fill="#3E8361"/>
+<path d="M190 122 L174 205 L206 205 Z" fill="#FBF2DA"/>
+<path d="M135 205 Q190 218 245 205 L245 210 Q190 224 135 210 Z" fill="#8FBB6F"/>
+</svg>

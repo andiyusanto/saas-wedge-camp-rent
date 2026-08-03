@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { waLink, WHATSAPP_DISPLAY } from '../lib/whatsapp';
+import { waLink, WHATSAPP_DISPLAY } from './lib/whatsapp';
 import './LandingPage.css';
 
 const MSG_UMUM = 'Halo, saya pemilik rental alat kamping. Mau tanya-tanya soal Sewalog.';

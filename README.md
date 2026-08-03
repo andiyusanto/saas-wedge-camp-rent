@@ -17,6 +17,7 @@ SaaS tools operasional untuk UKM rental alat kamping/outdoor di Malang Raya (Kot
 ## Tech stack
 
 - **Frontend**: React + Vite + TypeScript (`frontend/`)
+- **Landing page**: React + Vite + TypeScript (`landing/`) — situs marketing statis, terpisah dari app produk, tanpa dependensi Supabase/backend
 - **Backend**: Express + TypeScript (`backend/`)
 - **Database & Auth**: Supabase (Postgres + Row Level Security)
 
@@ -25,7 +26,8 @@ Backend tidak pernah memakai Supabase Secret Key — semua request diteruskan de
 ## Struktur project
 
 ```
-frontend/       React SPA (Vite)
+frontend/       React SPA (Vite) — app produk (login, kalender, transaksi, jaminan & denda)
+landing/        React SPA (Vite) — landing page marketing, CTA WhatsApp, deploy terpisah dari frontend/
 backend/        REST API kecil untuk agregasi ketersediaan, transaksi, tracking denda
 migrations/     SQL schema — dijalankan manual di Supabase SQL Editor, urutan penting
 ```
@@ -46,10 +48,11 @@ migrations/     SQL schema — dijalankan manual di Supabase SQL Editor, urutan 
    - `backend/.env` → `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`
    - `frontend/.env` → `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`
 
-4. **Jalankan dev server** (dua terminal terpisah):
+4. **Jalankan dev server** (terminal terpisah per bagian yang mau dijalankan):
    ```bash
    npm run dev:backend    # http://localhost:3001
    npm run dev:frontend   # http://localhost:5173
+   npm run dev:landing    # http://localhost:5173 (workspace terpisah, jalankan salah satu saja per port default Vite)
    ```
 
 ## Deploy ke Render (free tier) untuk demo vendor
