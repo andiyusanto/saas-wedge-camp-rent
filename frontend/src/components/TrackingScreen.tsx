@@ -116,8 +116,20 @@ function ReturnForm({
 }
 
 export function TrackingScreen({ session }: { session: Session }) {
-  const { bookings, toleranceHours, loading, error, refresh } = useTrackings(session);
+  const { bookings, toleranceHours, loading, error, refresh, cancelBooking } = useTrackings(session);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+
+  async function handleCancel(booking: TrackingBooking) {
+    const confirmed = window.confirm(
+      `Batalkan transaksi ${booking.customer?.name ?? 'ini'}? Jaminan yang masih ditahan akan otomatis dilepas.`,
+    );
+    if (!confirmed) return;
+
+    setCancelError(null);
+    const { error: cancelErr } = await cancelBooking(booking.id);
+    if (cancelErr) setCancelError(cancelErr);
+  }
 
   if (loading) return <p className="app-shell__subtitle">Memuat...</p>;
   if (error) return <p className="error-text">Gagal memuat: {error}</p>;
@@ -129,6 +141,7 @@ export function TrackingScreen({ session }: { session: Session }) {
     <section>
       <h2>Jaminan &amp; denda</h2>
       <p className="app-shell__subtitle">Toleransi telat: {toleranceHours} jam</p>
+      {cancelError && <p className="error-text">{cancelError}</p>}
 
       <ul className="tracking-list">
         {bookings.map((b) => (
@@ -170,9 +183,18 @@ export function TrackingScreen({ session }: { session: Session }) {
                 }}
               />
             ) : (
-              <button type="button" className="tracking-item__action" onClick={() => setOpenId(b.id)}>
-                Proses pengembalian
-              </button>
+              <div className="tracking-item__actions">
+                <button type="button" className="tracking-item__action" onClick={() => setOpenId(b.id)}>
+                  Proses pengembalian
+                </button>
+                <button
+                  type="button"
+                  className="tracking-item__action tracking-item__action--cancel"
+                  onClick={() => handleCancel(b)}
+                >
+                  Batalkan
+                </button>
+              </div>
             )}
           </li>
         ))}

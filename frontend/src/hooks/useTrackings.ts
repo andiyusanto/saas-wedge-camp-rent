@@ -55,5 +55,24 @@ export function useTrackings(session: Session | null) {
     refresh();
   }, [refresh]);
 
-  return { bookings, toleranceHours, loading, error, refresh };
+  async function cancelBooking(bookingId: string) {
+    if (!session) return { error: 'Belum login' };
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/bookings/${bookingId}/cancel`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const body = await res.json().catch(() => ({}));
+
+      if (!res.ok) return { error: body.error ?? `HTTP ${res.status}` };
+
+      await refresh();
+      return { error: null };
+    } catch (err) {
+      return { error: (err as Error).message };
+    }
+  }
+
+  return { bookings, toleranceHours, loading, error, refresh, cancelBooking };
 }

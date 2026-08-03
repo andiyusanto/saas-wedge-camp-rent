@@ -49,8 +49,13 @@
   color: var(--color-text-muted);
 }
 
-.tracking-item__action {
+.tracking-item__actions {
+  display: flex;
+  gap: 8px;
   margin-top: 10px;
+}
+
+.tracking-item__action {
   font: inherit;
   font-size: 13px;
   font-weight: 600;
@@ -60,6 +65,11 @@
   background: none;
   color: var(--color-primary);
   cursor: pointer;
+}
+
+.tracking-item__action--cancel {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
 }
 
 .return-form {

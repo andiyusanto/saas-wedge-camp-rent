@@ -7,15 +7,16 @@ export type Item = {
   category: string | null;
   total_units: number;
   price_per_day: number;
+  deactivated_at: string | null;
 };
 
 export function useItems(businessId: string | undefined) {
-  const [items, setItems] = useState<Item[]>([]);
+  const [allItems, setAllItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     if (!supabase || !businessId) {
-      setItems([]);
+      setAllItems([]);
       setLoading(false);
       return;
     }
@@ -23,10 +24,10 @@ export function useItems(businessId: string | undefined) {
     setLoading(true);
     const { data } = await supabase
       .from('items')
-      .select('id, name, category, total_units, price_per_day')
+      .select('id, name, category, total_units, price_per_day, deactivated_at')
       .order('name');
 
-    setItems(data ?? []);
+    setAllItems(data ?? []);
     setLoading(false);
   }, [businessId]);
 
@@ -53,5 +54,34 @@ export function useItems(businessId: string | undefined) {
     return { error: error?.message ?? null };
   }
 
-  return { items, loading, refresh, addItem };
+  async function updateItem(
+    id: string,
+    input: { name: string; total_units: number; price_per_day: number },
+  ) {
+    if (!supabase) return { error: 'Belum ada usaha' };
+
+    const { error } = await supabase.from('items').update(input).eq('id', id);
+
+    if (!error) await refresh();
+
+    return { error: error?.message ?? null };
+  }
+
+  async function setItemActive(id: string, active: boolean) {
+    if (!supabase) return { error: 'Belum ada usaha' };
+
+    const { error } = await supabase
+      .from('items')
+      .update({ deactivated_at: active ? null : new Date().toISOString() })
+      .eq('id', id);
+
+    if (!error) await refresh();
+
+    return { error: error?.message ?? null };
+  }
+
+  const items = allItems.filter((i) => !i.deactivated_at);
+  const inactiveItems = allItems.filter((i) => i.deactivated_at);
+
+  return { items, inactiveItems, loading, refresh, addItem, updateItem, setItemActive };
 }

@@ -166,4 +166,53 @@ router.post('/bookings/:id/return', async (req, res) => {
   res.json({ ok: true, status: isLate ? 'telat' : 'selesai', hours_late: hLate });
 });
 
+router.post('/bookings/:id/cancel', async (req, res) => {
+  if (!req.headers.authorization) {
+    res.status(401).json({ error: 'Belum login' });
+    return;
+  }
+
+  const { id } = req.params;
+  const supabase = createRequestClient(req);
+
+  const { data: booking, error: bookingError } = await supabase
+    .from('bookings')
+    .select('id, status')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (bookingError || !booking) {
+    res.status(404).json({ error: 'Transaksi tidak ditemukan' });
+    return;
+  }
+
+  if (booking.status !== 'aktif') {
+    res.status(400).json({ error: 'Transaksi sudah diproses sebelumnya' });
+    return;
+  }
+
+  const { error: updateError } = await supabase
+    .from('bookings')
+    .update({ status: 'dibatalkan', cancelled_at: new Date().toISOString() })
+    .eq('id', id);
+
+  if (updateError) {
+    res.status(400).json({ error: updateError.message });
+    return;
+  }
+
+  const { error: depositError } = await supabase
+    .from('deposits')
+    .update({ status: 'dikembalikan', returned_at: new Date().toISOString() })
+    .eq('booking_id', id)
+    .eq('status', 'ditahan');
+
+  if (depositError) {
+    res.status(400).json({ error: depositError.message });
+    return;
+  }
+
+  res.json({ ok: true });
+});
+
 export default router;
