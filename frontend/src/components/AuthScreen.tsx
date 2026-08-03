@@ -1,9 +1,30 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import './AuthScreen.css';
 
 export function AuthScreen() {
+  if (!isSupabaseConfigured) {
+    return (
+      <main className="auth-shell">
+        <div className="auth-card">
+          <div className="auth-brand">
+            <img src="/logo.svg" alt="" width="36" height="36" />
+            <h1>Sewalog</h1>
+          </div>
+          <p className="auth-error">
+            Aplikasi belum terhubung ke server (konfigurasi Supabase belum diisi). Hubungi admin/developer —
+            login &amp; daftar tidak bisa dipakai sampai ini diperbaiki.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  return <AuthForm />;
+}
+
+function AuthForm() {
   const [mode, setMode] = useState<'masuk' | 'daftar'>('masuk');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
