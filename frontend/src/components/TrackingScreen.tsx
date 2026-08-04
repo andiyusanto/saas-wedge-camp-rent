@@ -1,204 +1,444 @@
 import { useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import {
+  ShieldAlert,
+  AlertTriangle,
+  Clock,
+  DollarSign,
+  Send,
+  Phone,
+  ShieldCheck,
+  PlusCircle,
+  RotateCcw,
+  AlertOctagon,
+  PackageCheck,
+} from 'lucide-react';
 import { useTrackings } from '../hooks/useTrackings';
 import type { TrackingBooking } from '../hooks/useTrackings';
-import './TrackingScreen.css';
+import { ReturnModal } from './ReturnModal';
+import { AddFineModal } from './AddFineModal';
+import { formatDateIndo, formatIDR, depositLabel, fineLabel, generateWhatsAppReceipt, getWhatsAppShareUrl } from '../utils/formatters';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
+type StatusFilter = 'all' | 'overdue' | 'active' | 'pending_pickup';
 
-function formatRupiah(n: number) {
-  return `Rp${Math.round(n).toLocaleString('id-ID')}`;
-}
+export function TrackingScreen({ session, businessName }: { session: Session; businessName: string }) {
+  const { bookings, toleranceHours, loading, error, refresh, cancelBooking, pickupBooking } = useTrackings(session);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [returnTarget, setReturnTarget] = useState<TrackingBooking | null>(null);
+  const [fineTarget, setFineTarget] = useState<TrackingBooking | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-function ReturnForm({
-  session,
-  booking,
-  onDone,
-}: {
-  session: Session;
-  booking: TrackingBooking;
-  onDone: () => void;
-}) {
-  const [lateFee, setLateFee] = useState(String(Math.round(booking.suggested_late_fee)));
-  const [damageAmount, setDamageAmount] = useState('');
-  const [damageDesc, setDamageDesc] = useState('');
-  const [lossAmount, setLossAmount] = useState('');
-  const [lossDesc, setLossDesc] = useState('');
-  const [returnDeposit, setReturnDeposit] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  if (loading) return <p className="text-sm text-[#8A8368]">Memuat...</p>;
+  if (error) return <p className="text-sm text-[#A8412E]">Gagal memuat: {error}</p>;
 
-  const hasDeposit = booking.deposits.some((d) => d.status === 'ditahan');
+  const filtered = bookings.filter((b) => {
+    const matchesStatus =
+      statusFilter === 'all' ||
+      (statusFilter === 'overdue' && b.is_overdue) ||
+      (statusFilter === 'active' && !b.is_pending_pickup) ||
+      (statusFilter === 'pending_pickup' && b.is_pending_pickup);
 
-  async function submit() {
-    setSubmitting(true);
-    setError(null);
+    const q = searchQuery.toLowerCase();
+    const matchesSearch =
+      (b.customer?.name ?? '').toLowerCase().includes(q) ||
+      (b.booking_number ?? '').toLowerCase().includes(q) ||
+      (b.customer?.phone ?? '').includes(searchQuery);
 
-    const extraPenalties = [];
-    if (Number(damageAmount) > 0) {
-      extraPenalties.push({ type: 'kerusakan', amount: Number(damageAmount), description: damageDesc || null });
-    }
-    if (Number(lossAmount) > 0) {
-      extraPenalties.push({ type: 'kehilangan', amount: Number(lossAmount), description: lossDesc || null });
-    }
+    return matchesStatus && matchesSearch;
+  });
 
-    const res = await fetch(`${API_BASE_URL}/api/bookings/${booking.id}/return`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
-        late_fee_amount: Number(lateFee) || 0,
-        extra_penalties: extraPenalties,
-        return_deposits: hasDeposit && returnDeposit,
-      }),
+  const totalOverdue = bookings.filter((b) => b.is_overdue).length;
+  const totalRetained = bookings.filter((b) => b.deposits.some((d) => d.status === 'ditahan')).length;
+  const totalActive = bookings.filter((b) => !b.is_pending_pickup).length;
+  const totalUnpaidFines = bookings.reduce((sum, b) => sum + b.penalties.reduce((s, p) => s + p.amount, 0), 0);
+
+  async function runAction(fn: () => Promise<{ error: string | null }>) {
+    setActionError(null);
+    const { error: err } = await fn();
+    if (err) setActionError(err);
+  }
+
+  function handleShareWA(b: TrackingBooking) {
+    if (!b.customer?.phone) return;
+    const activeDeposit = b.deposits.find((d) => d.status === 'ditahan') ?? b.deposits[0];
+    const text = generateWhatsAppReceipt({
+      bookingNumber: b.booking_number ?? '-',
+      customerName: b.customer.name,
+      customerPhone: b.customer.phone,
+      startDate: b.start_date,
+      endDate: b.end_date,
+      items: b.items.map((i) => ({ name: i.name, quantity: i.quantity, price_per_day: 0 })),
+      totalPrice: b.total_price,
+      dpPaid: b.dp_paid,
+      depositType: activeDeposit?.type ?? null,
+      depositNote: activeDeposit?.note ?? null,
+      depositStatus: (activeDeposit?.status as 'ditahan' | 'dikembalikan' | null) ?? null,
+      status: b.is_pending_pickup ? 'dipesan' : 'aktif',
+      fines: b.penalties,
+      businessName,
     });
-
-    const body = await res.json().catch(() => ({}));
-    setSubmitting(false);
-
-    if (!res.ok) {
-      setError(body.error ?? `Gagal (HTTP ${res.status})`);
-      return;
-    }
-
-    onDone();
+    window.open(getWhatsAppShareUrl(b.customer.phone, text), '_blank');
   }
 
   return (
-    <div className="return-form">
-      <label>
-        Denda keterlambatan (Rp)
-        <input type="number" min={0} value={lateFee} onChange={(e) => setLateFee(e.target.value)} />
-      </label>
-
-      <div className="return-form__row">
-        <label>
-          Denda kerusakan (Rp)
-          <input type="number" min={0} value={damageAmount} onChange={(e) => setDamageAmount(e.target.value)} />
-        </label>
-        <label>
-          Keterangan kerusakan
-          <input value={damageDesc} onChange={(e) => setDamageDesc(e.target.value)} />
-        </label>
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <StatCard label="Sewa Terlambat" value={totalOverdue} color="danger" icon={AlertOctagon} sub="Perlu tindakan denda" />
+        <StatCard label="Jaminan Ditahan" value={totalRetained} color="warning" icon={ShieldAlert} sub="KTP / SIM / STNK / Uang" />
+        <StatCard label="Sedang Disewa" value={totalActive} color="primary" icon={Clock} sub="Peralatan di lapangan" />
+        <StatCard label="Tunggakan Denda" value={formatIDR(totalUnpaidFines)} color="neutral" icon={DollarSign} sub="Total tercatat" isText />
       </div>
 
-      <div className="return-form__row">
-        <label>
-          Denda kehilangan (Rp)
-          <input type="number" min={0} value={lossAmount} onChange={(e) => setLossAmount(e.target.value)} />
-        </label>
-        <label>
-          Keterangan kehilangan
-          <input value={lossDesc} onChange={(e) => setLossDesc(e.target.value)} />
-        </label>
-      </div>
-
-      {hasDeposit && (
-        <label className="return-form__checkbox">
+      <div className="bg-[#FBFAF4] p-4 rounded-2xl border border-[#DBD5C1] shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none w-full sm:w-auto">
+            <FilterButton label={`Semua (${bookings.length})`} active={statusFilter === 'all'} onClick={() => setStatusFilter('all')} />
+            <FilterButton
+              label={`Terlambat (${bookings.filter((b) => b.is_overdue).length})`}
+              active={statusFilter === 'overdue'}
+              onClick={() => setStatusFilter('overdue')}
+              tone="danger"
+            />
+            <FilterButton
+              label={`Sedang Disewa (${bookings.filter((b) => !b.is_pending_pickup).length})`}
+              active={statusFilter === 'active'}
+              onClick={() => setStatusFilter('active')}
+              tone="primary"
+            />
+            <FilterButton
+              label={`Siap Diambil (${bookings.filter((b) => b.is_pending_pickup).length})`}
+              active={statusFilter === 'pending_pickup'}
+              onClick={() => setStatusFilter('pending_pickup')}
+              tone="warning"
+            />
+          </div>
           <input
-            type="checkbox"
-            checked={returnDeposit}
-            onChange={(e) => setReturnDeposit(e.target.checked)}
+            type="text"
+            placeholder="Cari nama / kode booking..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full sm:w-64 px-3 py-1.5 text-xs rounded-xl bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
           />
-          Kembalikan jaminan
-        </label>
+        </div>
+        <p className="text-[11px] text-[#8A8368]">Toleransi telat vendor: {toleranceHours} jam.</p>
+      </div>
+
+      {actionError && (
+        <p className="text-xs font-semibold text-[#A8412E] bg-[#FAF0EE] border border-[#A8412E]/30 rounded-lg p-2.5">
+          {actionError}
+        </p>
       )}
 
-      {error && <p className="error-text">{error}</p>}
+      <div className="space-y-4">
+        {filtered.length === 0 ? (
+          <div className="bg-[#FBFAF4] rounded-2xl p-8 border border-[#DBD5C1] text-center text-[#8A8368] text-sm">
+            Tidak ada transaksi pada filter ini.
+          </div>
+        ) : (
+          filtered.map((b) => (
+            <BookingCard
+              key={b.id}
+              booking={b}
+              onShareWA={() => handleShareWA(b)}
+              onPickup={() => runAction(() => pickupBooking(b.id))}
+              onAddFine={() => setFineTarget(b)}
+              onReturn={() => setReturnTarget(b)}
+              onCancel={() =>
+                window.confirm(`Batalkan transaksi ${b.customer?.name ?? 'ini'}? Jaminan yang ditahan akan otomatis dilepas.`) &&
+                runAction(() => cancelBooking(b.id))
+              }
+            />
+          ))
+        )}
+      </div>
 
-      <button type="button" onClick={submit} disabled={submitting}>
-        Konfirmasi pengembalian
-      </button>
+      <ReturnModal
+        isOpen={returnTarget !== null}
+        onClose={() => setReturnTarget(null)}
+        booking={returnTarget}
+        businessName={businessName}
+        session={session}
+        onDone={() => {
+          setReturnTarget(null);
+          refresh();
+        }}
+      />
+
+      <AddFineModal
+        isOpen={fineTarget !== null}
+        onClose={() => setFineTarget(null)}
+        booking={fineTarget}
+        session={session}
+        onSaved={() => {
+          setFineTarget(null);
+          refresh();
+        }}
+      />
     </div>
   );
 }
 
-export function TrackingScreen({ session }: { session: Session }) {
-  const { bookings, toleranceHours, loading, error, refresh, cancelBooking } = useTrackings(session);
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [cancelError, setCancelError] = useState<string | null>(null);
+function StatCard({
+  label,
+  value,
+  color,
+  icon: Icon,
+  sub,
+  isText,
+}: {
+  label: string;
+  value: number | string;
+  color: 'danger' | 'warning' | 'primary' | 'neutral';
+  icon: typeof Clock;
+  sub: string;
+  isText?: boolean;
+}) {
+  const palette = {
+    danger: { border: 'border-[#A8412E]/30', bg: 'bg-[#FAF0EE]', text: 'text-[#A8412E]' },
+    warning: { border: 'border-[#B5652E]/30', bg: 'bg-[#F9EFE7]', text: 'text-[#B5652E]' },
+    primary: { border: 'border-[#2B4739]/30', bg: 'bg-[#E8EFEA]', text: 'text-[#2B4739]' },
+    neutral: { border: 'border-[#DBD5C1]', bg: 'bg-[#F1EEE2]', text: 'text-[#26302B]' },
+  }[color];
 
-  async function handleCancel(booking: TrackingBooking) {
-    const confirmed = window.confirm(
-      `Batalkan transaksi ${booking.customer?.name ?? 'ini'}? Jaminan yang masih ditahan akan otomatis dilepas.`,
+  return (
+    <div className={`bg-[#FBFAF4] p-4 rounded-2xl border ${palette.border} shadow-xs relative overflow-hidden`}>
+      <div className={`absolute right-3 top-3 w-8 h-8 rounded-xl ${palette.bg} flex items-center justify-center ${palette.text}`}>
+        <Icon className="w-5 h-5" />
+      </div>
+      <p className="text-xs text-[#8A8368] font-semibold">{label}</p>
+      <p className={`${isText ? 'text-sm sm:text-base' : 'text-xl sm:text-2xl'} font-extrabold ${palette.text} mt-1`}>{value}</p>
+      <p className={`text-[10px] ${palette.text} mt-1 font-medium`}>{sub}</p>
+    </div>
+  );
+}
+
+function FilterButton({
+  label,
+  active,
+  onClick,
+  tone,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  tone?: 'danger' | 'primary' | 'warning';
+}) {
+  const activeBg =
+    tone === 'danger' ? 'bg-[#A8412E] text-white' : tone === 'primary' ? 'bg-[#2B4739] text-white' : tone === 'warning' ? 'bg-[#B5652E] text-white' : 'bg-[#2B4739] text-[#FBFAF4]';
+  const inactiveBg =
+    tone === 'danger'
+      ? 'bg-[#FAF0EE] text-[#A8412E] hover:bg-[#FAF0EE]/80'
+      : tone === 'primary'
+        ? 'bg-[#E8EFEA] text-[#2B4739] hover:bg-[#E8EFEA]/80'
+        : tone === 'warning'
+          ? 'bg-[#F9EFE7] text-[#B5652E] hover:bg-[#F9EFE7]/80'
+          : 'bg-[#F1EEE2] text-[#26302B] hover:bg-[#E6E1D2]';
+
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap shrink-0 ${active ? activeBg + ' shadow-xs' : inactiveBg}`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function BookingCard({
+  booking: b,
+  onShareWA,
+  onPickup,
+  onAddFine,
+  onReturn,
+  onCancel,
+}: {
+  booking: TrackingBooking;
+  onShareWA: () => void;
+  onPickup: () => void;
+  onAddFine: () => void;
+  onReturn: () => void;
+  onCancel: () => void;
+}) {
+  const lateFines = b.penalties.filter((p) => p.type === 'keterlambatan');
+  const otherFines = b.penalties.filter((p) => p.type !== 'keterlambatan');
+  const totalFines = b.penalties.reduce((sum, p) => sum + p.amount, 0);
+  const activeDeposit = b.deposits.find((d) => d.status === 'ditahan');
+  const remaining = Math.max(0, b.total_price - b.dp_paid);
+
+  let statusBadge = (
+    <span className="px-2.5 py-1 rounded-md bg-[#E8EFEA] text-[#2B4739] text-xs font-bold border border-[#2B4739]/30">Sedang Disewa</span>
+  );
+  if (b.is_overdue) {
+    statusBadge = (
+      <span className="px-2.5 py-1 rounded-md bg-[#A8412E] text-white text-xs font-extrabold border border-[#A8412E] flex items-center gap-1 w-fit">
+        <AlertOctagon className="w-3.5 h-3.5" /> TERLAMBAT {b.hours_late} JAM
+      </span>
     );
-    if (!confirmed) return;
-
-    setCancelError(null);
-    const { error: cancelErr } = await cancelBooking(booking.id);
-    if (cancelErr) setCancelError(cancelErr);
-  }
-
-  if (loading) return <p className="app-shell__subtitle">Memuat...</p>;
-  if (error) return <p className="error-text">Gagal memuat: {error}</p>;
-  if (bookings.length === 0) {
-    return <p className="app-shell__subtitle">Tidak ada transaksi aktif.</p>;
+  } else if (b.is_pending_pickup) {
+    statusBadge = (
+      <span className="px-2.5 py-1 rounded-md bg-[#F9EFE7] text-[#B5652E] text-xs font-bold border border-[#B5652E]/30">Siap Diambil</span>
+    );
   }
 
   return (
-    <section>
-      <h2>Jaminan &amp; denda</h2>
-      <p className="app-shell__subtitle">Toleransi telat: {toleranceHours} jam</p>
-      {cancelError && <p className="error-text">{cancelError}</p>}
+    <div className={`bg-[#FBFAF4] rounded-2xl p-5 border shadow-xs transition ${b.is_overdue ? 'border-[#A8412E] bg-[#FAF0EE]/30' : 'border-[#DBD5C1]'}`}>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-[#E6E1D2] gap-2">
+        <div className="flex items-center space-x-3">
+          <span className="font-mono text-xs font-bold text-[#2B4739] bg-[#E8EFEA] px-2.5 py-1 rounded-md border border-[#2B4739]/20">
+            {b.booking_number ?? '-'}
+          </span>
+        </div>
+        {statusBadge}
+      </div>
 
-      <ul className="tracking-list">
-        {bookings.map((b) => (
-          <li key={b.id} className="tracking-item">
-            <div className="tracking-item__header">
-              <div>
-                <div className="tracking-item__customer">{b.customer?.name}</div>
-                <div className="app-shell__subtitle">
-                  {b.items.map((i) => `${i.name} x${i.quantity}`).join(', ')}
-                </div>
-                <div className="app-shell__subtitle">Kembali: {b.end_date}</div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 pt-4 text-xs">
+        <div className="space-y-2">
+          <h4 className="font-bold text-sm text-[#26302B]">{b.customer?.name}</h4>
+          {b.customer?.phone && (
+            <p className="text-[#8A8368] flex items-center gap-1">
+              <Phone className="w-3.5 h-3.5 text-[#2B4739]" />
+              <span>{b.customer.phone}</span>
+            </p>
+          )}
+          {b.customer?.address && <p className="text-[#8A8368] italic">{b.customer.address}</p>}
+
+          <div className="p-2.5 rounded-xl bg-[#F1EEE2] border border-[#DBD5C1] space-y-1 mt-2">
+            <div className="flex justify-between text-[11px]">
+              <span className="text-[#8A8368]">Tanggal Ambil:</span>
+              <strong className="text-[#26302B]">{formatDateIndo(b.start_date)}</strong>
+            </div>
+            <div className="flex justify-between text-[11px]">
+              <span className="text-[#8A8368]">Janji Kembali:</span>
+              <strong className={`font-bold ${b.is_overdue ? 'text-[#A8412E]' : 'text-[#26302B]'}`}>{formatDateIndo(b.end_date)}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <h5 className="font-semibold text-[#26302B] uppercase text-[10px] tracking-wider">Item Disewa ({b.items.length}):</h5>
+          <ul className="space-y-1 bg-white p-2.5 rounded-xl border border-[#DBD5C1] max-h-28 overflow-y-auto">
+            {b.items.map((it, idx) => (
+              <li key={idx} className="flex justify-between text-[11px]">
+                <span className="text-[#26302B] font-medium">
+                  • {it.name} ({it.quantity}x)
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-[#8A8368]">Total Sewa:</span>
+            <span className="font-extrabold text-[#26302B] text-sm">{formatIDR(b.total_price)}</span>
+          </div>
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="text-[#8A8368]">Sisa Tagihan:</span>
+            <span className={`font-bold ${remaining > 0 ? 'text-[#A8412E]' : 'text-[#2B4739]'}`}>
+              {remaining > 0 ? formatIDR(remaining) : 'LUNAS'}
+            </span>
+          </div>
+        </div>
+
+        <div className="space-y-3 bg-[#F1EEE2] p-3 rounded-xl border border-[#DBD5C1]">
+          {activeDeposit && (
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-[#26302B] flex items-center gap-1">
+                  <ShieldCheck className="w-3.5 h-3.5 text-[#2B4739]" />
+                  Jaminan ({depositLabel(activeDeposit.type)})
+                </span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#B5652E] text-white">DITAHAN</span>
               </div>
-              <span
-                className={
-                  b.is_overdue ? 'tracking-badge tracking-badge--overdue' : 'tracking-badge tracking-badge--ok'
-                }
-              >
-                {b.is_overdue ? `Telat ${b.hours_late} jam` : 'Aktif'}
+              {activeDeposit.note && (
+                <p className="text-[11px] text-[#8A8368] mt-1 bg-white p-2 rounded-lg border border-[#DBD5C1]">{activeDeposit.note}</p>
+              )}
+            </div>
+          )}
+
+          <div className="pt-2 border-t border-[#DBD5C1] space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-[#A8412E] flex items-center gap-1">
+                <AlertTriangle className="w-3.5 h-3.5" />
+                Rincian Denda ({b.penalties.length})
               </span>
+              <span className="font-extrabold text-[#A8412E]">{formatIDR(totalFines)}</span>
             </div>
 
-            {b.penalties.length > 0 && (
-              <ul className="tracking-item__penalties">
-                {b.penalties.map((p) => (
-                  <li key={p.id}>
-                    {p.type}: {formatRupiah(p.amount)} {p.description ? `(${p.description})` : ''}
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {openId === b.id ? (
-              <ReturnForm
-                session={session}
-                booking={b}
-                onDone={() => {
-                  setOpenId(null);
-                  refresh();
-                }}
-              />
+            {b.penalties.length === 0 ? (
+              <p className="text-[10px] text-[#8A8368] italic">Tidak ada denda pada sewa ini.</p>
             ) : (
-              <div className="tracking-item__actions">
-                <button type="button" className="tracking-item__action" onClick={() => setOpenId(b.id)}>
-                  Proses pengembalian
-                </button>
-                <button
-                  type="button"
-                  className="tracking-item__action tracking-item__action--cancel"
-                  onClick={() => handleCancel(b)}
-                >
-                  Batalkan
-                </button>
+              <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                {lateFines.map((f) => (
+                  <div key={f.id} className="p-1.5 rounded-lg bg-[#FAF0EE] border border-[#A8412E]/30 text-[10px]">
+                    <div className="flex justify-between font-bold text-[#A8412E]">
+                      <span>[{fineLabel(f.type)}]</span>
+                      <span>{formatIDR(f.amount)}</span>
+                    </div>
+                    {f.description && <p className="text-[#26302B]">{f.description}</p>}
+                  </div>
+                ))}
+                {otherFines.map((f) => (
+                  <div key={f.id} className="p-1.5 rounded-lg bg-[#F9EFE7] border border-[#B5652E]/30 text-[10px]">
+                    <div className="flex justify-between font-bold text-[#B5652E]">
+                      <span>[{fineLabel(f.type)}]</span>
+                      <span>{formatIDR(f.amount)}</span>
+                    </div>
+                    {f.description && <p className="text-[#26302B]">{f.description}</p>}
+                  </div>
+                ))}
               </div>
             )}
-          </li>
-        ))}
-      </ul>
-    </section>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between pt-3 mt-3 border-t border-[#E6E1D2] gap-2">
+        <button
+          onClick={onShareWA}
+          className="px-3 py-1.5 rounded-lg bg-[#2B4739] hover:bg-[#1E3429] text-white text-xs font-semibold flex items-center gap-1.5 transition"
+        >
+          <Send className="w-3.5 h-3.5 text-[#B5652E]" />
+          <span>Kirim Struk WA</span>
+        </button>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {b.is_pending_pickup && (
+            <button
+              onClick={onPickup}
+              className="px-3 py-1.5 rounded-lg bg-[#B5652E] hover:bg-[#9E5524] text-white text-xs font-bold transition flex items-center gap-1"
+            >
+              <PackageCheck className="w-3.5 h-3.5" />
+              Tandai Barang Diambil
+            </button>
+          )}
+
+          {!b.is_pending_pickup && (
+            <button
+              onClick={onAddFine}
+              className="px-3 py-1.5 rounded-lg bg-[#FAF0EE] border border-[#A8412E]/40 text-[#A8412E] hover:bg-[#A8412E] hover:text-white text-xs font-bold transition flex items-center gap-1"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              Tambah Denda
+            </button>
+          )}
+
+          {!b.is_pending_pickup && (
+            <button
+              onClick={onReturn}
+              className="px-3 py-1.5 rounded-lg bg-[#2B4739] hover:bg-[#1E3429] text-white text-xs font-bold shadow-xs transition flex items-center gap-1"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-[#B5652E]" />
+              Proses Pengembalian
+            </button>
+          )}
+
+          <button
+            onClick={onCancel}
+            className="px-3 py-1.5 rounded-lg bg-white border border-[#DBD5C1] text-[#A8412E] hover:bg-[#FAF0EE] text-xs font-bold transition"
+          >
+            Batalkan
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

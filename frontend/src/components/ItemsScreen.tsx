@@ -1,211 +1,388 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
+import { Package, Plus, Edit2, Search, Trash2, X } from 'lucide-react';
 import { useItems } from '../hooks/useItems';
-import type { Item } from '../hooks/useItems';
-import './ItemsScreen.css';
+import type { Item, ItemInput } from '../hooks/useItems';
+import { formatIDR } from '../utils/formatters';
 
-function EditItemRow({
-  item,
+const CATEGORIES = [
+  'Tenda',
+  'Carrier & Bag',
+  'Sleeping Gear',
+  'Cooking Set',
+  'Penerangan',
+  'Matras & Layalas',
+  'Aksesoris Outdoor',
+  'Lainnya',
+];
+
+const EMPTY_FORM: ItemInput = {
+  code: '',
+  name: '',
+  category: 'Tenda',
+  total_units: 5,
+  price_per_day: 25000,
+  image_url: '',
+  description: '',
+  condition_note: '',
+};
+
+function ItemFormModal({
+  initial,
   onSave,
-  onCancel,
+  onClose,
 }: {
-  item: Item;
-  onSave: (input: { name: string; total_units: number; price_per_day: number }) => Promise<{ error: string | null }>;
-  onCancel: () => void;
+  initial: ItemInput;
+  onSave: (input: ItemInput) => Promise<{ error: string | null }>;
+  onClose: () => void;
 }) {
-  const [name, setName] = useState(item.name);
-  const [totalUnits, setTotalUnits] = useState(String(item.total_units));
-  const [pricePerDay, setPricePerDay] = useState(String(item.price_per_day));
+  const [form, setForm] = useState<ItemInput>(initial);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  function set<K extends keyof ItemInput>(key: K, value: ItemInput[K]) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!form.name.trim()) {
+      setError('Isi nama alat.');
+      return;
+    }
     setSubmitting(true);
     setError(null);
 
     const { error: saveError } = await onSave({
-      name,
-      total_units: Number(totalUnits),
-      price_per_day: Number(pricePerDay),
+      ...form,
+      code: form.code?.trim() || null,
+      image_url: form.image_url?.trim() || null,
+      description: form.description?.trim() || null,
+      condition_note: form.condition_note?.trim() || null,
     });
 
     setSubmitting(false);
-
     if (saveError) {
       setError(saveError);
       return;
     }
-
-    onCancel();
+    onClose();
   }
 
   return (
-    <li className="items-list__row items-list__row--editing">
-      <form onSubmit={handleSubmit} className="item-edit-form">
-        <input value={name} onChange={(e) => setName(e.target.value)} required />
-        <div className="item-edit-form__row">
-          <input
-            type="number"
-            min={1}
-            value={totalUnits}
-            onChange={(e) => setTotalUnits(e.target.value)}
-            required
-          />
-          <input
-            type="number"
-            min={0}
-            value={pricePerDay}
-            onChange={(e) => setPricePerDay(e.target.value)}
-            required
-          />
-        </div>
-        {error && <p className="error-text">{error}</p>}
-        <div className="item-edit-form__actions">
-          <button type="submit" disabled={submitting}>
-            Simpan
-          </button>
-          <button type="button" onClick={onCancel} className="item-edit-form__cancel">
-            Batal
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+      <div className="bg-[#FBFAF4] w-full max-w-lg rounded-2xl border border-[#DBD5C1] shadow-xl overflow-hidden my-auto flex flex-col">
+        <div className="bg-[#2B4739] px-5 py-4 text-white flex items-center justify-between">
+          <h3 className="font-bold text-base">{initial.name ? 'Edit Peralatan Katalog' : 'Tambah Peralatan Baru'}</h3>
+          <button onClick={onClose} className="text-white hover:opacity-80">
+            <X className="w-5 h-5" />
           </button>
         </div>
-      </form>
-    </li>
+
+        <form onSubmit={handleSubmit} className="p-5 space-y-3 text-xs sm:text-sm overflow-y-auto">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-[#26302B] mb-1">Kode Alat</label>
+              <input
+                type="text"
+                placeholder="TND-04"
+                value={form.code ?? ''}
+                onChange={(e) => set('code', e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B]"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-[#26302B] mb-1">Kategori</label>
+              <select
+                value={form.category ?? ''}
+                onChange={(e) => set('category', e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B]"
+              >
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-[#26302B] mb-1">Nama Alat *</label>
+            <input
+              type="text"
+              required
+              value={form.name}
+              onChange={(e) => set('name', e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B]"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-[#26302B] mb-1">Total Stok *</label>
+              <input
+                type="number"
+                required
+                min={1}
+                value={form.total_units}
+                onChange={(e) => set('total_units', Number(e.target.value))}
+                className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] font-bold"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-[#26302B] mb-1">Sewa /Hari (Rp) *</label>
+              <input
+                type="number"
+                required
+                min={0}
+                step={1000}
+                value={form.price_per_day}
+                onChange={(e) => set('price_per_day', Number(e.target.value))}
+                className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] font-bold"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-[#26302B] mb-1">URL Foto Alat</label>
+            <input
+              type="url"
+              placeholder="https://..."
+              value={form.image_url ?? ''}
+              onChange={(e) => set('image_url', e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B]"
+            />
+          </div>
+
+          <div>
+            <label className="block font-semibold text-[#26302B] mb-1">Deskripsi Spesifikasi Singkat</label>
+            <textarea
+              rows={2}
+              value={form.description ?? ''}
+              onChange={(e) => set('description', e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B]"
+            />
+          </div>
+
+          <div>
+            <label className="block font-semibold text-[#26302B] mb-1">Catatan Kondisi</label>
+            <input
+              type="text"
+              placeholder="Contoh: 6 unit kondisi bagus, 2 baru servis"
+              value={form.condition_note ?? ''}
+              onChange={(e) => set('condition_note', e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B]"
+            />
+          </div>
+
+          {error && <p className="text-[#A8412E] font-semibold">{error}</p>}
+
+          <div className="pt-3 border-t border-[#DBD5C1] flex items-center justify-end space-x-2">
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl border border-[#DBD5C1] text-[#26302B]">
+              Batal
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="px-5 py-2 rounded-xl bg-[#2B4739] text-white font-bold disabled:opacity-60"
+            >
+              Simpan Alat
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function ItemCard({ item, onEdit, onDeactivate, onReactivate }: {
+  item: Item;
+  onEdit: () => void;
+  onDeactivate?: () => void;
+  onReactivate?: () => void;
+}) {
+  return (
+    <div className="bg-[#FBFAF4] rounded-2xl p-4 border border-[#DBD5C1] shadow-xs flex flex-col justify-between space-y-3 hover:border-[#2B4739]/60 transition">
+      <div>
+        <div className="flex items-start space-x-3">
+          {item.image_url ? (
+            <img src={item.image_url} alt={item.name} className="w-16 h-16 rounded-xl object-cover border border-[#DBD5C1] shrink-0 bg-[#F1EEE2]" />
+          ) : (
+            <div className="w-16 h-16 rounded-xl border border-[#DBD5C1] shrink-0 bg-[#F1EEE2] flex items-center justify-center text-[#8A8368]">
+              <Package className="w-6 h-6" />
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
+              {item.code && (
+                <span className="px-2 py-0.5 rounded bg-[#2B4739]/10 text-[#2B4739] font-mono text-[11px] font-bold border border-[#2B4739]/20">
+                  {item.code}
+                </span>
+              )}
+              {item.category && <span className="text-[10px] text-[#8A8368] font-medium truncate">{item.category}</span>}
+            </div>
+            <h3 className="font-bold text-sm text-[#26302B] mt-1 line-clamp-1">{item.name}</h3>
+            {item.description && <p className="text-xs text-[#8A8368] line-clamp-2 mt-0.5">{item.description}</p>}
+          </div>
+        </div>
+
+        <div className="mt-3 p-2.5 rounded-xl bg-[#F1EEE2] border border-[#DBD5C1] grid grid-cols-2 gap-2 text-center text-xs">
+          <div>
+            <p className="text-[10px] text-[#8A8368]">Total Stok</p>
+            <p className="font-extrabold text-[#26302B] text-sm">
+              {item.total_units} <span className="text-[10px] font-normal">unit</span>
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] text-[#8A8368]">Sewa /Hari</p>
+            <p className="font-bold text-[#2B4739] text-xs">{formatIDR(item.price_per_day)}</p>
+          </div>
+        </div>
+        {item.condition_note && <p className="text-[11px] text-[#8A8368] mt-2 italic">{item.condition_note}</p>}
+      </div>
+
+      <div className="flex items-center justify-end space-x-2 pt-2 border-t border-[#E6E1D2]">
+        {onReactivate ? (
+          <button
+            onClick={onReactivate}
+            className="px-3 py-1.5 rounded-lg bg-[#E8EFEA] border border-[#2B4739]/30 text-[#2B4739] text-xs font-semibold transition"
+          >
+            Aktifkan kembali
+          </button>
+        ) : (
+          <>
+            <button
+              onClick={onEdit}
+              className="px-3 py-1.5 rounded-lg bg-white border border-[#DBD5C1] hover:bg-[#F1EEE2] text-[#26302B] text-xs font-semibold flex items-center gap-1 transition"
+            >
+              <Edit2 className="w-3.5 h-3.5 text-[#2B4739]" />
+              Edit
+            </button>
+            {onDeactivate && (
+              <button onClick={onDeactivate} className="p-1.5 rounded-lg text-[#A8412E] hover:bg-[#FAF0EE] transition" title="Nonaktifkan">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
 export function ItemsScreen({ businessId }: { businessId: string }) {
   const { items, inactiveItems, loading, addItem, updateItem, setItemActive } = useItems(businessId);
-  const [name, setName] = useState('');
-  const [totalUnits, setTotalUnits] = useState('');
-  const [pricePerDay, setPricePerDay] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('Semua');
+  const [modalItem, setModalItem] = useState<Item | 'new' | null>(null);
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    setError(null);
-
-    const { error: addError } = await addItem({
-      name,
-      total_units: Number(totalUnits),
-      price_per_day: Number(pricePerDay),
-    });
-
-    setSubmitting(false);
-
-    if (addError) {
-      setError(addError);
-      return;
-    }
-
-    setName('');
-    setTotalUnits('');
-    setPricePerDay('');
-  }
+  const filtered = items.filter((item) => {
+    const matchesCategory = selectedCategory === 'Semua' || item.category === selectedCategory;
+    const q = searchQuery.toLowerCase();
+    const matchesSearch = item.name.toLowerCase().includes(q) || (item.code ?? '').toLowerCase().includes(q);
+    return matchesCategory && matchesSearch;
+  });
 
   async function handleDeactivate(item: Item) {
     if (!window.confirm(`Nonaktifkan "${item.name}"? Alat ini tidak akan muncul lagi di Catat Transaksi.`)) return;
     await setItemActive(item.id, false);
   }
 
-  async function handleReactivate(item: Item) {
-    await setItemActive(item.id, true);
-  }
-
   return (
-    <section>
-      <h2>Kelola alat</h2>
+    <div className="space-y-6">
+      <div className="bg-[#FBFAF4] p-4 sm:p-5 rounded-2xl border border-[#DBD5C1] shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-[#26302B] flex items-center gap-2">
+              <Package className="w-5 h-5 text-[#2B4739]" />
+              <span>Katalog & Manajemen Stok Peralatan</span>
+            </h2>
+            <p className="text-xs text-[#8A8368]">Kelola daftar alat kamping, stok fisik toko, dan tarif sewa per hari.</p>
+          </div>
+          <button
+            onClick={() => setModalItem('new')}
+            className="px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs shadow-sm transition flex items-center gap-2 shrink-0 self-start sm:self-auto"
+          >
+            <Plus className="w-4 h-4 text-[#B5652E]" />
+            <span>Tambah Alat Baru</span>
+          </button>
+        </div>
 
-      <form onSubmit={handleSubmit} className="form">
-        <label>
-          Nama alat
-          <input value={name} onChange={(e) => setName(e.target.value)} required />
-        </label>
-        <label>
-          Jumlah unit
-          <input
-            type="number"
-            min={1}
-            value={totalUnits}
-            onChange={(e) => setTotalUnits(e.target.value)}
-            required
-          />
-        </label>
-        <label>
-          Harga sewa / hari (Rp)
-          <input
-            type="number"
-            min={0}
-            value={pricePerDay}
-            onChange={(e) => setPricePerDay(e.target.value)}
-            required
-          />
-        </label>
-
-        {error && <p className="error-text">{error}</p>}
-
-        <button type="submit" disabled={submitting}>
-          Tambah alat
-        </button>
-      </form>
+        <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t border-[#E6E1D2]">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#8A8368]" />
+            <input
+              type="text"
+              placeholder="Cari kode / nama alat..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 text-xs rounded-xl bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+            />
+          </div>
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+            {['Semua', ...CATEGORIES].map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition shrink-0 ${
+                  selectedCategory === cat
+                    ? 'bg-[#2B4739] text-[#FBFAF4] shadow-xs font-bold'
+                    : 'bg-[#F1EEE2] text-[#26302B] border border-[#DBD5C1] hover:bg-[#E6E1D2]'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
 
       {loading ? (
-        <p className="app-shell__subtitle">Memuat...</p>
-      ) : items.length === 0 ? (
-        <p className="app-shell__subtitle">Belum ada alat. Tambahkan dulu di atas.</p>
+        <p className="text-sm text-[#8A8368]">Memuat...</p>
+      ) : filtered.length === 0 ? (
+        <div className="bg-[#FBFAF4] rounded-2xl p-8 border border-[#DBD5C1] text-center text-[#8A8368] text-sm">
+          Belum ada alat yang cocok. Tambahkan dulu di atas.
+        </div>
       ) : (
-        <ul className="items-list">
-          {items.map((item) =>
-            editingId === item.id ? (
-              <EditItemRow
-                key={item.id}
-                item={item}
-                onSave={(input) => updateItem(item.id, input)}
-                onCancel={() => setEditingId(null)}
-              />
-            ) : (
-              <li key={item.id} className="items-list__row">
-                <span>{item.name}</span>
-                <span className="app-shell__subtitle">
-                  {item.total_units} unit · Rp{item.price_per_day.toLocaleString('id-ID')}/hari
-                </span>
-                <div className="items-list__actions">
-                  <button type="button" onClick={() => setEditingId(item.id)}>
-                    Edit
-                  </button>
-                  <button type="button" className="items-list__deactivate" onClick={() => handleDeactivate(item)}>
-                    Nonaktifkan
-                  </button>
-                </div>
-              </li>
-            ),
-          )}
-        </ul>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map((item) => (
+            <ItemCard key={item.id} item={item} onEdit={() => setModalItem(item)} onDeactivate={() => handleDeactivate(item)} />
+          ))}
+        </div>
       )}
 
       {inactiveItems.length > 0 && (
-        <div className="items-inactive">
-          <h3>Alat nonaktif</h3>
-          <ul className="items-list">
+        <div>
+          <h3 className="text-sm font-bold text-[#8A8368] mb-2">Alat Nonaktif</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 opacity-70">
             {inactiveItems.map((item) => (
-              <li key={item.id} className="items-list__row items-list__row--inactive">
-                <span>{item.name}</span>
-                <span className="app-shell__subtitle">
-                  {item.total_units} unit · Rp{item.price_per_day.toLocaleString('id-ID')}/hari
-                </span>
-                <div className="items-list__actions">
-                  <button type="button" onClick={() => handleReactivate(item)}>
-                    Aktifkan kembali
-                  </button>
-                </div>
-              </li>
+              <ItemCard key={item.id} item={item} onEdit={() => {}} onReactivate={() => setItemActive(item.id, true)} />
             ))}
-          </ul>
+          </div>
         </div>
       )}
-    </section>
+
+      {modalItem && (
+        <ItemFormModal
+          initial={
+            modalItem === 'new'
+              ? EMPTY_FORM
+              : {
+                  code: modalItem.code,
+                  name: modalItem.name,
+                  category: modalItem.category,
+                  total_units: modalItem.total_units,
+                  price_per_day: modalItem.price_per_day,
+                  image_url: modalItem.image_url,
+                  description: modalItem.description,
+                  condition_note: modalItem.condition_note,
+                }
+          }
+          onSave={(input) => (modalItem === 'new' ? addItem(input) : updateItem(modalItem.id, input))}
+          onClose={() => setModalItem(null)}
+        />
+      )}
+    </div>
   );
 }

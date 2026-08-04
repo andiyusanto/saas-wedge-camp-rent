@@ -27,9 +27,9 @@ router.get('/trackings', async (req, res) => {
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select(
-      'id, start_date, end_date, status, total_price, created_at, customers(name, phone), booking_items(quantity, price_at_booking, items(name)), deposits(id, type, amount, status), penalties(id, type, amount, description)',
+      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, customers(name, phone, address), booking_items(quantity, price_at_booking, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description)',
     )
-    .eq('status', 'aktif')
+    .in('status', ['dipesan', 'aktif'])
     .order('end_date');
 
   if (bookingsError) {
@@ -40,21 +40,26 @@ router.get('/trackings', async (req, res) => {
   const now = new Date();
 
   const result = (bookings ?? []).map((b) => {
-    const dueAt = computeDueAt(b.end_date, b.created_at);
-    const hLate = Math.max(0, hoursLate(dueAt, now));
     const dailyRate = ((b.booking_items ?? []) as unknown as BookingItemJoin[]).reduce(
       (sum, bi) => sum + bi.quantity * bi.price_at_booking,
       0,
     );
-    const suggestedLateFee = computeLateFee(hLate, business.late_tolerance_hours, dailyRate);
+
+    // 'dipesan' belum diambil fisik — belum relevan hitung telat.
+    const isPendingPickup = b.status === 'dipesan';
+    const dueAt = computeDueAt(b.end_date, b.created_at);
+    const hLate = isPendingPickup ? 0 : Math.max(0, hoursLate(dueAt, now));
+    const suggestedLateFee = isPendingPickup ? 0 : computeLateFee(hLate, business.late_tolerance_hours, dailyRate);
 
     return {
       id: b.id,
+      booking_number: b.booking_number,
       customer: b.customers,
       start_date: b.start_date,
       end_date: b.end_date,
       due_at: dueAt.toISOString(),
-      is_overdue: hLate > business.late_tolerance_hours,
+      is_pending_pickup: isPendingPickup,
+      is_overdue: !isPendingPickup && hLate > business.late_tolerance_hours,
       hours_late: Math.round(hLate * 10) / 10,
       daily_rate: dailyRate,
       suggested_late_fee: suggestedLateFee,
@@ -65,6 +70,7 @@ router.get('/trackings', async (req, res) => {
       deposits: b.deposits ?? [],
       penalties: b.penalties ?? [],
       total_price: b.total_price,
+      dp_paid: b.dp_paid,
     };
   });
 
@@ -213,6 +219,39 @@ router.post('/bookings/:id/cancel', async (req, res) => {
   }
 
   res.json({ ok: true });
+});
+
+// Catat denda di tengah masa sewa (mis. penyewa lapor rusak sebelum
+// dikembalikan) — terpisah dari alur POST /return yang menutup transaksi.
+router.post('/bookings/:id/penalties', async (req, res) => {
+  if (!req.headers.authorization) {
+    res.status(401).json({ error: 'Belum login' });
+    return;
+  }
+
+  const { id } = req.params;
+  const { type, amount, description } = req.body ?? {};
+
+  if (!['kerusakan', 'kehilangan', 'keterlambatan'].includes(type) || !(Number(amount) > 0)) {
+    res.status(400).json({ error: 'Jenis atau nominal denda tidak valid' });
+    return;
+  }
+
+  const supabase = createRequestClient(req);
+
+  const { error } = await supabase.from('penalties').insert({
+    booking_id: id,
+    type,
+    amount: Number(amount),
+    description: description || null,
+  });
+
+  if (error) {
+    res.status(400).json({ error: error.message });
+    return;
+  }
+
+  res.status(201).json({ ok: true });
 });
 
 export default router;

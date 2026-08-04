@@ -5,7 +5,10 @@ export type AvailabilityStatus = 'tersedia' | 'sisa_sedikit' | 'penuh';
 
 export type AvailabilityItem = {
   id: string;
+  code: string | null;
   name: string;
+  category: string | null;
+  image_url: string | null;
   total_units: number;
   price_per_day: number;
   remaining: number[];
@@ -19,7 +22,7 @@ export type AvailabilityResponse = {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
 
-export function useAvailability(session: Session | null, days = 7) {
+export function useAvailability(session: Session | null, days = 7, startDate?: string) {
   const [data, setData] = useState<AvailabilityResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +36,10 @@ export function useAvailability(session: Session | null, days = 7) {
     setLoading(true);
     setError(null);
 
-    fetch(`${API_BASE_URL}/api/availability?days=${days}`, {
+    const params = new URLSearchParams({ days: String(days) });
+    if (startDate) params.set('start_date', startDate);
+
+    fetch(`${API_BASE_URL}/api/availability?${params.toString()}`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
     })
       .then(async (res) => {
@@ -46,7 +52,7 @@ export function useAvailability(session: Session | null, days = 7) {
       .then((json) => setData(json))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [session, days]);
+  }, [session, days, startDate]);
 
   return { data, loading, error };
 }

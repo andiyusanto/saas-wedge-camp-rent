@@ -1,11 +1,30 @@
 import { Router } from 'express';
 import { createRequestClient } from '../lib/supabaseClient.js';
 import { fetchActiveBookingItems, usedUnitsOn } from '../lib/availability.js';
-import { dateRange } from '../lib/dates.js';
+import { dateRange, todayInWIB } from '../lib/dates.js';
 
 const router = Router();
 
 type BookingItemInput = { item_id: string; quantity: number };
+
+async function generateBookingNumber(
+  supabase: ReturnType<typeof createRequestClient>,
+  businessId: string,
+): Promise<string> {
+  const todayWib = todayInWIB();
+  const dayStart = `${todayWib}T00:00:00+07:00`;
+  const dayEnd = `${todayWib}T23:59:59+07:00`;
+
+  const { count } = await supabase
+    .from('bookings')
+    .select('id', { count: 'exact', head: true })
+    .eq('business_id', businessId)
+    .gte('created_at', dayStart)
+    .lte('created_at', dayEnd);
+
+  const seq = String((count ?? 0) + 1).padStart(2, '0');
+  return `SWL-${todayWib.replaceAll('-', '')}-${seq}`;
+}
 
 router.post('/bookings', async (req, res) => {
   if (!req.headers.authorization) {
@@ -13,7 +32,7 @@ router.post('/bookings', async (req, res) => {
     return;
   }
 
-  const { businessId, customer, start_date, end_date, items, deposit, total_price } = req.body ?? {};
+  const { businessId, customer, start_date, end_date, items, deposit, total_price, dp_paid } = req.body ?? {};
 
   const requestedItems = items as BookingItemInput[] | undefined;
 
@@ -76,7 +95,12 @@ router.post('/bookings', async (req, res) => {
 
   const { data: customerRow, error: customerError } = await supabase
     .from('customers')
-    .insert({ business_id: businessId, name: customer.name, phone: customer.phone ?? null })
+    .insert({
+      business_id: businessId,
+      name: customer.name,
+      phone: customer.phone ?? null,
+      address: customer.address ?? null,
+    })
     .select('id')
     .single();
 
@@ -85,17 +109,24 @@ router.post('/bookings', async (req, res) => {
     return;
   }
 
+  // Jalan diambil hari ini -> langsung 'aktif' (alur walk-in biasa).
+  // Tanggal ambil di masa depan -> 'dipesan' (reservasi, belum diambil fisik).
+  const status = start_date <= todayInWIB() ? 'aktif' : 'dipesan';
+  const bookingNumber = await generateBookingNumber(supabase, businessId);
+
   const { data: bookingRow, error: bookingError } = await supabase
     .from('bookings')
     .insert({
       business_id: businessId,
       customer_id: customerRow.id,
+      booking_number: bookingNumber,
       start_date,
       end_date,
-      status: 'aktif',
+      status,
       total_price: Number(total_price) || 0,
+      dp_paid: Number(dp_paid) || 0,
     })
-    .select('id')
+    .select('id, booking_number, status')
     .single();
 
   if (bookingError || !bookingRow) {
@@ -128,6 +159,7 @@ router.post('/bookings', async (req, res) => {
       booking_id: bookingRow.id,
       type: deposit.type,
       amount: deposit.type === 'uang' ? Number(deposit.amount) || 0 : null,
+      note: deposit.note ?? null,
       status: 'ditahan',
     });
 
@@ -140,7 +172,42 @@ router.post('/bookings', async (req, res) => {
     }
   }
 
-  res.status(201).json({ id: bookingRow.id });
+  res.status(201).json({ id: bookingRow.id, booking_number: bookingRow.booking_number, status: bookingRow.status });
+});
+
+router.post('/bookings/:id/pickup', async (req, res) => {
+  if (!req.headers.authorization) {
+    res.status(401).json({ error: 'Belum login' });
+    return;
+  }
+
+  const { id } = req.params;
+  const supabase = createRequestClient(req);
+
+  const { data: booking, error: bookingError } = await supabase
+    .from('bookings')
+    .select('id, status')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (bookingError || !booking) {
+    res.status(404).json({ error: 'Transaksi tidak ditemukan' });
+    return;
+  }
+
+  if (booking.status !== 'dipesan') {
+    res.status(400).json({ error: 'Transaksi ini bukan status "dipesan"' });
+    return;
+  }
+
+  const { error: updateError } = await supabase.from('bookings').update({ status: 'aktif' }).eq('id', id);
+
+  if (updateError) {
+    res.status(400).json({ error: updateError.message });
+    return;
+  }
+
+  res.json({ ok: true });
 });
 
 export default router;

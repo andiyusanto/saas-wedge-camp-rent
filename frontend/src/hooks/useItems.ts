@@ -3,12 +3,30 @@ import { supabase } from '../lib/supabaseClient';
 
 export type Item = {
   id: string;
+  code: string | null;
   name: string;
   category: string | null;
   total_units: number;
   price_per_day: number;
+  image_url: string | null;
+  description: string | null;
+  condition_note: string | null;
   deactivated_at: string | null;
 };
+
+export type ItemInput = {
+  code: string | null;
+  name: string;
+  category: string | null;
+  total_units: number;
+  price_per_day: number;
+  image_url: string | null;
+  description: string | null;
+  condition_note: string | null;
+};
+
+const SELECT_FIELDS =
+  'id, code, name, category, total_units, price_per_day, image_url, description, condition_note, deactivated_at';
 
 export function useItems(businessId: string | undefined) {
   const [allItems, setAllItems] = useState<Item[]>([]);
@@ -22,10 +40,7 @@ export function useItems(businessId: string | undefined) {
     }
 
     setLoading(true);
-    const { data } = await supabase
-      .from('items')
-      .select('id, name, category, total_units, price_per_day, deactivated_at')
-      .order('name');
+    const { data } = await supabase.from('items').select(SELECT_FIELDS).order('name');
 
     setAllItems(data ?? []);
     setLoading(false);
@@ -35,29 +50,17 @@ export function useItems(businessId: string | undefined) {
     refresh();
   }, [refresh]);
 
-  async function addItem(input: {
-    name: string;
-    total_units: number;
-    price_per_day: number;
-  }) {
+  async function addItem(input: ItemInput) {
     if (!supabase || !businessId) return { error: 'Belum ada usaha' };
 
-    const { error } = await supabase.from('items').insert({
-      business_id: businessId,
-      name: input.name,
-      total_units: input.total_units,
-      price_per_day: input.price_per_day,
-    });
+    const { error } = await supabase.from('items').insert({ business_id: businessId, ...input });
 
     if (!error) await refresh();
 
     return { error: error?.message ?? null };
   }
 
-  async function updateItem(
-    id: string,
-    input: { name: string; total_units: number; price_per_day: number },
-  ) {
+  async function updateItem(id: string, input: ItemInput) {
     if (!supabase) return { error: 'Belum ada usaha' };
 
     const { error } = await supabase.from('items').update(input).eq('id', id);

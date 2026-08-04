@@ -26,12 +26,14 @@ router.get('/availability', async (req, res) => {
   const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 30);
   const supabase = createRequestClient(req);
 
-  const startDate = todayInWIB();
+  const requestedStart = typeof req.query.start_date === 'string' ? req.query.start_date : '';
+  const startDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedStart) ? requestedStart : todayInWIB();
   const dateList: string[] = Array.from({ length: days }, (_, i) => addDays(startDate, i));
 
   const { data: items, error: itemsError } = await supabase
     .from('items')
-    .select('id, name, total_units, price_per_day')
+    .select('id, code, name, category, image_url, total_units, price_per_day')
+    .is('deactivated_at', null)
     .order('name');
 
   if (itemsError) {
@@ -54,7 +56,10 @@ router.get('/availability', async (req, res) => {
 
     return {
       id: item.id,
+      code: item.code,
       name: item.name,
+      category: item.category,
+      image_url: item.image_url,
       total_units: item.total_units,
       price_per_day: item.price_per_day,
       remaining,

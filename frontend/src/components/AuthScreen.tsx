@@ -1,20 +1,16 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
-import './AuthScreen.css';
 
 export function AuthScreen() {
   if (!isSupabaseConfigured) {
     return (
-      <main className="auth-shell">
-        <div className="auth-card">
-          <div className="auth-brand">
-            <img src="/logo.svg" alt="" width="36" height="36" />
-            <h1>Sewalog</h1>
-          </div>
-          <p className="auth-error">
-            Aplikasi belum terhubung ke server (konfigurasi Supabase belum diisi). Hubungi admin/developer —
-            login &amp; daftar tidak bisa dipakai sampai ini diperbaiki.
+      <main className="min-h-screen flex items-center justify-center p-4 bg-[#F1EEE2]">
+        <div className="w-full max-w-sm bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] shadow-sm p-6">
+          <Brand />
+          <p className="text-xs font-semibold text-[#A8412E] bg-[#FAF0EE] border border-[#A8412E]/30 rounded-lg p-3 mt-4">
+            Aplikasi belum terhubung ke server (konfigurasi Supabase belum diisi). Hubungi admin/developer — login
+            &amp; daftar tidak bisa dipakai sampai ini diperbaiki.
           </p>
         </div>
       </main>
@@ -22,6 +18,15 @@ export function AuthScreen() {
   }
 
   return <AuthForm />;
+}
+
+function Brand() {
+  return (
+    <div className="flex items-center gap-2.5">
+      <img src="/logo.svg" alt="" width={36} height={36} />
+      <h1 className="text-xl font-bold text-[#26302B]">Sewalog</h1>
+    </div>
+  );
 }
 
 function AuthForm() {
@@ -56,24 +61,22 @@ function AuthForm() {
   }
 
   return (
-    <main className="auth-shell">
-      <div className="auth-card">
-        <div className="auth-brand">
-          <img src="/logo.svg" alt="" width="36" height="36" />
-          <h1>Sewalog</h1>
-        </div>
+    <main className="min-h-screen flex items-center justify-center p-4 bg-[#F1EEE2]">
+      <div className="w-full max-w-sm bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] shadow-sm p-6">
+        <Brand />
 
-        <form onSubmit={handleSubmit} className="auth-form">
-          <label>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3.5 mt-5">
+          <label className="flex flex-col gap-1.5 text-sm text-[#8A8368]">
             Email
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
             />
           </label>
-          <label>
+          <label className="flex flex-col gap-1.5 text-sm text-[#8A8368]">
             Password
             <input
               type="password"
@@ -81,21 +84,26 @@ function AuthForm() {
               onChange={(e) => setPassword(e.target.value)}
               minLength={6}
               required
+              className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
             />
           </label>
 
-          {error && <p className="auth-error">{error}</p>}
-          {message && <p className="auth-message">{message}</p>}
+          {error && <p className="text-sm text-[#A8412E]">{error}</p>}
+          {message && <p className="text-sm text-[#2B4739]">{message}</p>}
 
-          <button type="submit" disabled={submitting}>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="mt-1 px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-sm shadow-sm transition active:scale-95 disabled:opacity-60"
+          >
             {mode === 'masuk' ? 'Masuk' : 'Daftar'}
           </button>
         </form>
 
         <button
           type="button"
-          className="auth-switch"
           onClick={() => setMode(mode === 'masuk' ? 'daftar' : 'masuk')}
+          className="mt-4 text-xs text-[#8A8368] underline hover:text-[#26302B] transition"
         >
           {mode === 'masuk' ? 'Belum punya akun? Daftar' : 'Sudah punya akun? Masuk'}
         </button>

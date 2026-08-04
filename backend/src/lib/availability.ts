@@ -6,7 +6,10 @@ export type BookingItemRow = {
   bookings: { start_date: string; end_date: string; status: string } | null;
 };
 
-const ACTIVE_STATUSES = new Set(['aktif', 'telat']);
+// 'dipesan' (sudah dicatat, belum diambil fisik) sengaja ikut dihitung
+// supaya alat yang sudah direservasi tidak bisa di-booking dobel oleh
+// orang lain. 'dibatalkan' dan 'selesai' sengaja tidak dimasukkan.
+const ACTIVE_STATUSES = new Set(['dipesan', 'aktif', 'telat']);
 
 export async function fetchActiveBookingItems(supabase: SupabaseClient): Promise<BookingItemRow[]> {
   const { data, error } = await supabase
