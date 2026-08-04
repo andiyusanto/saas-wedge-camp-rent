@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import type { ComponentType, ReactNode } from 'react';
-import { Calendar, CalendarX, FileWarning, Plus, ShieldAlert, AlertOctagon } from 'lucide-react';
+import { Calendar, CalendarX, FileWarning, Plus, ShieldAlert, AlertOctagon, Search, Package } from 'lucide-react';
 import { waLink, WHATSAPP_DISPLAY } from './lib/whatsapp';
 
 const MSG_UMUM = 'Halo, saya pemilik rental alat kamping. Mau tanya-tanya soal Sewalog.';
@@ -29,47 +29,83 @@ const CALENDAR_CELL_CLASS: Record<'tersedia' | 'sisa_sedikit' | 'penuh', string>
   penuh: 'bg-[#A8412E]',
 };
 
-function CalendarMock() {
+const CALENDAR_ROWS: { code: string; name: string; status: ('tersedia' | 'sisa_sedikit' | 'penuh')[] }[] = [
+  { code: 'TND-04', name: 'Tenda Dome 4P', status: ['tersedia', 'tersedia', 'sisa_sedikit', 'tersedia', 'penuh'] },
+  { code: 'SLB-02', name: 'Sleeping Bag', status: ['tersedia', 'tersedia', 'tersedia', 'sisa_sedikit', 'tersedia'] },
+  { code: 'KMP-01', name: 'Kompor Portable', status: ['tersedia', 'sisa_sedikit', 'tersedia', 'tersedia', 'tersedia'] },
+  { code: 'CRR-05', name: 'Carrier 60L', status: ['tersedia', 'tersedia', 'tersedia', 'penuh', 'penuh'] },
+  { code: 'MTR-03', name: 'Matras Lipat', status: ['tersedia', 'sisa_sedikit', 'tersedia', 'tersedia', 'tersedia'] },
+];
+
+function CalendarMock({ compact = false }: { compact?: boolean }) {
   const days = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum'];
-  const rows: { code: string; name: string; status: ('tersedia' | 'sisa_sedikit' | 'penuh')[] }[] = [
-    { code: 'TND-04', name: 'Tenda Dome 4P', status: ['tersedia', 'tersedia', 'sisa_sedikit', 'tersedia', 'penuh'] },
-    { code: 'SLB-02', name: 'Sleeping Bag', status: ['tersedia', 'tersedia', 'tersedia', 'sisa_sedikit', 'tersedia'] },
-  ];
+  const rows = compact ? CALENDAR_ROWS.slice(0, 2) : CALENDAR_ROWS;
   return (
-    <div className="space-y-2.5">
-      {rows.map((row) => (
-        <div key={row.code}>
-          <div className="flex items-center gap-1.5 mb-1">
-            <span className="font-mono text-[9px] font-bold bg-[#2B4739]/10 text-[#2B4739] border border-[#2B4739]/20 rounded px-1.5 py-0.5">
-              {row.code}
+    <div className="space-y-3">
+      {!compact && (
+        <>
+          <div className="flex items-center gap-1.5 bg-white border border-[#DBD5C1] rounded-lg px-2.5 py-1.5">
+            <Search className="w-3 h-3 text-[#8A8368] shrink-0" />
+            <span className="text-[10px] text-[#8A8368]">Cari alat...</span>
+          </div>
+          <div className="flex gap-1.5">
+            <span className="text-[9px] font-semibold bg-[#2B4739] text-white rounded-full px-2 py-0.5">Semua</span>
+            <span className="text-[9px] font-semibold bg-[#F1EEE2] border border-[#DBD5C1] text-[#26302B] rounded-full px-2 py-0.5">
+              Tenda
             </span>
-            <span className="text-[11px] font-bold text-[#26302B]">{row.name}</span>
+            <span className="text-[9px] font-semibold bg-[#F1EEE2] border border-[#DBD5C1] text-[#26302B] rounded-full px-2 py-0.5">
+              Sleeping Gear
+            </span>
           </div>
-          <div className="grid grid-cols-5 gap-[3px]">
-            {row.status.map((status, i) => (
-              <span
-                key={days[i]}
-                className={`flex items-center justify-center rounded text-[9px] font-bold text-white py-1 ${CALENDAR_CELL_CLASS[status]}`}
-              >
-                {days[i]}
-              </span>
-            ))}
+        </>
+      )}
+      <div className="space-y-2.5">
+        {rows.map((row) => (
+          <div key={row.code} className="flex gap-2">
+            <div className="w-8 h-8 rounded-lg bg-[#F1EEE2] flex items-center justify-center shrink-0">
+              <Package className="w-4 h-4 text-[#8A8368]" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="font-mono text-[9px] font-bold bg-[#2B4739]/10 text-[#2B4739] border border-[#2B4739]/20 rounded px-1.5 py-0.5">
+                  {row.code}
+                </span>
+                <span className="text-[11px] font-bold text-[#26302B] truncate">{row.name}</span>
+              </div>
+              <div className="grid grid-cols-5 gap-[3px]">
+                {row.status.map((status, i) => (
+                  <span
+                    key={days[i]}
+                    className={`flex items-center justify-center rounded text-[9px] font-bold text-white py-1 ${CALENDAR_CELL_CLASS[status]}`}
+                  >
+                    {days[i]}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
+}
+
+function MockSectionLabel({ children }: { children: string }) {
+  return <span className="block text-[9px] font-bold text-[#8A8368] uppercase tracking-wide">{children}</span>;
 }
 
 function TransactionMock() {
   return (
     <div className="space-y-2">
+      <MockSectionLabel>1. Data Penyewa</MockSectionLabel>
       <MockField label="Nama penyewa" value="Budi Santoso" />
+      <MockSectionLabel>2. Periode &amp; Alat</MockSectionLabel>
       <MockField label="Alat" value="Tenda Dome 4P × 1" />
       <div className="grid grid-cols-2 gap-2">
         <MockField label="Ambil" value="3 Agu" />
         <MockField label="Kembali" value="5 Agu" />
       </div>
+      <MockSectionLabel>3. Jaminan &amp; Pembayaran</MockSectionLabel>
       <MockField label="DP (Rp)" value="50.000" />
       <div className="mt-1 bg-[#2B4739] text-white text-center text-[11px] font-bold rounded-lg py-1.5">
         Simpan transaksi
@@ -80,7 +116,17 @@ function TransactionMock() {
 
 function TrackingMock() {
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        <div className="bg-[#FAF0EE] border border-[#A8412E]/20 rounded-lg px-2 py-1.5">
+          <div className="text-[9px] text-[#8A8368]">Terlambat</div>
+          <div className="text-sm font-extrabold text-[#A8412E]">2</div>
+        </div>
+        <div className="bg-[#F9EFE7] border border-[#B5652E]/20 rounded-lg px-2 py-1.5">
+          <div className="text-[9px] text-[#8A8368]">Jaminan Ditahan</div>
+          <div className="text-sm font-extrabold text-[#B5652E]">3</div>
+        </div>
+      </div>
       <div className="flex items-start justify-between gap-2">
         <div>
           <span className="font-mono text-[9px] font-bold bg-[#2B4739]/10 text-[#2B4739] border border-[#2B4739]/20 rounded px-1.5 py-0.5 inline-block mb-1">
@@ -105,23 +151,23 @@ function TrackingMock() {
 function HeroPreview() {
   return (
     <div className="relative w-full max-w-[300px] h-[300px] lg:max-w-[340px] lg:h-[340px]" aria-hidden="true">
-      <div className="absolute inset-0 bg-[#FBFAF4] border border-[#DBD5C1] rounded-2xl shadow-xl p-3.5 rotate-[6deg] translate-x-[10px] translate-y-[6px] opacity-70 z-10">
+      <div className="absolute inset-0 bg-[#FBFAF4] border border-[#DBD5C1] rounded-2xl shadow-xl p-3.5 overflow-hidden rotate-[6deg] translate-x-[10px] translate-y-[6px] opacity-70 z-10">
         <span className="block text-[11px] font-bold uppercase tracking-wide text-[#8A8368] mb-2.5">
           Jaminan &amp; denda
         </span>
         <TrackingMock />
       </div>
-      <div className="absolute inset-0 bg-[#FBFAF4] border border-[#DBD5C1] rounded-2xl shadow-xl p-3.5 -rotate-[4deg] -translate-x-[8px] translate-y-[10px] opacity-90 z-20">
+      <div className="absolute inset-0 bg-[#FBFAF4] border border-[#DBD5C1] rounded-2xl shadow-xl p-3.5 overflow-hidden -rotate-[4deg] -translate-x-[8px] translate-y-[10px] opacity-90 z-20">
         <span className="block text-[11px] font-bold uppercase tracking-wide text-[#8A8368] mb-2.5">
           Catat transaksi
         </span>
         <TransactionMock />
       </div>
-      <div className="absolute inset-0 bg-[#FBFAF4] border border-[#DBD5C1] rounded-2xl shadow-xl p-3.5 rotate-[1deg] z-30">
+      <div className="absolute inset-0 bg-[#FBFAF4] border border-[#DBD5C1] rounded-2xl shadow-xl p-3.5 overflow-hidden rotate-[1deg] z-30">
         <span className="block text-[11px] font-bold uppercase tracking-wide text-[#8A8368] mb-2.5">
           Kalender ketersediaan
         </span>
-        <CalendarMock />
+        <CalendarMock compact />
       </div>
     </div>
   );
@@ -153,25 +199,21 @@ function FeatureCard({
   title,
   children,
   preview,
-  className = '',
 }: {
   icon: ComponentType<{ className?: string }>;
   iconClass: string;
   title: string;
   children: string;
   preview: ReactNode;
-  className?: string;
 }) {
   return (
-    <div
-      className={`bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] shadow-xs p-5 flex flex-col gap-3 hover:border-[#2B4739]/50 transition ${className}`}
-    >
+    <div className="bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] shadow-xs p-5 flex flex-col gap-3 hover:border-[#2B4739]/50 transition">
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${iconClass}`}>
         <Icon className="w-5 h-5" />
       </div>
       <h3 className="text-base font-bold text-[#26302B]">{title}</h3>
       <p className="text-sm text-[#8A8368]">{children}</p>
-      <div className="mt-auto pt-3.5 border-t border-[#E6E1D2]">{preview}</div>
+      <div className="pt-3.5 border-t border-[#E6E1D2]">{preview}</div>
     </div>
   );
 }
@@ -267,32 +309,33 @@ export function LandingPage() {
 
         <section className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
           <h2 className="reveal text-2xl font-bold text-[#26302B] mb-5">Tiga Hal yang Sewalog Bereskan</h2>
-          <div className="reveal grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-2 gap-4">
+          <div className="reveal grid grid-cols-1 lg:grid-cols-2 gap-4 lg:items-start">
             <FeatureCard
               icon={Calendar}
               iconClass="bg-[#E8EFEA] border border-[#2B4739]/20 text-[#2B4739]"
               title="Kalender Ketersediaan"
               preview={<CalendarMock />}
-              className="lg:row-span-2"
             >
               Langsung kelihatan alat mana yang masih kosong, tanpa buka-buka catatan lama.
             </FeatureCard>
-            <FeatureCard
-              icon={Plus}
-              iconClass="bg-[#F9EFE7] border border-[#B5652E]/30 text-[#B5652E]"
-              title="Catat Transaksi"
-              preview={<TransactionMock />}
-            >
-              Isi form singkat sambil pelanggan menunggu — alat, tanggal, sampai total harga otomatis kehitung.
-            </FeatureCard>
-            <FeatureCard
-              icon={ShieldAlert}
-              iconClass="bg-[#FAF0EE] border border-[#A8412E]/30 text-[#A8412E]"
-              title="Jaminan & Denda"
-              preview={<TrackingMock />}
-            >
-              Pantau siapa yang telat balikin alat — denda telat dan rusak/hilang dicatat terpisah, rapi.
-            </FeatureCard>
+            <div className="flex flex-col gap-4">
+              <FeatureCard
+                icon={Plus}
+                iconClass="bg-[#F9EFE7] border border-[#B5652E]/30 text-[#B5652E]"
+                title="Catat Transaksi"
+                preview={<TransactionMock />}
+              >
+                Isi form singkat sambil pelanggan menunggu — alat, tanggal, sampai total harga otomatis kehitung.
+              </FeatureCard>
+              <FeatureCard
+                icon={ShieldAlert}
+                iconClass="bg-[#FAF0EE] border border-[#A8412E]/30 text-[#A8412E]"
+                title="Jaminan & Denda"
+                preview={<TrackingMock />}
+              >
+                Pantau siapa yang telat balikin alat — denda telat dan rusak/hilang dicatat terpisah, rapi.
+              </FeatureCard>
+            </div>
           </div>
         </section>
 
