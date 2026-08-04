@@ -1,51 +1,37 @@
-:root {
-  /* Token warna final — lihat CLAUDE.md bagian 5. Light theme, kontras
-     tinggi secara sengaja (pemakaian outdoor siang hari), jangan diganti
-     ke dark mode atau palet generik tanpa diskusi eksplisit. */
-  --color-bg: #f1eee2;
-  --color-surface: #fbfaf4;
-  --color-border: #dbd5c1;
-  --color-border-soft: #e6e1d2;
-  --color-primary: #2b4739;
-  --color-warning: #b5652e;
-  --color-danger: #a8412e;
-  --color-text: #26302b;
-  --color-text-muted: #8a8368;
+@import "tailwindcss";
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-
-  color-scheme: light;
-  font: 16px/1.45 var(--sans);
-  color: var(--color-text);
-  background: var(--color-bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* Token warna final — lihat CLAUDE.md bagian 5. Light theme, kontras tinggi
+   secara sengaja (pemakaian outdoor siang hari), jangan diganti ke dark
+   mode atau palet generik tanpa diskusi eksplisit. Warna dipakai langsung
+   sebagai arbitrary hex class Tailwind (bg-[#2B4739] dst), sama seperti
+   pola di frontend/src/index.css — bukan lewat @theme/nama token. */
+@layer base {
+  body {
+    background-color: #f1eee2;
+    color: #26302b;
+    font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 
-* {
-  box-sizing: border-box;
+/* Micro-animation fade/slide saat scroll ke section berikutnya — dipicu
+   lewat IntersectionObserver di LandingPage.tsx, bukan utility Tailwind
+   bawaan (perlu toggle class dari JS berdasarkan visibility). */
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
 }
 
-body {
-  margin: 0;
-  min-height: 100svh;
+.reveal--visible {
+  opacity: 1;
+  transform: translateY(0);
 }
 
-#root {
-  min-height: 100svh;
-  max-width: 100%;
-}
-
-h1,
-h2,
-h3 {
-  font-weight: 600;
-  color: var(--color-text);
-  margin: 0 0 8px;
-}
-
-p {
-  margin: 0;
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
 }
