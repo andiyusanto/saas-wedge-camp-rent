@@ -1,4 +1,5 @@
 import { Calendar, ShieldAlert, Package, Plus, LogOut } from 'lucide-react';
+import { ScrollableRow } from './ScrollableRow';
 
 export type Tab = 'kalender' | 'tracking' | 'alat';
 
@@ -60,8 +61,8 @@ export function Navbar({
       </div>
 
       <div className="bg-[#1E3429] border-t border-[#3A5C4A]/50">
-        <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
-          <nav className="flex items-center gap-2 sm:gap-3 py-2 overflow-x-auto scrollbar-none">
+        <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 py-2">
+          <ScrollableRow variant="dark">
             {TABS.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
@@ -76,7 +77,7 @@ export function Navbar({
                 <span>{label}</span>
               </button>
             ))}
-          </nav>
+          </ScrollableRow>
         </div>
       </div>
     </header>

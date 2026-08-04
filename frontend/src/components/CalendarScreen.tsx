@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import { Search, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Package } from 'lucide-react';
 import { useAvailability } from '../hooks/useAvailability';
 import { formatIDR, todayStr } from '../utils/formatters';
+import { ScrollableRow } from './ScrollableRow';
 
 const CATEGORIES = [
   'Semua',
@@ -113,20 +114,22 @@ export function CalendarScreen({
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pt-1">
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition shrink-0 ${
-                selectedCategory === cat
-                  ? 'bg-[#2B4739] text-[#FBFAF4] shadow-xs'
-                  : 'bg-[#F1EEE2] text-[#26302B] hover:bg-[#E6E1D2] border border-[#DBD5C1]'
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
+        <div className="pt-1">
+          <ScrollableRow>
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition shrink-0 ${
+                  selectedCategory === cat
+                    ? 'bg-[#2B4739] text-[#FBFAF4] shadow-xs'
+                    : 'bg-[#F1EEE2] text-[#26302B] hover:bg-[#E6E1D2] border border-[#DBD5C1]'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </ScrollableRow>
         </div>
       </div>
 

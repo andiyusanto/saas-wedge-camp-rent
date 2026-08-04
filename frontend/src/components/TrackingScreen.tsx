@@ -17,6 +17,7 @@ import { useTrackings } from '../hooks/useTrackings';
 import type { TrackingBooking } from '../hooks/useTrackings';
 import { ReturnModal } from './ReturnModal';
 import { AddFineModal } from './AddFineModal';
+import { ScrollableRow } from './ScrollableRow';
 import { formatDateIndo, formatIDR, depositLabel, fineLabel, generateWhatsAppReceipt, getWhatsAppShareUrl } from '../utils/formatters';
 
 type StatusFilter = 'all' | 'overdue' | 'active' | 'pending_pickup';
@@ -92,7 +93,7 @@ export function TrackingScreen({ session, businessName }: { session: Session; bu
 
       <div className="bg-[#FBFAF4] p-4 rounded-2xl border border-[#DBD5C1] shadow-xs space-y-3">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none w-full sm:w-auto">
+          <ScrollableRow className="sm:w-auto">
             <FilterButton label={`Semua (${bookings.length})`} active={statusFilter === 'all'} onClick={() => setStatusFilter('all')} />
             <FilterButton
               label={`Terlambat (${bookings.filter((b) => b.is_overdue).length})`}
@@ -112,7 +113,7 @@ export function TrackingScreen({ session, businessName }: { session: Session; bu
               onClick={() => setStatusFilter('pending_pickup')}
               tone="warning"
             />
-          </div>
+          </ScrollableRow>
           <input
             type="text"
             placeholder="Cari nama / kode booking..."

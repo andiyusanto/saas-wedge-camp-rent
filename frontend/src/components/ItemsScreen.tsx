@@ -4,6 +4,7 @@ import { Package, Plus, Edit2, Search, Trash2, X } from 'lucide-react';
 import { useItems } from '../hooks/useItems';
 import type { Item, ItemInput } from '../hooks/useItems';
 import { formatIDR } from '../utils/formatters';
+import { ScrollableRow } from './ScrollableRow';
 
 const CATEGORIES = [
   'Tenda',
@@ -320,7 +321,7 @@ export function ItemsScreen({ businessId }: { businessId: string }) {
               className="w-full pl-9 pr-4 py-2 text-xs rounded-xl bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
             />
           </div>
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+          <ScrollableRow className="sm:w-auto">
             {['Semua', ...CATEGORIES].map((cat) => (
               <button
                 key={cat}
@@ -334,7 +335,7 @@ export function ItemsScreen({ businessId }: { businessId: string }) {
                 {cat}
               </button>
             ))}
-          </div>
+          </ScrollableRow>
         </div>
       </div>
 
