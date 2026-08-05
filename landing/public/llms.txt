@@ -1,0 +1,17 @@
+# Sewalog
+
+> Tools operasional untuk UKM rental alat kamping & outdoor di Malang Raya (Kota Malang, Kabupaten Malang, Kota Batu) — kalender ketersediaan, catat transaksi, dan tracking jaminan & denda. Fase saat ini adalah SaaS-wedge: tools gratis/uji coba untuk vendor, belum jadi marketplace publik.
+
+## Tentang
+
+- [Halaman utama](https://sewalog.com/): landing page produk — masalah yang diselesaikan, tiga fitur inti, cara mulai coba Sewalog.
+
+## Cara menghubungi
+
+- Onboarding vendor masih manual, tidak ada pendaftaran mandiri. Vendor yang tertarik menghubungi lewat WhatsApp (tautan CTA di halaman utama).
+
+## Cakupan & batasan
+
+- Wilayah layanan saat ini terbatas pada Malang Raya, Jawa Timur, Indonesia.
+- Produk ini adalah tools internal untuk pemilik/staf usaha rental (B2B), bukan marketplace publik untuk penyewa akhir.
+- Belum ada uji coba gratis mandiri, harga publik, atau proses pembayaran online di halaman ini.
