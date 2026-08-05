@@ -33,7 +33,7 @@ export function Navbar({
             <div className="min-w-0">
               <div className="flex items-center space-x-2">
                 <span className="text-xl font-bold tracking-tight text-[#F1EEE2]">Sewalog</span>
-                <span className="hidden sm:inline text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-[#B5652E]/30 text-[#FBFAF4] border border-[#B5652E]/50">
+                <span className="hidden sm:inline text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-[#A65C2A]/30 text-[#FBFAF4] border border-[#A65C2A]/50">
                   UKM Outdoor
                 </span>
               </div>
@@ -44,7 +44,7 @@ export function Navbar({
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={onOpenNewBooking}
-              className="flex items-center gap-1.5 px-3 py-2 sm:px-4 rounded-xl bg-[#B5652E] hover:bg-[#9E5524] text-white font-semibold text-xs sm:text-sm shadow-sm transition active:scale-95"
+              className="flex items-center gap-1.5 px-3 py-2 sm:px-4 rounded-xl bg-[#A65C2A] hover:bg-[#9E5524] text-white font-semibold text-xs sm:text-sm shadow-sm transition active:scale-95"
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Catat Transaksi</span>

@@ -55,10 +55,12 @@ Boleh tambahkan manifest + ikon agar bisa "Add to Home Screen" (biaya kecil, mur
 | Surface/card | `#FBFAF4` | kartu, input field |
 | Border | `#DBD5C1` / `#E6E1D2` | garis pemisah |
 | Primary (hijau pinus) | `#2B4739` | aksi utama, status "tersedia" |
-| Warning (rust) | `#B5652E` | status "sisa sedikit" |
+| Warning (rust) | `#A65C2A` | status "sisa sedikit" |
 | Danger | `#A8412E` | status "penuh", denda, keterlambatan |
 | Text primary | `#26302B` | teks utama |
-| Text muted | `#8A8368` | label, teks sekunder |
+| Text muted | `#6E6853` | label, teks sekunder |
+
+Warning dan text muted sudah digelapkan sedikit dari nilai awal (`#B5652E`, `#8A8368`) supaya lolos WCAG AA contrast 4.5:1 — ketahuan lewat Lighthouse accessibility audit di `sewalog.com` (skor sempat 93/100, dua token ini penyebabnya). Konsisten dengan alasan "kontras tinggi" di atas: kalau tokennya sendiri gagal kontras, prinsip outdoor-readability-nya ikut gagal. Jangan dikembalikan ke nilai lama tanpa evaluasi kontras ulang.
 
 ### Prinsip layout — "strategic minimalism ala Linear"
 Padat tapi terstruktur, bukan kosong demi terlihat "bersih". Setiap elemen di layar harus punya alasan fungsional untuk ada. Fitur sekunder disembunyikan dari layar utama (progressive disclosure), fitur inti harian selalu terlihat langsung tanpa navigasi berlapis.

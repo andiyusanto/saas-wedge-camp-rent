@@ -210,7 +210,7 @@ function ItemCard({ item, onEdit, onDeactivate, onReactivate }: {
           {item.image_url ? (
             <img src={item.image_url} alt={item.name} className="w-16 h-16 rounded-xl object-cover border border-[#DBD5C1] shrink-0 bg-[#F1EEE2]" />
           ) : (
-            <div className="w-16 h-16 rounded-xl border border-[#DBD5C1] shrink-0 bg-[#F1EEE2] flex items-center justify-center text-[#8A8368]">
+            <div className="w-16 h-16 rounded-xl border border-[#DBD5C1] shrink-0 bg-[#F1EEE2] flex items-center justify-center text-[#6E6853]">
               <Package className="w-6 h-6" />
             </div>
           )}
@@ -221,26 +221,26 @@ function ItemCard({ item, onEdit, onDeactivate, onReactivate }: {
                   {item.code}
                 </span>
               )}
-              {item.category && <span className="text-[10px] text-[#8A8368] font-medium truncate">{item.category}</span>}
+              {item.category && <span className="text-[10px] text-[#6E6853] font-medium truncate">{item.category}</span>}
             </div>
             <h3 className="font-bold text-sm text-[#26302B] mt-1 line-clamp-1">{item.name}</h3>
-            {item.description && <p className="text-xs text-[#8A8368] line-clamp-2 mt-0.5">{item.description}</p>}
+            {item.description && <p className="text-xs text-[#6E6853] line-clamp-2 mt-0.5">{item.description}</p>}
           </div>
         </div>
 
         <div className="mt-3 p-2.5 rounded-xl bg-[#F1EEE2] border border-[#DBD5C1] grid grid-cols-2 gap-2 text-center text-xs">
           <div>
-            <p className="text-[10px] text-[#8A8368]">Total Stok</p>
+            <p className="text-[10px] text-[#6E6853]">Total Stok</p>
             <p className="font-extrabold text-[#26302B] text-sm">
               {item.total_units} <span className="text-[10px] font-normal">unit</span>
             </p>
           </div>
           <div>
-            <p className="text-[10px] text-[#8A8368]">Sewa /Hari</p>
+            <p className="text-[10px] text-[#6E6853]">Sewa /Hari</p>
             <p className="font-bold text-[#2B4739] text-xs">{formatIDR(item.price_per_day)}</p>
           </div>
         </div>
-        {item.condition_note && <p className="text-[11px] text-[#8A8368] mt-2 italic">{item.condition_note}</p>}
+        {item.condition_note && <p className="text-[11px] text-[#6E6853] mt-2 italic">{item.condition_note}</p>}
       </div>
 
       <div className="flex items-center justify-end space-x-2 pt-2 border-t border-[#E6E1D2]">
@@ -299,20 +299,20 @@ export function ItemsScreen({ businessId }: { businessId: string }) {
               <Package className="w-5 h-5 text-[#2B4739]" />
               <span>Katalog & Manajemen Stok Peralatan</span>
             </h2>
-            <p className="text-xs text-[#8A8368]">Kelola daftar alat kamping, stok fisik toko, dan tarif sewa per hari.</p>
+            <p className="text-xs text-[#6E6853]">Kelola daftar alat kamping, stok fisik toko, dan tarif sewa per hari.</p>
           </div>
           <button
             onClick={() => setModalItem('new')}
             className="px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs shadow-sm transition flex items-center gap-2 shrink-0 self-start sm:self-auto"
           >
-            <Plus className="w-4 h-4 text-[#B5652E]" />
+            <Plus className="w-4 h-4 text-[#A65C2A]" />
             <span>Tambah Alat Baru</span>
           </button>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t border-[#E6E1D2]">
           <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#8A8368]" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#6E6853]" />
             <input
               type="text"
               placeholder="Cari kode / nama alat..."
@@ -340,9 +340,9 @@ export function ItemsScreen({ businessId }: { businessId: string }) {
       </div>
 
       {loading ? (
-        <p className="text-sm text-[#8A8368]">Memuat...</p>
+        <p className="text-sm text-[#6E6853]">Memuat...</p>
       ) : filtered.length === 0 ? (
-        <div className="bg-[#FBFAF4] rounded-2xl p-8 border border-[#DBD5C1] text-center text-[#8A8368] text-sm">
+        <div className="bg-[#FBFAF4] rounded-2xl p-8 border border-[#DBD5C1] text-center text-[#6E6853] text-sm">
           Belum ada alat yang cocok. Tambahkan dulu di atas.
         </div>
       ) : (
@@ -355,7 +355,7 @@ export function ItemsScreen({ businessId }: { businessId: string }) {
 
       {inactiveItems.length > 0 && (
         <div>
-          <h3 className="text-sm font-bold text-[#8A8368] mb-2">Alat Nonaktif</h3>
+          <h3 className="text-sm font-bold text-[#6E6853] mb-2">Alat Nonaktif</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 opacity-70">
             {inactiveItems.map((item) => (
               <ItemCard key={item.id} item={item} onEdit={() => {}} onReactivate={() => setItemActive(item.id, true)} />

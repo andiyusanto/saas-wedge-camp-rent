@@ -74,10 +74,10 @@ export function AddFineModal({
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4 text-xs sm:text-sm">
           <div className="p-3 rounded-xl bg-[#F1EEE2] border border-[#DBD5C1]">
-            <p className="text-[#8A8368]">
+            <p className="text-[#6E6853]">
               Booking: <strong className="text-[#26302B]">{booking.booking_number ?? '-'}</strong>
             </p>
-            <p className="text-[#8A8368]">
+            <p className="text-[#6E6853]">
               Penyewa: <strong className="text-[#26302B]">{booking.customer?.name}</strong>
             </p>
           </div>
@@ -89,7 +89,7 @@ export function AddFineModal({
                 type="button"
                 onClick={() => setType('kerusakan')}
                 className={`p-2.5 rounded-xl text-xs font-bold border text-center transition ${
-                  type === 'kerusakan' ? 'bg-[#B5652E] text-white border-[#B5652E]' : 'bg-[#F1EEE2] text-[#26302B] border-[#DBD5C1]'
+                  type === 'kerusakan' ? 'bg-[#A65C2A] text-white border-[#A65C2A]' : 'bg-[#F1EEE2] text-[#26302B] border-[#DBD5C1]'
                 }`}
               >
                 Kerusakan

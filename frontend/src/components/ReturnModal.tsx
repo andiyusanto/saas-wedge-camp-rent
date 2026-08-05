@@ -118,7 +118,7 @@ export function ReturnModal({
       <ModalPanel className="bg-[#FBFAF4] w-full max-w-2xl rounded-2xl border border-[#DBD5C1] shadow-xl overflow-hidden my-auto max-h-[92vh] flex flex-col">
         <div className="bg-[#2B4739] px-5 py-4 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center space-x-2">
-            <RotateCcw className="w-5 h-5 text-[#B5652E]" />
+            <RotateCcw className="w-5 h-5 text-[#A65C2A]" />
             <h2 className="text-lg font-bold">Proses Pengembalian Peralatan</h2>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/10 text-white transition">
@@ -136,7 +136,7 @@ export function ReturnModal({
                 {booking.customer?.name} ({booking.customer?.phone})
               </span>
             </div>
-            <p className="text-[#8A8368]">
+            <p className="text-[#6E6853]">
               Jadwal Sewa: {formatDateIndo(booking.start_date)} s/d {formatDateIndo(booking.end_date)}
             </p>
           </div>
@@ -263,7 +263,7 @@ export function ReturnModal({
             disabled={submitting}
             className="px-5 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs shadow-md transition flex items-center space-x-2 active:scale-95 disabled:opacity-60"
           >
-            <CheckCircle2 className="w-4 h-4 text-[#B5652E]" />
+            <CheckCircle2 className="w-4 h-4 text-[#A65C2A]" />
             <span>{submitting ? 'Memproses...' : 'Selesaikan Pengembalian'}</span>
           </button>
         </div>

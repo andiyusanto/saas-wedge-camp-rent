@@ -30,7 +30,7 @@ export function TrackingScreen({ session, businessName }: { session: Session; bu
   const [fineTarget, setFineTarget] = useState<TrackingBooking | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  if (loading) return <p className="text-sm text-[#8A8368]">Memuat...</p>;
+  if (loading) return <p className="text-sm text-[#6E6853]">Memuat...</p>;
   if (error) return <p className="text-sm text-[#A8412E]">Gagal memuat: {error}</p>;
 
   const filtered = bookings.filter((b) => {
@@ -122,7 +122,7 @@ export function TrackingScreen({ session, businessName }: { session: Session; bu
             className="w-full sm:w-64 px-3 py-1.5 text-xs rounded-xl bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
           />
         </div>
-        <p className="text-[11px] text-[#8A8368]">Toleransi telat vendor: {toleranceHours} jam.</p>
+        <p className="text-[11px] text-[#6E6853]">Toleransi telat vendor: {toleranceHours} jam.</p>
       </div>
 
       {actionError && (
@@ -133,7 +133,7 @@ export function TrackingScreen({ session, businessName }: { session: Session; bu
 
       <div className="space-y-4">
         {filtered.length === 0 ? (
-          <div className="bg-[#FBFAF4] rounded-2xl p-8 border border-[#DBD5C1] text-center text-[#8A8368] text-sm">
+          <div className="bg-[#FBFAF4] rounded-2xl p-8 border border-[#DBD5C1] text-center text-[#6E6853] text-sm">
             Tidak ada transaksi pada filter ini.
           </div>
         ) : (
@@ -197,7 +197,7 @@ function StatCard({
 }) {
   const palette = {
     danger: { border: 'border-[#A8412E]/30', bg: 'bg-[#FAF0EE]', text: 'text-[#A8412E]' },
-    warning: { border: 'border-[#B5652E]/30', bg: 'bg-[#F9EFE7]', text: 'text-[#B5652E]' },
+    warning: { border: 'border-[#A65C2A]/30', bg: 'bg-[#F9EFE7]', text: 'text-[#A65C2A]' },
     primary: { border: 'border-[#2B4739]/30', bg: 'bg-[#E8EFEA]', text: 'text-[#2B4739]' },
     neutral: { border: 'border-[#DBD5C1]', bg: 'bg-[#F1EEE2]', text: 'text-[#26302B]' },
   }[color];
@@ -207,7 +207,7 @@ function StatCard({
       <div className={`absolute right-3 top-3 w-8 h-8 rounded-xl ${palette.bg} flex items-center justify-center ${palette.text}`}>
         <Icon className="w-5 h-5" />
       </div>
-      <p className="text-xs text-[#8A8368] font-semibold">{label}</p>
+      <p className="text-xs text-[#6E6853] font-semibold">{label}</p>
       <p className={`${isText ? 'text-sm sm:text-base' : 'text-xl sm:text-2xl'} font-extrabold ${palette.text} mt-1`}>{value}</p>
       <p className={`text-[10px] ${palette.text} mt-1 font-medium`}>{sub}</p>
     </div>
@@ -226,14 +226,14 @@ function FilterButton({
   tone?: 'danger' | 'primary' | 'warning';
 }) {
   const activeBg =
-    tone === 'danger' ? 'bg-[#A8412E] text-white' : tone === 'primary' ? 'bg-[#2B4739] text-white' : tone === 'warning' ? 'bg-[#B5652E] text-white' : 'bg-[#2B4739] text-[#FBFAF4]';
+    tone === 'danger' ? 'bg-[#A8412E] text-white' : tone === 'primary' ? 'bg-[#2B4739] text-white' : tone === 'warning' ? 'bg-[#A65C2A] text-white' : 'bg-[#2B4739] text-[#FBFAF4]';
   const inactiveBg =
     tone === 'danger'
       ? 'bg-[#FAF0EE] text-[#A8412E] hover:bg-[#FAF0EE]/80'
       : tone === 'primary'
         ? 'bg-[#E8EFEA] text-[#2B4739] hover:bg-[#E8EFEA]/80'
         : tone === 'warning'
-          ? 'bg-[#F9EFE7] text-[#B5652E] hover:bg-[#F9EFE7]/80'
+          ? 'bg-[#F9EFE7] text-[#A65C2A] hover:bg-[#F9EFE7]/80'
           : 'bg-[#F1EEE2] text-[#26302B] hover:bg-[#E6E1D2]';
 
   return (
@@ -278,7 +278,7 @@ function BookingCard({
     );
   } else if (b.is_pending_pickup) {
     statusBadge = (
-      <span className="px-2.5 py-1 rounded-md bg-[#F9EFE7] text-[#B5652E] text-xs font-bold border border-[#B5652E]/30">Siap Diambil</span>
+      <span className="px-2.5 py-1 rounded-md bg-[#F9EFE7] text-[#A65C2A] text-xs font-bold border border-[#A65C2A]/30">Siap Diambil</span>
     );
   }
 
@@ -297,20 +297,20 @@ function BookingCard({
         <div className="space-y-2">
           <h4 className="font-bold text-sm text-[#26302B]">{b.customer?.name}</h4>
           {b.customer?.phone && (
-            <p className="text-[#8A8368] flex items-center gap-1">
+            <p className="text-[#6E6853] flex items-center gap-1">
               <Phone className="w-3.5 h-3.5 text-[#2B4739]" />
               <span>{b.customer.phone}</span>
             </p>
           )}
-          {b.customer?.address && <p className="text-[#8A8368] italic">{b.customer.address}</p>}
+          {b.customer?.address && <p className="text-[#6E6853] italic">{b.customer.address}</p>}
 
           <div className="p-2.5 rounded-xl bg-[#F1EEE2] border border-[#DBD5C1] space-y-1 mt-2">
             <div className="flex justify-between text-[11px]">
-              <span className="text-[#8A8368]">Tanggal Ambil:</span>
+              <span className="text-[#6E6853]">Tanggal Ambil:</span>
               <strong className="text-[#26302B]">{formatDateIndo(b.start_date)}</strong>
             </div>
             <div className="flex justify-between text-[11px]">
-              <span className="text-[#8A8368]">Janji Kembali:</span>
+              <span className="text-[#6E6853]">Janji Kembali:</span>
               <strong className={`font-bold ${b.is_overdue ? 'text-[#A8412E]' : 'text-[#26302B]'}`}>{formatDateIndo(b.end_date)}</strong>
             </div>
           </div>
@@ -328,11 +328,11 @@ function BookingCard({
             ))}
           </ul>
           <div className="flex items-center justify-between pt-1">
-            <span className="text-[#8A8368]">Total Sewa:</span>
+            <span className="text-[#6E6853]">Total Sewa:</span>
             <span className="font-extrabold text-[#26302B] text-sm">{formatIDR(b.total_price)}</span>
           </div>
           <div className="flex items-center justify-between text-[11px]">
-            <span className="text-[#8A8368]">Sisa Tagihan:</span>
+            <span className="text-[#6E6853]">Sisa Tagihan:</span>
             <span className={`font-bold ${remaining > 0 ? 'text-[#A8412E]' : 'text-[#2B4739]'}`}>
               {remaining > 0 ? formatIDR(remaining) : 'LUNAS'}
             </span>
@@ -347,10 +347,10 @@ function BookingCard({
                   <ShieldCheck className="w-3.5 h-3.5 text-[#2B4739]" />
                   Jaminan ({depositLabel(activeDeposit.type)})
                 </span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#B5652E] text-white">DITAHAN</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#A65C2A] text-white">DITAHAN</span>
               </div>
               {activeDeposit.note && (
-                <p className="text-[11px] text-[#8A8368] mt-1 bg-white p-2 rounded-lg border border-[#DBD5C1]">{activeDeposit.note}</p>
+                <p className="text-[11px] text-[#6E6853] mt-1 bg-white p-2 rounded-lg border border-[#DBD5C1]">{activeDeposit.note}</p>
               )}
             </div>
           )}
@@ -365,7 +365,7 @@ function BookingCard({
             </div>
 
             {b.penalties.length === 0 ? (
-              <p className="text-[10px] text-[#8A8368] italic">Tidak ada denda pada sewa ini.</p>
+              <p className="text-[10px] text-[#6E6853] italic">Tidak ada denda pada sewa ini.</p>
             ) : (
               <div className="space-y-1.5 max-h-32 overflow-y-auto">
                 {lateFines.map((f) => (
@@ -378,8 +378,8 @@ function BookingCard({
                   </div>
                 ))}
                 {otherFines.map((f) => (
-                  <div key={f.id} className="p-1.5 rounded-lg bg-[#F9EFE7] border border-[#B5652E]/30 text-[10px]">
-                    <div className="flex justify-between font-bold text-[#B5652E]">
+                  <div key={f.id} className="p-1.5 rounded-lg bg-[#F9EFE7] border border-[#A65C2A]/30 text-[10px]">
+                    <div className="flex justify-between font-bold text-[#A65C2A]">
                       <span>[{fineLabel(f.type)}]</span>
                       <span>{formatIDR(f.amount)}</span>
                     </div>
@@ -397,7 +397,7 @@ function BookingCard({
           onClick={onShareWA}
           className="px-3 py-1.5 rounded-lg bg-[#2B4739] hover:bg-[#1E3429] text-white text-xs font-semibold flex items-center gap-1.5 transition"
         >
-          <Send className="w-3.5 h-3.5 text-[#B5652E]" />
+          <Send className="w-3.5 h-3.5 text-[#A65C2A]" />
           <span>Kirim Struk WA</span>
         </button>
 
@@ -405,7 +405,7 @@ function BookingCard({
           {b.is_pending_pickup && (
             <button
               onClick={onPickup}
-              className="px-3 py-1.5 rounded-lg bg-[#B5652E] hover:bg-[#9E5524] text-white text-xs font-bold transition flex items-center gap-1"
+              className="px-3 py-1.5 rounded-lg bg-[#A65C2A] hover:bg-[#9E5524] text-white text-xs font-bold transition flex items-center gap-1"
             >
               <PackageCheck className="w-3.5 h-3.5" />
               Tandai Barang Diambil
@@ -427,7 +427,7 @@ function BookingCard({
               onClick={onReturn}
               className="px-3 py-1.5 rounded-lg bg-[#2B4739] hover:bg-[#1E3429] text-white text-xs font-bold shadow-xs transition flex items-center gap-1"
             >
-              <RotateCcw className="w-3.5 h-3.5 text-[#B5652E]" />
+              <RotateCcw className="w-3.5 h-3.5 text-[#A65C2A]" />
               Proses Pengembalian
             </button>
           )}

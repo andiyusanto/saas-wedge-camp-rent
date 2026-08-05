@@ -66,7 +66,7 @@ function AuthForm() {
         <Brand />
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3.5 mt-5">
-          <label className="flex flex-col gap-1.5 text-sm text-[#8A8368]">
+          <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
             Email
             <input
               type="email"
@@ -76,7 +76,7 @@ function AuthForm() {
               className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
             />
           </label>
-          <label className="flex flex-col gap-1.5 text-sm text-[#8A8368]">
+          <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
             Password
             <input
               type="password"
@@ -103,7 +103,7 @@ function AuthForm() {
         <button
           type="button"
           onClick={() => setMode(mode === 'masuk' ? 'daftar' : 'masuk')}
-          className="mt-4 text-xs text-[#8A8368] underline hover:text-[#26302B] transition"
+          className="mt-4 text-xs text-[#6E6853] underline hover:text-[#26302B] transition"
         >
           {mode === 'masuk' ? 'Belum punya akun? Daftar' : 'Sudah punya akun? Masuk'}
         </button>

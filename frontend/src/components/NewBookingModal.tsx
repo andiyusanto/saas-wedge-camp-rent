@@ -160,7 +160,7 @@ export function NewBookingModal({
       <ModalPanel className="bg-[#FBFAF4] w-full max-w-2xl rounded-2xl border border-[#DBD5C1] shadow-xl overflow-hidden my-auto max-h-[92vh] flex flex-col">
         <div className="bg-[#2B4739] px-5 py-4 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center space-x-2">
-            <Plus className="w-5 h-5 text-[#B5652E]" />
+            <Plus className="w-5 h-5 text-[#A65C2A]" />
             <h2 className="text-lg font-bold">Catat Transaksi Sewa Baru</h2>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/10 text-white transition">
@@ -244,7 +244,7 @@ export function NewBookingModal({
               <span className="text-sm font-extrabold">{days} Hari</span>
             </div>
             {startDate > todayStr() && (
-              <p className="text-[11px] text-[#B5652E] font-medium">
+              <p className="text-[11px] text-[#A65C2A] font-medium">
                 Tanggal ambil di masa depan → transaksi akan berstatus "Siap Diambil" sampai kamu tandai barang
                 sudah diambil.
               </p>
@@ -255,7 +255,7 @@ export function NewBookingModal({
             <h3 className="font-bold text-[#26302B]">3. Pilih Peralatan ({selectedEntries.length} Jenis)</h3>
 
             {items.length === 0 ? (
-              <p className="text-center text-[#8A8368] py-3 italic bg-white/50 rounded-lg border border-dashed border-[#DBD5C1]">
+              <p className="text-center text-[#6E6853] py-3 italic bg-white/50 rounded-lg border border-dashed border-[#DBD5C1]">
                 Belum ada alat di katalog. Tambahkan dulu di tab "Katalog & Stok Alat".
               </p>
             ) : (
@@ -276,7 +276,7 @@ export function NewBookingModal({
                         />
                         <span className="min-w-0">
                           <p className="font-bold text-[#26302B] truncate">{item.name}</p>
-                          <p className="text-[11px] text-[#8A8368]">
+                          <p className="text-[11px] text-[#6E6853]">
                             {formatIDR(item.price_per_day)}/hr
                             {checked && (
                               <>
@@ -312,7 +312,7 @@ export function NewBookingModal({
                 })}
               </div>
             )}
-            <p className="text-[10px] text-[#8A8368]">
+            <p className="text-[10px] text-[#6E6853]">
               Kapasitas dicek ulang otomatis saat disimpan — kalau ada alat yang sudah kepakai di tanggal itu, akan
               ditolak dengan keterangan sisa stok.
             </p>
@@ -377,7 +377,7 @@ export function NewBookingModal({
                 />
               </div>
               <div>
-                <label className="block font-semibold text-[#8A8368] mb-1">Sisa Bayar Saat Ambil</label>
+                <label className="block font-semibold text-[#6E6853] mb-1">Sisa Bayar Saat Ambil</label>
                 <div className="px-3 py-2 rounded-lg bg-[#FAF0EE] border border-[#A8412E]/30 text-[#A8412E] font-extrabold text-sm">
                   {formatIDR(remainingPayment)}
                 </div>
@@ -424,7 +424,7 @@ export function NewBookingModal({
               disabled={submitting}
               className="px-5 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs shadow-md transition flex items-center space-x-2 active:scale-95 disabled:opacity-60"
             >
-              <CheckCircle2 className="w-4 h-4 text-[#B5652E]" />
+              <CheckCircle2 className="w-4 h-4 text-[#A65C2A]" />
               <span>{submitting ? 'Menyimpan...' : 'Simpan & Terbitkan Nota'}</span>
             </button>
           </div>

@@ -17,7 +17,7 @@ function WaIcon({ className }: { className?: string }) {
 function MockField({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <span className="block text-[10px] text-[#8A8368] mb-0.5">{label}</span>
+      <span className="block text-[10px] text-[#6E6853] mb-0.5">{label}</span>
       <div className="bg-white border border-[#DBD5C1] rounded-md px-2 py-1 text-[11px] text-[#26302B]">{value}</div>
     </div>
   );
@@ -25,7 +25,7 @@ function MockField({ label, value }: { label: string; value: string }) {
 
 const CALENDAR_CELL_CLASS: Record<'tersedia' | 'sisa_sedikit' | 'penuh', string> = {
   tersedia: 'bg-[#2B4739]',
-  sisa_sedikit: 'bg-[#B5652E]',
+  sisa_sedikit: 'bg-[#A65C2A]',
   penuh: 'bg-[#A8412E]',
 };
 
@@ -45,8 +45,8 @@ function CalendarMock({ compact = false }: { compact?: boolean }) {
       {!compact && (
         <>
           <div className="flex items-center gap-1.5 bg-white border border-[#DBD5C1] rounded-lg px-2.5 py-1.5">
-            <Search className="w-3 h-3 text-[#8A8368] shrink-0" />
-            <span className="text-[10px] text-[#8A8368]">Cari alat...</span>
+            <Search className="w-3 h-3 text-[#6E6853] shrink-0" />
+            <span className="text-[10px] text-[#6E6853]">Cari alat...</span>
           </div>
           <div className="flex gap-1.5">
             <span className="text-[9px] font-semibold bg-[#2B4739] text-white rounded-full px-2 py-0.5">Semua</span>
@@ -63,7 +63,7 @@ function CalendarMock({ compact = false }: { compact?: boolean }) {
         {rows.map((row) => (
           <div key={row.code} className="flex gap-2">
             <div className="w-8 h-8 rounded-lg bg-[#F1EEE2] flex items-center justify-center shrink-0">
-              <Package className="w-4 h-4 text-[#8A8368]" />
+              <Package className="w-4 h-4 text-[#6E6853]" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5 mb-1">
@@ -91,7 +91,7 @@ function CalendarMock({ compact = false }: { compact?: boolean }) {
 }
 
 function MockSectionLabel({ children }: { children: string }) {
-  return <span className="block text-[9px] font-bold text-[#8A8368] uppercase tracking-wide">{children}</span>;
+  return <span className="block text-[9px] font-bold text-[#6E6853] uppercase tracking-wide">{children}</span>;
 }
 
 function TransactionMock() {
@@ -119,12 +119,12 @@ function TrackingMock() {
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-2">
         <div className="bg-[#FAF0EE] border border-[#A8412E]/20 rounded-lg px-2 py-1.5">
-          <div className="text-[9px] text-[#8A8368]">Terlambat</div>
+          <div className="text-[9px] text-[#6E6853]">Terlambat</div>
           <div className="text-sm font-extrabold text-[#A8412E]">2</div>
         </div>
-        <div className="bg-[#F9EFE7] border border-[#B5652E]/20 rounded-lg px-2 py-1.5">
-          <div className="text-[9px] text-[#8A8368]">Jaminan Ditahan</div>
-          <div className="text-sm font-extrabold text-[#B5652E]">3</div>
+        <div className="bg-[#F9EFE7] border border-[#A65C2A]/20 rounded-lg px-2 py-1.5">
+          <div className="text-[9px] text-[#6E6853]">Jaminan Ditahan</div>
+          <div className="text-sm font-extrabold text-[#A65C2A]">3</div>
         </div>
       </div>
       <div className="flex items-start justify-between gap-2">
@@ -133,14 +133,14 @@ function TrackingMock() {
             SWL-0803-02
           </span>
           <div className="text-[12px] font-bold text-[#26302B]">Rina W.</div>
-          <div className="text-[10px] text-[#8A8368]">Tenda Dome 4P × 1</div>
+          <div className="text-[10px] text-[#6E6853]">Tenda Dome 4P × 1</div>
         </div>
         <span className="inline-flex items-center gap-1 bg-[#A8412E] text-white text-[9px] font-bold rounded-full px-2 py-0.5 whitespace-nowrap">
           <AlertOctagon className="w-2.5 h-2.5" />
           Telat 5 jam
         </span>
       </div>
-      <ul className="text-[10px] text-[#8A8368] pl-4 list-disc space-y-0.5">
+      <ul className="text-[10px] text-[#6E6853] pl-4 list-disc space-y-0.5">
         <li>Denda keterlambatan: Rp25.000</li>
         <li>Denda kerusakan: Rp50.000 (ritsleting)</li>
       </ul>
@@ -152,19 +152,19 @@ function HeroPreview() {
   return (
     <div className="relative w-full max-w-[300px] h-[300px] lg:max-w-[340px] lg:h-[340px]" aria-hidden="true">
       <div className="absolute inset-0 bg-[#FBFAF4] border border-[#DBD5C1] rounded-2xl shadow-xl p-3.5 overflow-hidden rotate-[6deg] translate-x-[10px] translate-y-[6px] opacity-70 z-10">
-        <span className="block text-[11px] font-bold uppercase tracking-wide text-[#8A8368] mb-2.5">
+        <span className="block text-[11px] font-bold uppercase tracking-wide text-[#6E6853] mb-2.5">
           Jaminan &amp; denda
         </span>
         <TrackingMock />
       </div>
       <div className="absolute inset-0 bg-[#FBFAF4] border border-[#DBD5C1] rounded-2xl shadow-xl p-3.5 overflow-hidden -rotate-[4deg] -translate-x-[8px] translate-y-[10px] opacity-90 z-20">
-        <span className="block text-[11px] font-bold uppercase tracking-wide text-[#8A8368] mb-2.5">
+        <span className="block text-[11px] font-bold uppercase tracking-wide text-[#6E6853] mb-2.5">
           Catat transaksi
         </span>
         <TransactionMock />
       </div>
       <div className="absolute inset-0 bg-[#FBFAF4] border border-[#DBD5C1] rounded-2xl shadow-xl p-3.5 overflow-hidden rotate-[1deg] z-30">
-        <span className="block text-[11px] font-bold uppercase tracking-wide text-[#8A8368] mb-2.5">
+        <span className="block text-[11px] font-bold uppercase tracking-wide text-[#6E6853] mb-2.5">
           Kalender ketersediaan
         </span>
         <CalendarMock compact />
@@ -188,7 +188,7 @@ function ProblemCard({
         <Icon className="w-5 h-5 text-[#A8412E]" />
       </div>
       <h3 className="text-base font-bold text-[#26302B] mb-1.5">{title}</h3>
-      <p className="text-sm text-[#8A8368]">{children}</p>
+      <p className="text-sm text-[#6E6853]">{children}</p>
     </div>
   );
 }
@@ -212,7 +212,7 @@ function FeatureCard({
         <Icon className="w-5 h-5" />
       </div>
       <h3 className="text-base font-bold text-[#26302B]">{title}</h3>
-      <p className="text-sm text-[#8A8368]">{children}</p>
+      <p className="text-sm text-[#6E6853]">{children}</p>
       <div className="pt-3.5 border-t border-[#E6E1D2]">{preview}</div>
     </div>
   );
@@ -258,7 +258,7 @@ export function LandingPage() {
             href={waLink(MSG_UMUM)}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-2 bg-[#B5652E] hover:bg-[#9E5524] active:scale-95 transition text-white text-sm font-semibold px-4 py-2 rounded-xl shadow-xs"
+            className="inline-flex items-center gap-2 bg-[#A65C2A] hover:bg-[#9E5524] active:scale-95 transition text-white text-sm font-semibold px-4 py-2 rounded-xl shadow-xs"
           >
             <WaIcon className="w-4 h-4" />
             Hubungi Kami
@@ -272,7 +272,7 @@ export function LandingPage() {
             <h1 className="text-3xl sm:text-4xl lg:text-[42px] font-extrabold leading-tight text-[#26302B] mb-4">
               Jangan Sampai Alat yang Sama Disewa Dua Kali
             </h1>
-            <p className="text-base text-[#8A8368] mb-6 max-w-md">
+            <p className="text-base text-[#6E6853] mb-6 max-w-md">
               Sewalog bantu kamu lihat stok alat yang masih kosong, catat transaksi sewa dalam hitungan detik, dan
               pantau jaminan &amp; denda — semua dari HP, sambil tetap layani pelanggan di depan rak.
             </p>
@@ -280,7 +280,7 @@ export function LandingPage() {
               href={waLink(MSG_UMUM)}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-2 bg-[#B5652E] hover:bg-[#9E5524] active:scale-95 transition text-white font-semibold px-6 py-3.5 rounded-xl shadow-md"
+              className="inline-flex items-center gap-2 bg-[#A65C2A] hover:bg-[#9E5524] active:scale-95 transition text-white font-semibold px-6 py-3.5 rounded-xl shadow-md"
             >
               <WaIcon className="w-5 h-5" />
               Ngobrol Dulu Yuk
@@ -321,7 +321,7 @@ export function LandingPage() {
             <div className="flex flex-col gap-4">
               <FeatureCard
                 icon={Plus}
-                iconClass="bg-[#F9EFE7] border border-[#B5652E]/30 text-[#B5652E]"
+                iconClass="bg-[#F9EFE7] border border-[#A65C2A]/30 text-[#A65C2A]"
                 title="Catat Transaksi"
                 preview={<TransactionMock />}
               >
@@ -362,7 +362,7 @@ export function LandingPage() {
                 </span>
                 <div>
                   <h3 className="text-[15px] font-bold text-[#26302B] mb-0.5">{step.title}</h3>
-                  <p className="text-sm text-[#8A8368]">{step.desc}</p>
+                  <p className="text-sm text-[#6E6853]">{step.desc}</p>
                 </div>
               </li>
             ))}
@@ -372,7 +372,7 @@ export function LandingPage() {
         <section className="reveal max-w-4xl mx-auto px-4 sm:px-6 py-9">
           <div className="bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] shadow-xs text-center px-6 py-9 sm:py-11">
             <h2 className="text-2xl font-bold text-[#26302B] mb-3">Masih Ragu? Ngobrol Dulu Aja</h2>
-            <p className="text-[#8A8368] max-w-md mx-auto mb-6">
+            <p className="text-[#6E6853] max-w-md mx-auto mb-6">
               Nggak perlu buru-buru mutusin. Ceritakan cara sewa alat di tempat kamu, biar kami bantu lihat apakah
               Sewalog cocok buat usaha kamu.
             </p>
@@ -380,7 +380,7 @@ export function LandingPage() {
               href={waLink(MSG_MULAI)}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-2 bg-[#B5652E] hover:bg-[#9E5524] active:scale-95 transition text-white font-semibold px-6 py-3.5 rounded-xl shadow-md"
+              className="inline-flex items-center gap-2 bg-[#A65C2A] hover:bg-[#9E5524] active:scale-95 transition text-white font-semibold px-6 py-3.5 rounded-xl shadow-md"
             >
               <WaIcon className="w-5 h-5" />
               Hubungi Kami Sekarang

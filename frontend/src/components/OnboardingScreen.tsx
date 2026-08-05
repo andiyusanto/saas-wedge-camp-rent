@@ -50,10 +50,10 @@ export function OnboardingScreen({ onCreated }: { onCreated: () => void }) {
           <Store className="w-5 h-5 text-[#2B4739]" />
           <span>Setup Usaha</span>
         </h2>
-        <p className="text-xs text-[#8A8368] mt-1">Isi data usaha rental kamu sebelum mulai pakai Sewalog.</p>
+        <p className="text-xs text-[#6E6853] mt-1">Isi data usaha rental kamu sebelum mulai pakai Sewalog.</p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3.5 mt-4">
-          <label className="flex flex-col gap-1.5 text-sm text-[#8A8368]">
+          <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
             Nama usaha
             <input
               value={name}
@@ -62,7 +62,7 @@ export function OnboardingScreen({ onCreated }: { onCreated: () => void }) {
               className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
             />
           </label>
-          <label className="flex flex-col gap-1.5 text-sm text-[#8A8368]">
+          <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
             Nama pemilik
             <input
               value={ownerName}
@@ -70,7 +70,7 @@ export function OnboardingScreen({ onCreated }: { onCreated: () => void }) {
               className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
             />
           </label>
-          <label className="flex flex-col gap-1.5 text-sm text-[#8A8368]">
+          <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
             No. telepon
             <input
               value={phone}

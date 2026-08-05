@@ -10,10 +10,10 @@
     --border-main: #dbd5c1;
     --border-light: #e6e1d2;
     --primary-pine: #2b4739;
-    --warning-rust: #b5652e;
+    --warning-rust: #a65c2a;
     --danger-accent: #a8412e;
     --text-primary: #26302b;
-    --text-muted: #8a8368;
+    --text-muted: #6e6853;
   }
 
   body {
@@ -45,7 +45,7 @@
   color: #26302b;
 }
 @utility text-sewa-muted {
-  color: #8a8368;
+  color: #6e6853;
 }
 @utility bg-sewa-pine {
   background-color: #2b4739;
@@ -54,10 +54,10 @@
   color: #2b4739;
 }
 @utility bg-sewa-rust {
-  background-color: #b5652e;
+  background-color: #a65c2a;
 }
 @utility text-sewa-rust {
-  color: #b5652e;
+  color: #a65c2a;
 }
 @utility bg-sewa-danger {
   background-color: #a8412e;

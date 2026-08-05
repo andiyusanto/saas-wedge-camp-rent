@@ -62,7 +62,7 @@ export function CalendarScreen({
               <CalendarIcon className="w-5 h-5 text-[#2B4739]" />
               <span>Kalender Ketersediaan Alat</span>
             </h2>
-            <p className="text-xs text-[#8A8368]">Perhitungan stok dihitung realtime dari transaksi aktif.</p>
+            <p className="text-xs text-[#6E6853]">Perhitungan stok dihitung realtime dari transaksi aktif.</p>
           </div>
 
           <div className="flex items-center space-x-2 bg-[#F1EEE2] p-1.5 rounded-xl border border-[#DBD5C1]">
@@ -89,7 +89,7 @@ export function CalendarScreen({
 
         <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t border-[#E6E1D2]">
           <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#8A8368]" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#6E6853]" />
             <input
               type="text"
               placeholder="Cari alat (contoh: Tenda, 60L)..."
@@ -98,7 +98,7 @@ export function CalendarScreen({
               className="w-full pl-9 pr-4 py-2 text-xs rounded-xl bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:border-[#2B4739] focus:ring-1 focus:ring-[#2B4739]"
             />
           </div>
-          <div className="flex items-center space-x-1 text-xs font-medium text-[#8A8368]">
+          <div className="flex items-center space-x-1 text-xs font-medium text-[#6E6853]">
             <span className="hidden sm:inline">Tampilan:</span>
             {[5, 7].map((n) => (
               <button
@@ -133,14 +133,14 @@ export function CalendarScreen({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between text-xs text-[#8A8368] px-1 gap-2">
+      <div className="flex flex-wrap items-center justify-between text-xs text-[#6E6853] px-1 gap-2">
         <div className="flex items-center gap-3">
           <span className="font-semibold text-[#26302B]">Status:</span>
           <span className="flex items-center gap-1 text-[#2B4739] font-medium">
             <span className="w-2.5 h-2.5 rounded-full bg-[#2B4739]" /> Tersedia
           </span>
-          <span className="flex items-center gap-1 text-[#B5652E] font-medium">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#B5652E]" /> Sisa Sedikit
+          <span className="flex items-center gap-1 text-[#A65C2A] font-medium">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#A65C2A]" /> Sisa Sedikit
           </span>
           <span className="flex items-center gap-1 text-[#A8412E] font-medium">
             <span className="w-2.5 h-2.5 rounded-full bg-[#A8412E]" /> Penuh
@@ -149,11 +149,11 @@ export function CalendarScreen({
       </div>
 
       {loading ? (
-        <p className="text-sm text-[#8A8368]">Memuat kalender...</p>
+        <p className="text-sm text-[#6E6853]">Memuat kalender...</p>
       ) : error ? (
         <p className="text-sm text-[#A8412E]">Gagal memuat kalender: {error}</p>
       ) : filteredItems.length === 0 ? (
-        <div className="bg-[#FBFAF4] rounded-2xl p-8 border border-[#DBD5C1] text-center text-[#8A8368] text-sm">
+        <div className="bg-[#FBFAF4] rounded-2xl p-8 border border-[#DBD5C1] text-center text-[#6E6853] text-sm">
           {data?.items.length === 0
             ? 'Belum ada alat. Tambahkan dulu di tab "Katalog & Stok Alat".'
             : 'Peralatan tidak ditemukan dengan kata kunci atau kategori tersebut.'}
@@ -170,7 +170,7 @@ export function CalendarScreen({
                   {item.image_url ? (
                     <img src={item.image_url} alt={item.name} className="w-14 h-14 rounded-xl object-cover border border-[#DBD5C1] shrink-0 bg-[#F1EEE2]" />
                   ) : (
-                    <div className="w-14 h-14 rounded-xl border border-[#DBD5C1] shrink-0 bg-[#F1EEE2] flex items-center justify-center text-[#8A8368]">
+                    <div className="w-14 h-14 rounded-xl border border-[#DBD5C1] shrink-0 bg-[#F1EEE2] flex items-center justify-center text-[#6E6853]">
                       <Package className="w-5 h-5" />
                     </div>
                   )}
@@ -181,15 +181,15 @@ export function CalendarScreen({
                           {item.code}
                         </span>
                       )}
-                      {item.category && <span className="text-[11px] font-medium text-[#8A8368]">{item.category}</span>}
+                      {item.category && <span className="text-[11px] font-medium text-[#6E6853]">{item.category}</span>}
                     </div>
                     <h3 className="font-bold text-sm text-[#26302B] mt-0.5">{item.name}</h3>
                     <div className="flex items-center space-x-3 text-xs mt-1">
                       <span className="font-semibold text-[#2B4739]">
-                        {formatIDR(item.price_per_day)} <span className="text-[10px] font-normal text-[#8A8368]">/hari</span>
+                        {formatIDR(item.price_per_day)} <span className="text-[10px] font-normal text-[#6E6853]">/hari</span>
                       </span>
                       <span className="text-[#DBD5C1]">|</span>
-                      <span className="text-[#8A8368]">
+                      <span className="text-[#6E6853]">
                         Stok: <strong className="text-[#26302B]">{item.total_units}</strong> unit
                       </span>
                     </div>
@@ -205,10 +205,10 @@ export function CalendarScreen({
                         status === 'penuh'
                           ? 'bg-[#FAF0EE] text-[#A8412E] border-[#A8412E]/30'
                           : status === 'sisa_sedikit'
-                            ? 'bg-[#F9EFE7] text-[#B5652E] border-[#B5652E]/30'
+                            ? 'bg-[#F9EFE7] text-[#A65C2A] border-[#A65C2A]/30'
                             : 'bg-[#E8EFEA] text-[#2B4739] border-[#2B4739]/30';
                       const countBg =
-                        status === 'penuh' ? 'bg-[#A8412E] text-white' : status === 'sisa_sedikit' ? 'bg-[#B5652E] text-white' : 'bg-[#2B4739] text-[#FBFAF4]';
+                        status === 'penuh' ? 'bg-[#A8412E] text-white' : status === 'sisa_sedikit' ? 'bg-[#A65C2A] text-white' : 'bg-[#2B4739] text-[#FBFAF4]';
 
                       return (
                         <div key={dateStr} className={`flex flex-col items-center p-2 rounded-xl border min-w-[64px] text-center ${styles}`}>
