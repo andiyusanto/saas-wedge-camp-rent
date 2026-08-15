@@ -12,6 +12,7 @@
     "dev:landing": "npm run dev --workspace landing",
     "build:frontend": "npm run build --workspace frontend",
     "build:backend": "npm run build --workspace backend",
-    "build:landing": "npm run build --workspace landing"
+    "build:landing": "npm run build --workspace landing",
+    "seed:demo": "node --env-file=backend/.env scripts/seed-demo.mjs"
   }
 }

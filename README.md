@@ -70,6 +70,22 @@ migrations/     SQL schema — dijalankan manual di Supabase SQL Editor, urutan 
    npm run dev:landing    # http://localhost:5173 (workspace terpisah, jalankan salah satu saja per port default Vite)
    ```
 
+## Akun demo untuk ditunjukkan ke calon vendor
+
+Supaya calon vendor bisa langsung coba alur aplikasi (kalender, catat transaksi, jaminan & denda, kelola karyawan) tanpa harus isi data sendiri dulu, ada satu akun demo yang sudah terisi katalog alat + beberapa contoh transaksi di berbagai status (siap diambil, sedang disewa, terlambat + denda kerusakan) dan dua login (pemilik + karyawan) supaya "peran karyawan cuma label, bukan pembatas akses" bisa langsung dirasakan, bukan cuma dijelaskan.
+
+```bash
+npm run seed:demo
+```
+
+- Butuh `backend/.env` sudah terisi (script baca `SUPABASE_URL`/`SUPABASE_PUBLISHABLE_KEY` dari situ) dan backend sedang jalan di `npm run dev:backend` (booking dibuat lewat endpoint backend asli, bukan insert langsung ke tabel, supaya nomor booking/validasi kapasitas/audit trail tetap konsisten). Untuk seed ke backend production, jalankan `API_BASE_URL=https://<url-backend-render-mu> npm run seed:demo`.
+- **Aman dijalankan berkali-kali** (manual kapan saja, atau dijadwalkan lewat cron/GitHub Actions kalau demo-nya dibagikan ke banyak orang) — setiap run menutup transaksi demo dari run sebelumnya lewat endpoint yang sama dipakai vendor asli (bukan hard-delete, karena `booking_status_history` sengaja append-only — lihat bagian Keterbatasan di bawah), lalu reset katalog alat ke nilai default dan membuat transaksi contoh yang baru.
+- Login default (bisa ditimpa lewat env var `DEMO_OWNER_EMAIL`/`DEMO_KARYAWAN_EMAIL`/`DEMO_PASSWORD`):
+  - Pemilik: `demo.pemilik@sewalog.test` / `CobaSewalog2026`
+  - Karyawan: `demo.karyawan@sewalog.test` / `CobaSewalog2026`
+
+> Karena ini akun demo yang **dibagikan bersama** ke banyak calon vendor, dua orang yang mencoba bersamaan bisa saling menimpa perubahan satu sama lain (mis. batalkan transaksi contoh yang baru saja dilihat orang lain) — cukup jalankan ulang `npm run seed:demo` untuk mengembalikannya ke kondisi awal sebelum sesi demo berikutnya.
+
 ## Deploy ke Render (free tier) untuk demo vendor
 
 Render dipakai karena free tier-nya cukup untuk demo: dua **Static Site** (frontend, landing) + satu **Web Service** (backend). Supabase sudah di-setup dari langkah lokal di atas — kalau belum, lakukan itu dulu.
@@ -158,5 +174,6 @@ Authentication → Providers → Email → toggle **Confirm email**. Untuk pilot
 
 Lihat CLAUDE.md bagian 8 untuk daftar lengkap non-goals. Yang relevan secara teknis:
 - Tabel `businesses` sengaja tidak punya RLS policy `delete` (mencegah kehilangan histori booking) — kalau perlu hapus data uji coba, lakukan lewat SQL Editor langsung.
+- Tabel `booking_status_history` (audit trail) sengaja append-only, tidak ada policy `update`/`delete` sama sekali — termasuk untuk data uji coba/demo. `scripts/seed-demo.mjs` sengaja didesain menutup transaksi lama lewat endpoint asli (bukan hard-delete) karena batasan ini.
 - Belum ada manifest/ikon PWA — logo master ada di `frontend/public/logo.svg`, tinggal diekspor kalau fitur ini mau diaktifkan.
 - Belum ada rekap laporan, multi-cabang, atau marketplace publik.
