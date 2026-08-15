@@ -4,12 +4,25 @@ import { useAuth } from './hooks/useAuth';
 import { useBusiness } from './hooks/useBusiness';
 import { AuthScreen } from './components/AuthScreen';
 import { OnboardingScreen } from './components/OnboardingScreen';
+import { RedeemInviteScreen } from './components/RedeemInviteScreen';
 import { ItemsScreen } from './components/ItemsScreen';
 import { CalendarScreen } from './components/CalendarScreen';
 import { NewBookingModal } from './components/NewBookingModal';
 import { TrackingScreen } from './components/TrackingScreen';
+import { TeamScreen } from './components/TeamScreen';
+import { GuideScreen } from './components/GuideScreen';
 import { Navbar } from './components/Navbar';
 import type { Tab } from './components/Navbar';
+
+function readInviteCodeFromUrl(): string | null {
+  return new URLSearchParams(window.location.search).get('invite');
+}
+
+function clearInviteCodeFromUrl() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete('invite');
+  window.history.replaceState({}, '', url.toString());
+}
 
 function App() {
   const { session, loading: authLoading } = useAuth();
@@ -21,13 +34,32 @@ function App() {
   const [preselectedItemId, setPreselectedItemId] = useState<string | null>(null);
   const [preselectedStartDate, setPreselectedStartDate] = useState<string | null>(null);
 
+  const [inviteCode, setInviteCode] = useState<string | null>(readInviteCodeFromUrl);
+  const [inviteSkipped, setInviteSkipped] = useState(false);
+
   if (authLoading) return null;
 
   if (!session) return <AuthScreen />;
 
   if (businessLoading) return null;
 
-  if (!business) return <OnboardingScreen onCreated={refreshBusiness} />;
+  if (!business) {
+    if (inviteCode && !inviteSkipped) {
+      return (
+        <RedeemInviteScreen
+          session={session}
+          code={inviteCode}
+          onJoined={() => {
+            clearInviteCodeFromUrl();
+            setInviteCode(null);
+            refreshBusiness();
+          }}
+          onSkip={() => setInviteSkipped(true)}
+        />
+      );
+    }
+    return <OnboardingScreen onCreated={refreshBusiness} />;
+  }
 
   function openNewBooking(itemId?: string, startDate?: string) {
     setPreselectedItemId(itemId ?? null);
@@ -52,7 +84,9 @@ function App() {
         {tab === 'tracking' && (
           <TrackingScreen key={`trk-${refreshSignal}`} session={session} businessName={business.name} />
         )}
-        {tab === 'alat' && <ItemsScreen businessId={business.id} />}
+        {tab === 'alat' && <ItemsScreen businessId={business.id} session={session} />}
+        {tab === 'tim' && <TeamScreen session={session} businessId={business.id} />}
+        {tab === 'panduan' && <GuideScreen />}
       </main>
 
       {isNewBookingOpen && (

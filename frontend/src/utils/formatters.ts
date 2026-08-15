@@ -35,6 +35,22 @@ export function rentalDays(start: string, end: string): number {
   return Math.max(1, Math.round(ms / 86_400_000) + 1);
 }
 
+// Harga bertingkat sederhana: hari 1..discountMinDays pakai pricePerDay,
+// sisanya (kalau discountedPricePerDay diisi) pakai tarif itu. Sengaja
+// TIDAK dipakai untuk denda keterlambatan (lihat backend/src/lib/penalty.ts).
+export function computeItemRentalPrice(
+  pricePerDay: number,
+  discountMinDays: number,
+  discountedPricePerDay: number | null,
+  days: number,
+): number {
+  if (!discountedPricePerDay || days <= discountMinDays) {
+    return pricePerDay * days;
+  }
+  const extraDays = days - discountMinDays;
+  return pricePerDay * discountMinDays + discountedPricePerDay * extraDays;
+}
+
 const DEPOSIT_LABEL: Record<string, string> = {
   ktp: 'KTP Asli',
   sim: 'SIM Asli',

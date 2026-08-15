@@ -7,11 +7,14 @@ SaaS tools operasional untuk UKM rental alat kamping/outdoor di Malang Raya (Kot
 **Fondasi**
 - Login & daftar (email/password, Supabase Auth)
 - Onboarding — buat profil usaha otomatis saat pertama login
-- Katalog & stok alat — kode alat, kategori, foto (URL), deskripsi, catatan kondisi, jumlah unit, harga sewa/hari; bisa diedit atau dinonaktifkan (soft-delete, histori booking lama tetap utuh)
+- Katalog & stok alat — kode alat, kategori, foto (unggah langsung dari galeri/kamera, otomatis dikompres & disimpan ke Cloudflare R2 — bukan tempel URL manual), deskripsi, catatan kondisi, jumlah unit, harga sewa/hari, harga bertingkat opsional (tarif lebih murah per hari setelah sewa melewati N hari); bisa diedit atau dinonaktifkan (soft-delete, histori booking lama tetap utuh)
+- Kelola karyawan — undang staf lewat link sekali-pakai (kedaluwarsa 7 hari), tanpa perlu pemilik membuatkan username/password. Peran (`karyawan`/`owner`) murni label atribusi, akses fitur operasional sama untuk semua anggota.
+- Panduan penggunaan — halaman referensi in-app yang menjelaskan tiap fitur dari sisi vendor (tab **Panduan** di navbar).
+- Audit trail — setiap perubahan status transaksi (aktif/telat/selesai/dibatalkan) tercatat siapa & kapan (`booking_status_history`, append-only); perubahan data alat (tambah/edit/nonaktifkan) tercatat otomatis lewat trigger database (`items.created_by`/`updated_by`/`updated_at`/`deactivated_by`).
 
 **Tiga fitur inti MVP**
 1. **Kalender ketersediaan** — daftar per-alat dengan strip status beberapa hari ke depan (tersedia / sisa sedikit / penuh), bisa geser tanggal maju-mundur, filter kategori & pencarian. Dihitung on-the-fly dari data booking, bukan tabel tersimpan terpisah.
-2. **Catat transaksi** — form bertahap: data penyewa (nama, WhatsApp, alamat), periode sewa, pilih alat (multi-item dengan validasi kapasitas otomatis), jenis jaminan (KTP/SIM/STNK/Paspor/Uang/Lainnya + catatan), uang muka (DP), total harga otomatis. Booking dengan tanggal ambil hari ini langsung berstatus aktif; tanggal ambil di masa depan berstatus "dipesan" sampai ditandai diambil. Nomor booking (`SWL-YYYYMMDD-NN`) dan struk WhatsApp otomatis (`wa.me`) dibuat setiap transaksi.
+2. **Catat transaksi** — form bertahap: data penyewa (nama, WhatsApp, alamat), periode sewa, pilih alat (multi-item dengan validasi kapasitas otomatis, harga bertingkat terhitung otomatis kalau alatnya punya diskon sewa lama), jenis jaminan (KTP/SIM/STNK/Paspor/Uang/Lainnya + catatan), uang muka (DP), total harga otomatis. Booking dengan tanggal ambil hari ini langsung berstatus aktif; tanggal ambil di masa depan berstatus "dipesan" sampai ditandai diambil. Nomor booking (`SWL-YYYYMMDD-NN`) dan struk WhatsApp otomatis (`wa.me`) dibuat setiap transaksi.
 3. **Jaminan & denda** — dashboard ringkasan (jumlah telat, jaminan ditahan, sedang disewa, tunggakan denda) dengan filter & pencarian. Bisa tambah denda ad-hoc kapan saja (tanpa harus lewat proses pengembalian), lalu proses pengembalian: denda keterlambatan (saran otomatis berbasis toleransi jam per-vendor, bisa ditimpa), denda kerusakan, dan denda kehilangan dicatat sebagai tiga hal terpisah — tidak digabung jadi satu angka — plus opsi tandai jaminan sudah dikembalikan. Transaksi juga bisa dibatalkan sebelum diproses.
 
 ## Tech stack
@@ -20,8 +23,9 @@ SaaS tools operasional untuk UKM rental alat kamping/outdoor di Malang Raya (Kot
 - **Landing page**: React + Vite + TypeScript (`landing/`) — situs marketing statis, terpisah dari app produk, tanpa dependensi Supabase/backend
 - **Backend**: Express + TypeScript (`backend/`)
 - **Database & Auth**: Supabase (Postgres + Row Level Security)
+- **Object storage**: Cloudflare R2 (foto katalog alat) — diakses lewat `@aws-sdk/client-s3` (S3-compatible), kredensial hanya ada di backend
 
-Backend tidak pernah memakai Supabase Secret Key — semua request diteruskan dengan JWT milik user yang login, supaya RLS (`owner_id = auth.uid()`) tetap jadi satu-satunya penjaga isolasi antar-vendor.
+Backend tidak pernah memakai Supabase Secret Key — semua request diteruskan dengan JWT milik user yang login, supaya RLS (`is_member_of(business_id)`, diturunkan dari `owner_id = auth.uid()` saat business dibuat) tetap jadi satu-satunya penjaga isolasi antar-vendor. R2 sendiri tidak punya mekanisme setara RLS per-user, jadi upload foto selalu lewat endpoint backend (`POST /api/uploads/item-image`) yang mengecek keanggotaan usaha dulu sebelum mengunggah — kredensial R2 tidak pernah dikirim ke browser.
 
 ## Struktur project
 
@@ -46,12 +50,20 @@ migrations/     SQL schema — dijalankan manual di Supabase SQL Editor, urutan 
    4. `004_items_deactivated_at.sql`
    5. `005_bookings_cancel_status.sql`
    6. `006_richer_catalog_and_booking_fields.sql`
+   7. `007_business_members_and_invites.sql`
+   8. `008_audit_trail.sql`
+   9. `009_tiered_pricing.sql`
+   10. `010_business_members_email.sql`
+   11. `012_business_members_owner_self_insert.sql`
+   12. `013_fix_owner_self_insert_recursion.sql`
 
-3. **Isi env var** — copy `.env.example` jadi `.env` di masing-masing folder, isi dari Supabase Dashboard → Connect → App Frameworks:
-   - `backend/.env` → `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`
+3. **Buat bucket Cloudflare R2** — buat bucket baru di [dash.cloudflare.com](https://dash.cloudflare.com) → R2, aktifkan akses publik (custom domain atau URL `pub-xxxx.r2.dev` bawaan), lalu buat API Token (Account API Token, permission **Object Read & Write**, dibatasi ke bucket ini saja).
+
+4. **Isi env var** — copy `.env.example` jadi `.env` di masing-masing folder, isi dari Supabase Dashboard → Connect → App Frameworks, dan dari langkah R2 di atas:
+   - `backend/.env` → `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_URL`
    - `frontend/.env` → `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`
 
-4. **Jalankan dev server** (terminal terpisah per bagian yang mau dijalankan):
+5. **Jalankan dev server** (terminal terpisah per bagian yang mau dijalankan):
    ```bash
    npm run dev:backend    # http://localhost:3001
    npm run dev:frontend   # http://localhost:5173
@@ -81,6 +93,7 @@ Di Render Dashboard → **New → Web Service** → hubungkan repo ini.
 Environment variables (Render → service ini → **Environment**):
 - `SUPABASE_URL` = URL project Supabase
 - `SUPABASE_PUBLISHABLE_KEY` = publishable key project Supabase
+- `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_URL` = dari setup bucket Cloudflare R2 (lihat langkah 3 di Setup lokal)
 - `FRONTEND_ORIGIN` = *(isi belakangan, setelah frontend dideploy dan tahu URL-nya — lihat langkah 5)*
 
 > Catatan: `--include=dev` sengaja dipakai supaya `typescript` (devDependency, dibutuhkan buat build) tetap ke-install meski platform men-set `NODE_ENV=production`.
@@ -138,7 +151,7 @@ Authentication → Providers → Email → toggle **Confirm email**. Untuk pilot
 
 - **Static Site** (frontend, landing) tidak pernah "tidur" — selalu langsung responsif.
 - **Web Service** (backend) di free tier akan *spin down* setelah idle beberapa saat, dan butuh waktu untuk "bangun" lagi (cold start) di request pertama setelahnya — bisa terasa lambat beberapa puluh detik. Kalau mau demo langsung ke vendor, buka dulu halaman Kalender/Catat Transaksi/Jaminan & Denda beberapa menit sebelum sesi demo dimulai supaya backend sudah "bangun".
-- Login, onboarding, dan Kelola Alat memanggil Supabase langsung dari frontend (tidak lewat backend), jadi tidak kena cold start ini — hanya tiga fitur inti MVP yang lewat backend.
+- Login, onboarding, dan sebagian besar Kelola Alat memanggil Supabase langsung dari frontend (tidak lewat backend), jadi tidak kena cold start ini. Tiga fitur inti MVP, upload foto alat (harus lewat backend karena kredensial R2), dan Kelola Karyawan (invite) tetap lewat backend, jadi bisa terasa lambat di request pertama setelah idle.
 - Landing page tidak kena cold start apa pun — full statis, tidak ada dependensi runtime.
 
 ## Keterbatasan yang disengaja (sesuai fase sekarang)

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { createRequestClient } from '../lib/supabaseClient.js';
 import { computeDueAt, hoursLate, computeLateFee } from '../lib/penalty.js';
+import { logBookingStatus } from '../lib/audit.js';
 
 const router = Router();
 
@@ -169,6 +170,17 @@ router.post('/bookings/:id/return', async (req, res) => {
     }
   }
 
+  const { data: actorData } = await supabase.auth.getUser();
+  if (actorData.user) {
+    await logBookingStatus(
+      supabase,
+      id,
+      isLate ? 'telat' : 'selesai',
+      actorData.user.id,
+      actorData.user.email ?? actorData.user.id,
+    );
+  }
+
   res.json({ ok: true, status: isLate ? 'telat' : 'selesai', hours_late: hLate });
 });
 
@@ -216,6 +228,11 @@ router.post('/bookings/:id/cancel', async (req, res) => {
   if (depositError) {
     res.status(400).json({ error: depositError.message });
     return;
+  }
+
+  const { data: actorData } = await supabase.auth.getUser();
+  if (actorData.user) {
+    await logBookingStatus(supabase, id, 'dibatalkan', actorData.user.id, actorData.user.email ?? actorData.user.id);
   }
 
   res.json({ ok: true });

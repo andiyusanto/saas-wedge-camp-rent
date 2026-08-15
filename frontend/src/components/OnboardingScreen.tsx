@@ -19,24 +19,48 @@ export function OnboardingScreen({ onCreated }: { onCreated: () => void }) {
 
     const { data: userData } = await supabase.auth.getUser();
     const ownerId = userData.user?.id;
+    const ownerEmail = userData.user?.email;
 
-    if (!ownerId) {
+    if (!ownerId || !ownerEmail) {
       setError('Sesi login tidak ditemukan, coba login ulang.');
       setSubmitting(false);
       return;
     }
 
+    // ID digenerate di client (bukan mengandalkan default gen_random_uuid()
+    // + .select() baca-balik) — soalnya baca-balik lewat RLS SELECT butuh
+    // is_member_of(), yang baru terpenuhi SETELAH baris business_members di
+    // bawah ini ada. Kalau insert dulu baru select id, jadi ayam-telur.
+    const businessId = crypto.randomUUID();
+
     const { error: insertError } = await supabase.from('businesses').insert({
+      id: businessId,
       owner_id: ownerId,
       name,
       owner_name: ownerName || null,
       phone: phone || null,
     });
 
+    if (insertError) {
+      setSubmitting(false);
+      setError(insertError.message);
+      return;
+    }
+
+    // RLS businesses (select/update) sekarang lewat business_members, bukan
+    // owner_id langsung — tanpa baris ini pemilik yang baru saja bikin
+    // bisnisnya sendiri malah tidak bisa membacanya lagi.
+    const { error: memberError } = await supabase.from('business_members').insert({
+      business_id: businessId,
+      user_id: ownerId,
+      role: 'owner',
+      email: ownerEmail,
+    });
+
     setSubmitting(false);
 
-    if (insertError) {
-      setError(insertError.message);
+    if (memberError) {
+      setError(memberError.message);
       return;
     }
 

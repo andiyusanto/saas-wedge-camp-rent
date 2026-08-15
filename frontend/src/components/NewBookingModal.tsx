@@ -5,7 +5,15 @@ import { X, Calendar, Plus, CheckCircle2, User, ShieldCheck } from 'lucide-react
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import { useItems } from '../hooks/useItems';
 import type { Business } from '../hooks/useBusiness';
-import { formatIDR, rentalDays, todayStr, generateWhatsAppReceipt, getWhatsAppShareUrl, depositLabel } from '../utils/formatters';
+import {
+  formatIDR,
+  rentalDays,
+  todayStr,
+  generateWhatsAppReceipt,
+  getWhatsAppShareUrl,
+  depositLabel,
+  computeItemRentalPrice,
+} from '../utils/formatters';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
 
@@ -68,7 +76,8 @@ export function NewBookingModal({
 
   const totalPrice = selectedEntries.reduce((sum, [itemId, qty]) => {
     const item = items.find((i) => i.id === itemId);
-    return sum + (item ? item.price_per_day * qty * days : 0);
+    if (!item) return sum;
+    return sum + qty * computeItemRentalPrice(item.price_per_day, item.discount_min_days, item.discounted_price_per_day, days);
   }, 0);
 
   const remainingPayment = Math.max(0, totalPrice - (Number(dpPaid) || 0));
@@ -263,7 +272,7 @@ export function NewBookingModal({
                 {items.map((item) => {
                   const qty = quantities[item.id] ?? 0;
                   const checked = qty > 0;
-                  const subtotal = item.price_per_day * qty * days;
+                  const subtotal = qty * computeItemRentalPrice(item.price_per_day, item.discount_min_days, item.discounted_price_per_day, days);
 
                   return (
                     <div key={item.id} className="flex items-center justify-between p-2.5 rounded-lg bg-white border border-[#DBD5C1]">

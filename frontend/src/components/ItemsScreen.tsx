@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { Package, Plus, Edit2, Search, Trash2, X } from 'lucide-react';
+import type { Session } from '@supabase/supabase-js';
+import { Package, Plus, Edit2, Search, Trash2, X, Upload } from 'lucide-react';
 import { useItems } from '../hooks/useItems';
 import type { Item, ItemInput } from '../hooks/useItems';
 import { formatIDR } from '../utils/formatters';
+import { resizeImageToDataUrl } from '../utils/imageResize';
 import { ScrollableRow } from './ScrollableRow';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
 
 const CATEGORIES = [
   'Tenda',
@@ -23,6 +27,8 @@ const EMPTY_FORM: ItemInput = {
   category: 'Tenda',
   total_units: 5,
   price_per_day: 25000,
+  discount_min_days: 5,
+  discounted_price_per_day: null,
   image_url: '',
   description: '',
   condition_note: '',
@@ -30,19 +36,46 @@ const EMPTY_FORM: ItemInput = {
 
 function ItemFormModal({
   initial,
+  businessId,
+  session,
   onSave,
   onClose,
 }: {
   initial: ItemInput;
+  businessId: string;
+  session: Session;
   onSave: (input: ItemInput) => Promise<{ error: string | null }>;
   onClose: () => void;
 }) {
   const [form, setForm] = useState<ItemInput>(initial);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   function set<K extends keyof ItemInput>(key: K, value: ItemInput[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handleUploadImage(file: File) {
+    setUploadingImage(true);
+    setError(null);
+
+    try {
+      const dataUrl = await resizeImageToDataUrl(file);
+      const res = await fetch(`${API_BASE_URL}/api/uploads/item-image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ businessId, image: dataUrl }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? `Gagal mengunggah (HTTP ${res.status})`);
+
+      set('image_url', body.url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gagal mengunggah gambar.');
+    } finally {
+      setUploadingImage(false);
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -145,14 +178,65 @@ function ItemFormModal({
             </div>
           </div>
 
+          <div className="p-3 rounded-xl bg-[#F1EEE2] border border-[#DBD5C1] space-y-2">
+            <p className="font-semibold text-[#26302B]">Harga setelah sewa lama (opsional)</p>
+            <p className="text-[11px] text-[#6E6853]">
+              Kosongkan "Harga setelah diskon" kalau alat ini harganya tetap sama berapa pun lama sewanya.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-semibold text-[#26302B] mb-1">Berlaku setelah (hari)</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={form.discount_min_days}
+                  onChange={(e) => set('discount_min_days', Number(e.target.value))}
+                  className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B]"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-[#26302B] mb-1">Harga setelah diskon (Rp)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1000}
+                  value={form.discounted_price_per_day ?? ''}
+                  onChange={(e) => set('discounted_price_per_day', e.target.value ? Number(e.target.value) : null)}
+                  placeholder="Sama seperti harga normal"
+                  className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B]"
+                />
+              </div>
+            </div>
+          </div>
+
           <div>
-            <label className="block font-semibold text-[#26302B] mb-1">URL Foto Alat</label>
+            <label className="block font-semibold text-[#26302B] mb-1">Foto Alat</label>
+            <div className="flex items-center gap-2">
+              {form.image_url && (
+                <img src={form.image_url} alt="Pratinjau" className="h-14 w-14 shrink-0 object-cover rounded-lg border border-[#DBD5C1]" />
+              )}
+              <label className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-dashed border-[#DBD5C1] px-3 py-2.5 text-xs font-semibold text-[#6E6853] hover:bg-[#F1EEE2] cursor-pointer transition">
+                <Upload className="w-4 h-4" />
+                {uploadingImage ? 'Mengunggah...' : 'Upload Gambar'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  disabled={uploadingImage}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleUploadImage(file);
+                    e.target.value = '';
+                  }}
+                  className="hidden"
+                />
+              </label>
+            </div>
             <input
               type="url"
-              placeholder="https://..."
+              placeholder="atau tempel URL gambar di sini..."
               value={form.image_url ?? ''}
               onChange={(e) => set('image_url', e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B]"
+              className="mt-2 w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B]"
             />
           </div>
 
@@ -240,6 +324,11 @@ function ItemCard({ item, onEdit, onDeactivate, onReactivate }: {
             <p className="font-bold text-[#2B4739] text-xs">{formatIDR(item.price_per_day)}</p>
           </div>
         </div>
+        {item.discounted_price_per_day != null && (
+          <p className="text-[11px] text-[#6E6853] mt-2">
+            Setelah {item.discount_min_days} hari: <strong className="text-[#2B4739]">{formatIDR(item.discounted_price_per_day)}</strong>/hari
+          </p>
+        )}
         {item.condition_note && <p className="text-[11px] text-[#6E6853] mt-2 italic">{item.condition_note}</p>}
       </div>
 
@@ -272,7 +361,7 @@ function ItemCard({ item, onEdit, onDeactivate, onReactivate }: {
   );
 }
 
-export function ItemsScreen({ businessId }: { businessId: string }) {
+export function ItemsScreen({ businessId, session }: { businessId: string; session: Session }) {
   const { items, inactiveItems, loading, addItem, updateItem, setItemActive } = useItems(businessId);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Semua');
@@ -375,11 +464,15 @@ export function ItemsScreen({ businessId }: { businessId: string }) {
                   category: modalItem.category,
                   total_units: modalItem.total_units,
                   price_per_day: modalItem.price_per_day,
+                  discount_min_days: modalItem.discount_min_days,
+                  discounted_price_per_day: modalItem.discounted_price_per_day,
                   image_url: modalItem.image_url,
                   description: modalItem.description,
                   condition_note: modalItem.condition_note,
                 }
           }
+          businessId={businessId}
+          session={session}
           onSave={(input) => (modalItem === 'new' ? addItem(input) : updateItem(modalItem.id, input))}
           onClose={() => setModalItem(null)}
         />

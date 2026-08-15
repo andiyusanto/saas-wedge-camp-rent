@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { createRequestClient } from '../lib/supabaseClient.js';
 import { fetchActiveBookingItems, usedUnitsOn } from '../lib/availability.js';
 import { dateRange, todayInWIB } from '../lib/dates.js';
+import { logBookingStatus } from '../lib/audit.js';
 
 const router = Router();
 
@@ -172,6 +173,11 @@ router.post('/bookings', async (req, res) => {
     }
   }
 
+  const { data: actorData } = await supabase.auth.getUser();
+  if (actorData.user) {
+    await logBookingStatus(supabase, bookingRow.id, bookingRow.status, actorData.user.id, actorData.user.email ?? actorData.user.id);
+  }
+
   res.status(201).json({ id: bookingRow.id, booking_number: bookingRow.booking_number, status: bookingRow.status });
 });
 
@@ -205,6 +211,11 @@ router.post('/bookings/:id/pickup', async (req, res) => {
   if (updateError) {
     res.status(400).json({ error: updateError.message });
     return;
+  }
+
+  const { data: actorData } = await supabase.auth.getUser();
+  if (actorData.user) {
+    await logBookingStatus(supabase, id, 'aktif', actorData.user.id, actorData.user.email ?? actorData.user.id);
   }
 
   res.json({ ok: true });

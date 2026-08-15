@@ -1,12 +1,14 @@
-import { Calendar, ShieldAlert, Package, Plus, LogOut } from 'lucide-react';
+import { Calendar, ShieldAlert, Package, Plus, LogOut, Users, BookOpen } from 'lucide-react';
 import { ScrollableRow } from './ScrollableRow';
 
-export type Tab = 'kalender' | 'tracking' | 'alat';
+export type Tab = 'kalender' | 'tracking' | 'alat' | 'tim' | 'panduan';
 
 const TABS: { id: Tab; label: string; icon: typeof Calendar }[] = [
   { id: 'kalender', label: 'Kalender Ketersediaan', icon: Calendar },
   { id: 'tracking', label: 'Jaminan & Denda', icon: ShieldAlert },
   { id: 'alat', label: 'Katalog & Stok Alat', icon: Package },
+  { id: 'tim', label: 'Kelola Karyawan', icon: Users },
+  { id: 'panduan', label: 'Panduan', icon: BookOpen },
 ];
 
 export function Navbar({
