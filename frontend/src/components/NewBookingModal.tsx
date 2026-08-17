@@ -5,6 +5,7 @@ import { X, Calendar, Plus, CheckCircle2, User, ShieldCheck } from 'lucide-react
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import { useItems } from '../hooks/useItems';
 import type { Business } from '../hooks/useBusiness';
+import { apiFetch } from '../lib/api';
 import {
   formatIDR,
   rentalDays,
@@ -14,8 +15,6 @@ import {
   depositLabel,
   computeItemRentalPrice,
 } from '../utils/formatters';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
 
 type DepositType = '' | 'ktp' | 'sim' | 'stnk' | 'paspor' | 'uang' | 'lainnya';
 
@@ -104,28 +103,27 @@ export function NewBookingModal({
 
     setSubmitting(true);
 
-    const res = await fetch(`${API_BASE_URL}/api/bookings`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({
-        businessId: business.id,
-        customer: { name: customerName, phone: customerPhone || null, address: customerAddress || null },
-        start_date: startDate,
-        end_date: endDate,
-        items: selectedItems,
-        deposit: depositType ? { type: depositType, amount: depositAmount, note: depositNote || null } : null,
-        total_price: totalPrice,
-        dp_paid: Number(dpPaid) || 0,
-      }),
-    });
-
-    const body = await res.json().catch(() => ({}));
-    setSubmitting(false);
-
-    if (!res.ok) {
-      setError(body.error ?? `Gagal menyimpan (HTTP ${res.status})`);
+    let body: { booking_number: string; status: string };
+    try {
+      body = await apiFetch(session, '/api/bookings', {
+        method: 'POST',
+        body: JSON.stringify({
+          businessId: business.id,
+          customer: { name: customerName, phone: customerPhone || null, address: customerAddress || null },
+          start_date: startDate,
+          end_date: endDate,
+          items: selectedItems,
+          deposit: depositType ? { type: depositType, amount: depositAmount, note: depositNote || null } : null,
+          total_price: totalPrice,
+          dp_paid: Number(dpPaid) || 0,
+        }),
+      });
+    } catch (err) {
+      setSubmitting(false);
+      setError((err as Error).message);
       return;
     }
+    setSubmitting(false);
 
     // Booking sudah tersimpan di server pada titik ini — kegagalan bikin
     // draft struk WA (mis. katalog lokal belum sempat refresh) tidak boleh

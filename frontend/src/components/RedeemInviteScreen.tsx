@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { UserPlus } from 'lucide-react';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
+import { apiFetch } from '../lib/api';
 
 export function RedeemInviteScreen({
   session,
@@ -22,18 +21,14 @@ export function RedeemInviteScreen({
     setSubmitting(true);
     setError(null);
 
-    const res = await fetch(`${API_BASE_URL}/api/team/invites/redeem`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ code }),
-    });
-    const body = await res.json().catch(() => ({}));
-    setSubmitting(false);
-
-    if (!res.ok) {
-      setError(body.error ?? `Gagal (HTTP ${res.status})`);
+    try {
+      await apiFetch(session, '/api/team/invites/redeem', { method: 'POST', body: JSON.stringify({ code }) });
+    } catch (err) {
+      setSubmitting(false);
+      setError((err as Error).message);
       return;
     }
+    setSubmitting(false);
 
     onJoined();
   }

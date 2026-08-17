@@ -3,14 +3,13 @@ import type { Session } from '@supabase/supabase-js';
 import { X, RotateCcw, AlertTriangle, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import type { TrackingBooking } from '../hooks/useTrackings';
+import { apiFetch } from '../lib/api';
 import {
   formatDateIndo,
   depositLabel,
   generateWhatsAppReceipt,
   getWhatsAppShareUrl,
 } from '../utils/formatters';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
 
 export function ReturnModal({
   isOpen,
@@ -67,23 +66,22 @@ export function ReturnModal({
       extraPenalties.push({ type: 'kehilangan', amount: Number(lossAmount), description: lossDesc || null });
     }
 
-    const res = await fetch(`${API_BASE_URL}/api/bookings/${booking.id}/return`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({
-        late_fee_amount: Number(lateFee) || 0,
-        extra_penalties: extraPenalties,
-        return_deposits: hasDeposit && returnDeposit,
-      }),
-    });
-
-    const body = await res.json().catch(() => ({}));
-    setSubmitting(false);
-
-    if (!res.ok) {
-      setError(body.error ?? `Gagal (HTTP ${res.status})`);
+    let body: { status: string };
+    try {
+      body = await apiFetch(session, `/api/bookings/${booking.id}/return`, {
+        method: 'POST',
+        body: JSON.stringify({
+          late_fee_amount: Number(lateFee) || 0,
+          extra_penalties: extraPenalties,
+          return_deposits: hasDeposit && returnDeposit,
+        }),
+      });
+    } catch (err) {
+      setSubmitting(false);
+      setError((err as Error).message);
       return;
     }
+    setSubmitting(false);
 
     if (autoOpenWA && booking.customer?.phone) {
       const allFines = [

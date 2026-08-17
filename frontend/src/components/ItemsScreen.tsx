@@ -4,11 +4,10 @@ import type { Session } from '@supabase/supabase-js';
 import { Package, Plus, Edit2, Search, Trash2, X, Upload } from 'lucide-react';
 import { useItems } from '../hooks/useItems';
 import type { Item, ItemInput } from '../hooks/useItems';
+import { apiFetch } from '../lib/api';
 import { formatIDR } from '../utils/formatters';
 import { resizeImageToDataUrl } from '../utils/imageResize';
 import { ScrollableRow } from './ScrollableRow';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
 
 const CATEGORIES = [
   'Tenda',
@@ -62,13 +61,10 @@ function ItemFormModal({
 
     try {
       const dataUrl = await resizeImageToDataUrl(file);
-      const res = await fetch(`${API_BASE_URL}/api/uploads/item-image`, {
+      const body = await apiFetch<{ url: string }>(session, '/api/uploads/item-image', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({ businessId, image: dataUrl }),
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error ?? `Gagal mengunggah (HTTP ${res.status})`);
 
       set('image_url', body.url);
     } catch (err) {

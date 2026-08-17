@@ -4,8 +4,7 @@ import type { Session } from '@supabase/supabase-js';
 import { X, PlusCircle } from 'lucide-react';
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import type { TrackingBooking } from '../hooks/useTrackings';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
+import { apiFetch } from '../lib/api';
 
 type FineType = 'kerusakan' | 'kehilangan';
 
@@ -40,19 +39,17 @@ export function AddFineModal({
     setSubmitting(true);
     setError(null);
 
-    const res = await fetch(`${API_BASE_URL}/api/bookings/${booking!.id}/penalties`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ type, amount: Number(amount), description: description.trim() }),
-    });
-
-    const body = await res.json().catch(() => ({}));
-    setSubmitting(false);
-
-    if (!res.ok) {
-      setError(body.error ?? `Gagal (HTTP ${res.status})`);
+    try {
+      await apiFetch(session, `/api/bookings/${booking!.id}/penalties`, {
+        method: 'POST',
+        body: JSON.stringify({ type, amount: Number(amount), description: description.trim() }),
+      });
+    } catch (err) {
+      setSubmitting(false);
+      setError((err as Error).message);
       return;
     }
+    setSubmitting(false);
 
     setDescription('');
     setAmount('');
