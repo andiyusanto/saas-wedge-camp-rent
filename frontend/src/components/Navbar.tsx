@@ -1,4 +1,4 @@
-import { Calendar, ShieldAlert, Package, Plus, LogOut, Users, BookOpen } from 'lucide-react';
+import { Calendar, ShieldAlert, Package, Plus, LogOut, Users, BookOpen, Store } from 'lucide-react';
 import { ScrollableRow } from './ScrollableRow';
 import type { MemberRole } from '../hooks/useBusiness';
 
@@ -48,6 +48,12 @@ export function Navbar({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#1E3429] border border-[#3A5C4A] max-w-[14rem]">
+              <Store className="w-4 h-4 text-[#A65C2A] shrink-0" />
+              <span className="text-xs font-bold text-[#F1EEE2] truncate" title={businessName}>
+                {businessName}
+              </span>
+            </div>
             <button
               onClick={onOpenNewBooking}
               className="flex items-center gap-1.5 px-3 py-2 sm:px-4 rounded-xl bg-[#A65C2A] hover:bg-[#9E5524] text-white font-semibold text-xs sm:text-sm shadow-sm transition active:scale-95"
