@@ -106,6 +106,9 @@ type ItemDef = {
   code: string;
   name: string;
   category: string;
+  variant: string | null;
+  size: string | null;
+  color: string | null;
   total_units: number;
   price_per_day: number;
   discount_min_days: number;
@@ -119,6 +122,9 @@ const ITEM_DEFS: ItemDef[] = [
     code: 'TND-01',
     name: 'Tenda Dome 4 Orang',
     category: 'Tenda',
+    variant: null,
+    size: null,
+    color: 'Hijau Army',
     total_units: 8,
     price_per_day: 60000,
     discount_min_days: 5,
@@ -130,6 +136,9 @@ const ITEM_DEFS: ItemDef[] = [
     code: 'SB-02',
     name: 'Sleeping Bag Dewasa',
     category: 'Perlengkapan Tidur',
+    variant: null,
+    size: 'Dewasa',
+    color: 'Merah',
     total_units: 15,
     price_per_day: 15000,
     discount_min_days: 3,
@@ -141,6 +150,9 @@ const ITEM_DEFS: ItemDef[] = [
     code: 'KP-03',
     name: 'Kompor Portable + Gas',
     category: 'Perlengkapan Masak',
+    variant: null,
+    size: null,
+    color: null,
     total_units: 6,
     price_per_day: 20000,
     discount_min_days: 5,
@@ -152,6 +164,9 @@ const ITEM_DEFS: ItemDef[] = [
     code: 'MT-04',
     name: 'Matras Camping',
     category: 'Perlengkapan Tidur',
+    variant: null,
+    size: null,
+    color: null,
     total_units: 20,
     price_per_day: 10000,
     discount_min_days: 5,
@@ -163,6 +178,9 @@ const ITEM_DEFS: ItemDef[] = [
     code: 'CR-05',
     name: 'Carrier 60L',
     category: 'Tas',
+    variant: null,
+    size: '60L',
+    color: 'Hijau Army',
     total_units: 10,
     price_per_day: 35000,
     discount_min_days: 5,
@@ -174,6 +192,9 @@ const ITEM_DEFS: ItemDef[] = [
     code: 'HL-06',
     name: 'Headlamp LED',
     category: 'Penerangan',
+    variant: null,
+    size: null,
+    color: 'Hitam',
     total_units: 12,
     price_per_day: 8000,
     discount_min_days: 5,

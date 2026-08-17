@@ -9,6 +9,14 @@ import { apiFetch } from '../lib/api';
 import { formatDateIndo, formatIDR } from '../utils/formatters';
 import { resizeImageToDataUrl } from '../utils/imageResize';
 import { ScrollableRow } from './ScrollableRow';
+import { SelectOrAddField } from './SelectOrAddField';
+
+// Diturunkan live dari katalog sendiri, bukan tabel enum/lookup terpisah —
+// sama seperti pola setara di Bilbo-Outdoors.
+function getDistinctValues(items: Item[], field: 'variant' | 'size' | 'color'): string[] {
+  const values = new Set(items.map((i) => i[field]).filter((v): v is string => !!v));
+  return [...values].sort((a, b) => a.localeCompare(b));
+}
 
 const CATEGORIES = [
   'Tenda',
@@ -25,6 +33,9 @@ const EMPTY_FORM: ItemInput = {
   code: '',
   name: '',
   category: 'Tenda',
+  variant: '',
+  size: '',
+  color: '',
   total_units: 5,
   price_per_day: 25000,
   discount_min_days: 5,
@@ -38,12 +49,18 @@ function ItemFormModal({
   initial,
   businessId,
   session,
+  variantOptions,
+  sizeOptions,
+  colorOptions,
   onSave,
   onClose,
 }: {
   initial: ItemInput;
   businessId: string;
   session: Session;
+  variantOptions: string[];
+  sizeOptions: string[];
+  colorOptions: string[];
   onSave: (input: ItemInput) => Promise<{ error: string | null }>;
   onClose: () => void;
 }) {
@@ -87,6 +104,9 @@ function ItemFormModal({
     const { error: saveError } = await onSave({
       ...form,
       code: form.code?.trim() || null,
+      variant: form.variant?.trim() || null,
+      size: form.size?.trim() || null,
+      color: form.color?.trim() || null,
       image_url: form.image_url?.trim() || null,
       description: form.description?.trim() || null,
       condition_note: form.condition_note?.trim() || null,
@@ -136,6 +156,33 @@ function ItemFormModal({
                 ))}
               </select>
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <SelectOrAddField
+              label="Varian"
+              value={form.variant ?? ''}
+              options={variantOptions}
+              onChange={(v) => set('variant', v)}
+              addButtonLabel="Tambah Varian Baru"
+              newInputPlaceholder="Contoh: Reguler"
+            />
+            <SelectOrAddField
+              label="Ukuran"
+              value={form.size ?? ''}
+              options={sizeOptions}
+              onChange={(v) => set('size', v)}
+              addButtonLabel="Tambah Ukuran Baru"
+              newInputPlaceholder="Contoh: L"
+            />
+            <SelectOrAddField
+              label="Warna"
+              value={form.color ?? ''}
+              options={colorOptions}
+              onChange={(v) => set('color', v)}
+              addButtonLabel="Tambah Warna Baru"
+              newInputPlaceholder="Contoh: Hijau Army"
+            />
           </div>
 
           <div>
@@ -308,6 +355,17 @@ function ItemCard({ item, emailByUserId, onEdit, onDeactivate, onReactivate }: {
               {item.category && <span className="text-[10px] text-[#6E6853] font-medium truncate">{item.category}</span>}
             </div>
             <h3 className="font-bold text-sm text-[#26302B] mt-1 line-clamp-1">{item.name}</h3>
+            {(item.variant || item.size || item.color) && (
+              <p className="text-[10px] text-[#6E6853] font-semibold uppercase tracking-wide mt-0.5">
+                {[
+                  item.variant && `Varian: ${item.variant}`,
+                  item.size && `Ukuran: ${item.size}`,
+                  item.color && `Warna: ${item.color}`,
+                ]
+                  .filter(Boolean)
+                  .join('   •   ')}
+              </p>
+            )}
             {item.description && <p className="text-xs text-[#6E6853] line-clamp-2 mt-0.5">{item.description}</p>}
           </div>
         </div>
@@ -381,10 +439,19 @@ export function ItemsScreen({ businessId, session }: { businessId: string; sessi
     [members],
   );
 
+  const variantOptions = useMemo(() => getDistinctValues(items, 'variant'), [items]);
+  const sizeOptions = useMemo(() => getDistinctValues(items, 'size'), [items]);
+  const colorOptions = useMemo(() => getDistinctValues(items, 'color'), [items]);
+
   const filtered = items.filter((item) => {
     const matchesCategory = selectedCategory === 'Semua' || item.category === selectedCategory;
     const q = searchQuery.toLowerCase();
-    const matchesSearch = item.name.toLowerCase().includes(q) || (item.code ?? '').toLowerCase().includes(q);
+    const matchesSearch =
+      item.name.toLowerCase().includes(q) ||
+      (item.code ?? '').toLowerCase().includes(q) ||
+      (item.variant ?? '').toLowerCase().includes(q) ||
+      (item.size ?? '').toLowerCase().includes(q) ||
+      (item.color ?? '').toLowerCase().includes(q);
     return matchesCategory && matchesSearch;
   });
 
@@ -488,6 +555,9 @@ export function ItemsScreen({ businessId, session }: { businessId: string; sessi
                   code: modalItem.code,
                   name: modalItem.name,
                   category: modalItem.category,
+                  variant: modalItem.variant,
+                  size: modalItem.size,
+                  color: modalItem.color,
                   total_units: modalItem.total_units,
                   price_per_day: modalItem.price_per_day,
                   discount_min_days: modalItem.discount_min_days,
@@ -499,6 +569,9 @@ export function ItemsScreen({ businessId, session }: { businessId: string; sessi
           }
           businessId={businessId}
           session={session}
+          variantOptions={variantOptions}
+          sizeOptions={sizeOptions}
+          colorOptions={colorOptions}
           onSave={(input) => (modalItem === 'new' ? addItem(input) : updateItem(modalItem.id, input))}
           onClose={() => setModalItem(null)}
         />
