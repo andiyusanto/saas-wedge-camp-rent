@@ -6,9 +6,36 @@ const router = Router();
 
 const INVITE_TTL_DAYS = 7;
 
+async function getCallerRole(
+  supabase: ReturnType<typeof createRequestClient>,
+  businessId: string,
+): Promise<string | null> {
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData.user?.id;
+  if (!userId) return null;
+
+  const { data } = await supabase
+    .from('business_members')
+    .select('role')
+    .eq('business_id', businessId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  return data?.role ?? null;
+}
+
+// Anggota mana pun (owner/karyawan) boleh lihat daftar anggota — dipakai
+// juga di luar layar Kelola Karyawan (baris "diperbarui oleh X" di
+// Katalog & Stok Alat), jadi sengaja tidak owner-only.
 router.get('/team/members', async (req, res) => {
   if (!req.headers.authorization) {
     res.status(401).json({ error: 'Belum login' });
+    return;
+  }
+
+  const businessId = req.query.businessId as string | undefined;
+  if (!businessId) {
+    res.status(400).json({ error: 'businessId wajib diisi' });
     return;
   }
 
@@ -16,6 +43,7 @@ router.get('/team/members', async (req, res) => {
   const { data, error } = await supabase
     .from('business_members')
     .select('id, user_id, role, email, created_at')
+    .eq('business_id', businessId)
     .order('created_at');
 
   if (error) {
@@ -26,16 +54,31 @@ router.get('/team/members', async (req, res) => {
   res.json({ members: data });
 });
 
+// Daftar undangan tertunda cuma untuk owner — bagian dari menu Kelola
+// Karyawan yang sengaja dibatasi (lihat migration 014).
 router.get('/team/invites', async (req, res) => {
   if (!req.headers.authorization) {
     res.status(401).json({ error: 'Belum login' });
     return;
   }
 
+  const businessId = req.query.businessId as string | undefined;
+  if (!businessId) {
+    res.status(400).json({ error: 'businessId wajib diisi' });
+    return;
+  }
+
   const supabase = createRequestClient(req);
+
+  if ((await getCallerRole(supabase, businessId)) !== 'owner') {
+    res.status(403).json({ error: 'Cuma pemilik yang bisa mengelola karyawan' });
+    return;
+  }
+
   const { data, error } = await supabase
     .from('business_invites')
     .select('id, code, role, expires_at, used_at, created_at')
+    .eq('business_id', businessId)
     .is('used_at', null)
     .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false });
@@ -62,6 +105,12 @@ router.post('/team/invites', async (req, res) => {
   }
 
   const supabase = createRequestClient(req);
+
+  if ((await getCallerRole(supabase, businessId)) !== 'owner') {
+    res.status(403).json({ error: 'Cuma pemilik yang bisa mengundang anggota' });
+    return;
+  }
+
   const code = crypto.randomBytes(20).toString('hex');
   const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
 
@@ -100,6 +149,23 @@ router.delete('/team/invites/:id', async (req, res) => {
   }
 
   const supabase = createRequestClient(req);
+
+  const { data: invite } = await supabase
+    .from('business_invites')
+    .select('business_id')
+    .eq('id', req.params.id)
+    .maybeSingle();
+
+  if (!invite) {
+    res.status(404).json({ error: 'Undangan tidak ditemukan' });
+    return;
+  }
+
+  if ((await getCallerRole(supabase, invite.business_id)) !== 'owner') {
+    res.status(403).json({ error: 'Cuma pemilik yang bisa membatalkan undangan' });
+    return;
+  }
+
   const { error } = await supabase.from('business_invites').delete().eq('id', req.params.id);
 
   if (error) {
@@ -117,6 +183,23 @@ router.delete('/team/members/:id', async (req, res) => {
   }
 
   const supabase = createRequestClient(req);
+
+  const { data: member } = await supabase
+    .from('business_members')
+    .select('business_id')
+    .eq('id', req.params.id)
+    .maybeSingle();
+
+  if (!member) {
+    res.status(404).json({ error: 'Anggota tidak ditemukan' });
+    return;
+  }
+
+  if ((await getCallerRole(supabase, member.business_id)) !== 'owner') {
+    res.status(403).json({ error: 'Cuma pemilik yang bisa mengeluarkan anggota' });
+    return;
+  }
+
   const { error } = await supabase.from('business_members').delete().eq('id', req.params.id);
 
   if (error) {
@@ -128,7 +211,8 @@ router.delete('/team/members/:id', async (req, res) => {
 });
 
 // Redeem kode undangan — hanya butuh login (belum tentu member bisnis
-// manapun). Validasi kode persis dilakukan di sini (bukan cuma di RLS
+// manapun), SENGAJA tidak owner-only (ini justru alur karyawan BARU
+// bergabung). Validasi kode persis dilakukan di sini (bukan cuma di RLS
 // insert_self_via_valid_invite, yang cuma cek "ada undangan valid untuk
 // business+role ini", bukan kecocokan kode persis) — lihat migration 007.
 router.post('/team/invites/redeem', async (req, res) => {

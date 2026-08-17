@@ -26,26 +26,37 @@ export function useTeam(session: Session | null, businessId: string | undefined)
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!session) {
+    if (!session || !businessId) {
       setLoading(false);
       return;
     }
 
     setLoading(true);
     setError(null);
-    try {
-      const [membersBody, invitesBody] = await Promise.all([
-        apiFetch<{ members: TeamMember[] }>(session, '/api/team/members'),
-        apiFetch<{ invites: TeamInvite[] }>(session, '/api/team/invites'),
-      ]);
-      setMembers(membersBody.members);
-      setInvites(invitesBody.invites);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
+
+    // allSettled, bukan all — GET /team/invites sengaja owner-only (lihat
+    // migration 014), tapi GET /team/members dipakai juga di luar layar
+    // Kelola Karyawan (baris "diperbarui oleh X" di Katalog & Stok Alat).
+    // Karyawan yang memanggil ini dari ItemsScreen harus tetap dapat daftar
+    // anggota walau invites-nya 403.
+    const [membersResult, invitesResult] = await Promise.allSettled([
+      apiFetch<{ members: TeamMember[] }>(session, `/api/team/members?businessId=${businessId}`),
+      apiFetch<{ invites: TeamInvite[] }>(session, `/api/team/invites?businessId=${businessId}`),
+    ]);
+
+    if (membersResult.status === 'fulfilled') {
+      setMembers(membersResult.value.members);
+    } else {
+      setError(membersResult.reason.message);
     }
-  }, [session]);
+
+    // Gagal ambil invites (mis. bukan owner) bukan error fatal — cukup
+    // kosongkan, TeamScreen sendiri sudah disembunyikan dari karyawan lewat
+    // Navbar/App.tsx.
+    setInvites(invitesResult.status === 'fulfilled' ? invitesResult.value.invites : []);
+
+    setLoading(false);
+  }, [session, businessId]);
 
   useEffect(() => {
     refresh();

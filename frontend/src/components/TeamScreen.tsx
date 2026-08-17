@@ -44,7 +44,8 @@ export function TeamScreen({ session, businessId }: { session: Session; business
           <span>Kelola Karyawan</span>
         </h2>
         <p className="text-xs text-[#6E6853]">
-          Karyawan yang bergabung dapat akses penuh ke data usaha ini — perannya cuma label, bukan pembatas hak akses.
+          Karyawan yang bergabung dapat akses penuh ke data operasional usaha ini (kalender, transaksi, jaminan &amp;
+          denda, katalog) — kecuali menu Kelola Karyawan ini sendiri, yang cuma bisa diakses pemilik.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-[#E6E1D2]">

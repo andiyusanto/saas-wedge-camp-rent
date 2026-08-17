@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabaseClient';
 import { useAuth } from './hooks/useAuth';
 import { useBusiness } from './hooks/useBusiness';
@@ -26,9 +26,18 @@ function clearInviteCodeFromUrl() {
 
 function App() {
   const { session, loading: authLoading } = useAuth();
-  const { business, loading: businessLoading, refresh: refreshBusiness } = useBusiness(session);
+  const { business, role, loading: businessLoading, refresh: refreshBusiness } = useBusiness(session);
   const [tab, setTab] = useState<Tab>('kalender');
   const [refreshSignal, setRefreshSignal] = useState(0);
+
+  // Jaring pengaman kalau karyawan sempat berada di tab 'tim' (mis. baru
+  // saja diturunkan dari owner ke karyawan oleh pemilik lain) — Navbar
+  // sendiri sudah menyembunyikan tab-nya, ini cuma jaga-jaga isi <main>.
+  useEffect(() => {
+    if (tab === 'tim' && role !== null && role !== 'owner') {
+      setTab('kalender');
+    }
+  }, [tab, role]);
 
   const [isNewBookingOpen, setIsNewBookingOpen] = useState(false);
   const [preselectedItemId, setPreselectedItemId] = useState<string | null>(null);
@@ -74,6 +83,7 @@ function App() {
         setActiveTab={setTab}
         onOpenNewBooking={() => openNewBooking()}
         businessName={business.name}
+        role={role}
         onLogout={() => supabase?.auth.signOut()}
       />
 
@@ -85,7 +95,7 @@ function App() {
           <TrackingScreen key={`trk-${refreshSignal}`} session={session} businessName={business.name} />
         )}
         {tab === 'alat' && <ItemsScreen businessId={business.id} session={session} />}
-        {tab === 'tim' && <TeamScreen session={session} businessId={business.id} />}
+        {tab === 'tim' && role === 'owner' && <TeamScreen session={session} businessId={business.id} />}
         {tab === 'panduan' && <GuideScreen />}
       </main>
 

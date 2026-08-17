@@ -1,13 +1,14 @@
 import { Calendar, ShieldAlert, Package, Plus, LogOut, Users, BookOpen } from 'lucide-react';
 import { ScrollableRow } from './ScrollableRow';
+import type { MemberRole } from '../hooks/useBusiness';
 
 export type Tab = 'kalender' | 'tracking' | 'alat' | 'tim' | 'panduan';
 
-const TABS: { id: Tab; label: string; icon: typeof Calendar }[] = [
+const TABS: { id: Tab; label: string; icon: typeof Calendar; ownerOnly?: boolean }[] = [
   { id: 'kalender', label: 'Kalender Ketersediaan', icon: Calendar },
   { id: 'tracking', label: 'Jaminan & Denda', icon: ShieldAlert },
   { id: 'alat', label: 'Katalog & Stok Alat', icon: Package },
-  { id: 'tim', label: 'Kelola Karyawan', icon: Users },
+  { id: 'tim', label: 'Kelola Karyawan', icon: Users, ownerOnly: true },
   { id: 'panduan', label: 'Panduan', icon: BookOpen },
 ];
 
@@ -16,14 +17,17 @@ export function Navbar({
   setActiveTab,
   onOpenNewBooking,
   businessName,
+  role,
   onLogout,
 }: {
   activeTab: Tab;
   setActiveTab: (tab: Tab) => void;
   onOpenNewBooking: () => void;
   businessName: string;
+  role: MemberRole | null;
   onLogout: () => void;
 }) {
+  const visibleTabs = TABS.filter((t) => !t.ownerOnly || role === 'owner');
   return (
     <header className="sticky top-0 z-30 bg-[#2B4739] text-white shadow-md border-b border-[#1E3429]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -65,7 +69,7 @@ export function Navbar({
       <div className="bg-[#1E3429] border-t border-[#3A5C4A]/50">
         <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 py-2">
           <ScrollableRow variant="dark">
-            {TABS.map(({ id, label, icon: Icon }) => (
+            {visibleTabs.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 onClick={() => setActiveTab(id)}

@@ -215,10 +215,12 @@ export function GuideScreen() {
           ]}
         />
         <Note>
-          Peran <Ui>Karyawan</Ui> di sini murni label atribusi (siapa yang mencatat transaksi/perubahan), bukan
-          pembatas akses — karyawan bisa memakai semua fitur operasional sama seperti pemilik. Link undangan otomatis
-          kedaluwarsa dalam 7 hari kalau belum dipakai, dan bisa dicabut manual kapan saja lewat tombol hapus di daftar
-          undangan.
+          Peran <Ui>Karyawan</Ui> di sini murni label atribusi (siapa yang mencatat transaksi/perubahan) untuk semua
+          fitur operasional — karyawan bisa memakai Kalender, Catat Transaksi, Jaminan &amp; Denda, dan Katalog &amp;
+          Stok Alat sama seperti pemilik. Satu pengecualian: tab <Ui>Kelola Karyawan</Ui> ini sendiri cuma terlihat
+          dan bisa dipakai oleh pemilik — karyawan tidak bisa mengundang atau mengeluarkan anggota tim. Link undangan
+          otomatis kedaluwarsa dalam 7 hari kalau belum dipakai, dan bisa dicabut manual kapan saja lewat tombol hapus
+          di daftar undangan.
         </Note>
       </Section>
 
