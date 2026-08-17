@@ -48,7 +48,7 @@ function App() {
 
   if (authLoading) return null;
 
-  if (!session) return <AuthScreen />;
+  if (!session) return <AuthScreen inviteCode={inviteCode} />;
 
   if (businessLoading) return null;
 

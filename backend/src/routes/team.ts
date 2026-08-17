@@ -1,10 +1,34 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
-import { createRequestClient } from '../lib/supabaseClient.js';
+import { createRequestClient, createAnonClient } from '../lib/supabaseClient.js';
 
 const router = Router();
 
 const INVITE_TTL_DAYS = 7;
+
+// Publik, SENGAJA tanpa auth — dipanggil dari layar login sebelum user
+// login sama sekali, supaya "Kamu diundang bergabung ke X" bisa tampil di
+// titik itu. Cuma memanggil get_invite_preview() (migration 016), function
+// SECURITY DEFINER yang dibatasi ketat cuma balikin nama usaha + role
+// untuk kode yang PERSIS cocok & masih berlaku — tidak pernah membocorkan
+// data lain.
+router.get('/team/invites/preview', async (req, res) => {
+  const code = req.query.code as string | undefined;
+  if (!code) {
+    res.status(400).json({ error: 'code wajib diisi' });
+    return;
+  }
+
+  const supabase = createAnonClient();
+  const { data, error } = await supabase.rpc('get_invite_preview', { p_code: code });
+
+  if (error || !data || data.length === 0) {
+    res.status(404).json({ error: 'Undangan tidak ditemukan atau sudah tidak berlaku' });
+    return;
+  }
+
+  res.json({ businessName: data[0].business_name, role: data[0].role });
+});
 
 async function getCallerRole(
   supabase: ReturnType<typeof createRequestClient>,

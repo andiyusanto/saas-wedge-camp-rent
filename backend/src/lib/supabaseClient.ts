@@ -24,3 +24,19 @@ export function createRequestClient(req: Request) {
     realtime: { transport: WebSocket as any },
   });
 }
+
+// Klien tanpa JWT user sama sekali — buat endpoint yang memang harus bisa
+// diakses SEBELUM login (mis. preview nama usaha dari kode undangan di
+// layar login). Bukan `createRequestClient` dengan header kosong — string
+// kosong bukan token anon yang valid, jadi butuh instance terpisah yang
+// benar-benar tidak menyetel Authorization sama sekali (supabase-js jatuh
+// balik ke publishable key sebagai bearer, setara peran `anon`). Cuma boleh
+// dipakai untuk memanggil function/endpoint yang memang didesain publik
+// (SECURITY DEFINER yang dibatasi ketat) — jangan query tabel langsung
+// lewat klien ini.
+export function createAnonClient() {
+  return createClient(supabaseUrl!, supabasePublishableKey!, {
+    auth: { persistSession: false },
+    realtime: { transport: WebSocket as any },
+  });
+}

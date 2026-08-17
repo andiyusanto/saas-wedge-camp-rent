@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
+import { Building2 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { API_BASE_URL } from '../lib/api';
 
-export function AuthScreen() {
+export function AuthScreen({ inviteCode }: { inviteCode: string | null }) {
   if (!isSupabaseConfigured) {
     return (
       <main className="min-h-screen flex items-center justify-center p-4 bg-[#F1EEE2]">
@@ -18,7 +19,7 @@ export function AuthScreen() {
     );
   }
 
-  return <AuthForm />;
+  return <AuthForm inviteCode={inviteCode} />;
 }
 
 function Brand() {
@@ -30,7 +31,46 @@ function Brand() {
   );
 }
 
-function AuthForm() {
+type InvitePreview = { businessName: string; role: 'owner' | 'karyawan' };
+
+const ROLE_LABEL: Record<'owner' | 'karyawan', string> = {
+  owner: 'Pemilik (co-owner)',
+  karyawan: 'Karyawan',
+};
+
+function InviteBanner({ inviteCode }: { inviteCode: string }) {
+  const [preview, setPreview] = useState<InvitePreview | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_BASE_URL}/api/team/invites/preview?code=${encodeURIComponent(inviteCode)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body) => {
+        if (!cancelled && body) setPreview({ businessName: body.businessName, role: body.role });
+      })
+      .catch(() => {
+        // Kode tidak valid/kedaluwarsa — biarkan saja, layar login tetap
+        // tampil normal tanpa banner ini.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [inviteCode]);
+
+  if (!preview) return null;
+
+  return (
+    <div className="mt-4 flex items-start gap-2.5 rounded-xl bg-[#E8EFEA] border border-[#2B4739]/20 p-3">
+      <Building2 className="w-4 h-4 text-[#2B4739] shrink-0 mt-0.5" />
+      <p className="text-xs text-[#26302B]">
+        Kamu diundang bergabung ke <strong>{preview.businessName}</strong> sebagai{' '}
+        <strong>{ROLE_LABEL[preview.role]}</strong>. Masuk atau daftar dulu buat lanjut.
+      </p>
+    </div>
+  );
+}
+
+function AuthForm({ inviteCode }: { inviteCode: string | null }) {
   const [mode, setMode] = useState<'masuk' | 'daftar'>('masuk');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -87,6 +127,8 @@ function AuthForm() {
     <main className="min-h-screen flex items-center justify-center p-4 bg-[#F1EEE2]">
       <div className="w-full max-w-sm bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] shadow-sm p-6">
         <Brand />
+
+        {inviteCode && <InviteBanner inviteCode={inviteCode} />}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3.5 mt-5">
           <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">

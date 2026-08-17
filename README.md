@@ -8,7 +8,7 @@ SaaS tools operasional untuk UKM rental alat kamping/outdoor di Malang Raya (Kot
 - Login & daftar (email/password, Supabase Auth)
 - Onboarding — buat profil usaha otomatis saat pertama login
 - Katalog & stok alat — kode alat, kategori, varian/ukuran/warna opsional (pilih dari nilai yang sudah pernah dipakai di katalog atau ketik baru, pola sama seperti Bilbo-Outdoors), foto (unggah langsung dari galeri/kamera, otomatis dikompres & disimpan ke Cloudflare R2 — bukan tempel URL manual), deskripsi, catatan kondisi, jumlah unit, harga sewa/hari, harga bertingkat opsional (tarif lebih murah per hari setelah sewa melewati N hari); bisa diedit atau dinonaktifkan (soft-delete, histori booking lama tetap utuh)
-- Kelola karyawan — undang staf lewat link sekali-pakai (kedaluwarsa 7 hari), tanpa perlu pemilik membuatkan username/password. Peran (`karyawan`/`owner`) murni label atribusi untuk fitur operasional (kalender, transaksi, jaminan & denda, katalog) — akses di situ sama untuk semua anggota. Satu pengecualian: menu Kelola Karyawan itu sendiri (undang/keluarkan anggota) cuma bisa diakses pemilik, ditegakkan di RLS (migration 014) dan backend, bukan cuma disembunyikan di UI.
+- Kelola karyawan — undang staf lewat link sekali-pakai (kedaluwarsa 7 hari), tanpa perlu pemilik membuatkan username/password. Peran (`karyawan`/`owner`) murni label atribusi untuk fitur operasional (kalender, transaksi, jaminan & denda, katalog) — akses di situ sama untuk semua anggota. Satu pengecualian: menu Kelola Karyawan itu sendiri (undang/keluarkan anggota) cuma bisa diakses pemilik, ditegakkan di RLS (migration 014) dan backend, bukan cuma disembunyikan di UI. Layar login yang dibuka lewat link undangan (`?invite=...`) menampilkan nama usaha & peran yang mengundang **sebelum** login (`GET /api/team/invites/preview`, migration 016 — function `SECURITY DEFINER` yang dibatasi ketat, cuma untuk kode undangan yang valid).
 - Panduan penggunaan — halaman referensi in-app yang menjelaskan tiap fitur dari sisi vendor (tab **Panduan** di navbar).
 - Audit trail — setiap perubahan status transaksi (aktif/telat/selesai/dibatalkan) tercatat siapa & kapan (`booking_status_history`, append-only) dan bisa dilihat langsung lewat "Riwayat Status" di tiap kartu transaksi pada layar Jaminan & Denda; perubahan data alat (tambah/edit/nonaktifkan) tercatat otomatis lewat trigger database (`items.created_by`/`updated_by`/`updated_at`/`deactivated_by`) dan ditampilkan sebagai baris "Diperbarui oleh..." di tiap kartu Katalog & Stok Alat.
 
@@ -58,6 +58,7 @@ migrations/     SQL schema — dijalankan manual di Supabase SQL Editor, urutan 
    12. `013_fix_owner_self_insert_recursion.sql`
    13. `014_team_management_owner_only.sql`
    14. `015_items_variant_size_color.sql`
+   15. `016_invite_preview.sql`
 
 3. **Buat bucket Cloudflare R2** — buat bucket baru di [dash.cloudflare.com](https://dash.cloudflare.com) → R2, aktifkan akses publik (custom domain atau URL `pub-xxxx.r2.dev` bawaan), lalu buat API Token (Account API Token, permission **Object Read & Write**, dibatasi ke bucket ini saja).
 
