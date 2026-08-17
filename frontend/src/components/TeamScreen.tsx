@@ -2,6 +2,8 @@ import { useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { Users, UserPlus, Copy, Trash2, Check } from 'lucide-react';
 import { useTeam } from '../hooks/useTeam';
+import type { TeamInvite, TeamMember } from '../hooks/useTeam';
+import { ConfirmModal } from './ConfirmModal';
 import { formatDateIndo } from '../utils/formatters';
 
 function inviteUrl(code: string) {
@@ -14,6 +16,8 @@ export function TeamScreen({ session, businessId }: { session: Session; business
   const [creating, setCreating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [revokeTarget, setRevokeTarget] = useState<TeamInvite | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<TeamMember | null>(null);
 
   async function handleCreateInvite() {
     setCreating(true);
@@ -90,7 +94,7 @@ export function TeamScreen({ session, businessId }: { session: Session; business
                   {copiedId === inv.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
                 <button
-                  onClick={() => revokeInvite(inv.id)}
+                  onClick={() => setRevokeTarget(inv)}
                   className="p-2 rounded-lg bg-white border border-[#DBD5C1] text-[#A8412E] hover:bg-[#FAF0EE] transition"
                   title="Batalkan undangan"
                 >
@@ -112,7 +116,7 @@ export function TeamScreen({ session, businessId }: { session: Session; business
             </div>
             {m.user_id !== session.user.id && (
               <button
-                onClick={() => removeMember(m.id)}
+                onClick={() => setRemoveTarget(m)}
                 className="p-2 rounded-lg bg-white border border-[#DBD5C1] text-[#A8412E] hover:bg-[#FAF0EE] transition shrink-0"
                 title="Keluarkan dari tim"
               >
@@ -122,6 +126,30 @@ export function TeamScreen({ session, businessId }: { session: Session; business
           </div>
         ))}
       </div>
+
+      <ConfirmModal
+        isOpen={revokeTarget !== null}
+        title="Batalkan Undangan?"
+        description="Link undangan ini tidak akan bisa dipakai lagi untuk bergabung."
+        confirmLabel="Batalkan"
+        onConfirm={async () => {
+          const { error: err } = await revokeInvite(revokeTarget!.id);
+          if (err) throw new Error(err);
+        }}
+        onClose={() => setRevokeTarget(null)}
+      />
+
+      <ConfirmModal
+        isOpen={removeTarget !== null}
+        title="Keluarkan dari Tim?"
+        description={`${removeTarget?.email ?? 'Anggota ini'} akan kehilangan akses ke data usaha ini. Dia bisa diundang lagi kapan saja lewat link undangan baru.`}
+        confirmLabel="Keluarkan"
+        onConfirm={async () => {
+          const { error: err } = await removeMember(removeTarget!.id);
+          if (err) throw new Error(err);
+        }}
+        onClose={() => setRemoveTarget(null)}
+      />
     </div>
   );
 }

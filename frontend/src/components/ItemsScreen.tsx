@@ -10,6 +10,7 @@ import { formatDateIndo, formatIDR } from '../utils/formatters';
 import { resizeImageToDataUrl } from '../utils/imageResize';
 import { ScrollableRow } from './ScrollableRow';
 import { SelectOrAddField } from './SelectOrAddField';
+import { ConfirmModal } from './ConfirmModal';
 
 // Diturunkan live dari katalog sendiri, bukan tabel enum/lookup terpisah —
 // sama seperti pola setara di Bilbo-Outdoors.
@@ -430,6 +431,7 @@ export function ItemsScreen({ businessId, session }: { businessId: string; sessi
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Semua');
   const [modalItem, setModalItem] = useState<Item | 'new' | null>(null);
+  const [deactivateTarget, setDeactivateTarget] = useState<Item | null>(null);
 
   // Buat baris "diperbarui oleh X" di kartu alat — items.updated_by cuma
   // simpan user_id, business_members yang punya email-nya (lihat migration
@@ -455,10 +457,6 @@ export function ItemsScreen({ businessId, session }: { businessId: string; sessi
     return matchesCategory && matchesSearch;
   });
 
-  async function handleDeactivate(item: Item) {
-    if (!window.confirm(`Nonaktifkan "${item.name}"? Alat ini tidak akan muncul lagi di Catat Transaksi.`)) return;
-    await setItemActive(item.id, false);
-  }
 
   return (
     <div className="space-y-6">
@@ -523,7 +521,7 @@ export function ItemsScreen({ businessId, session }: { businessId: string; sessi
               item={item}
               emailByUserId={emailByUserId}
               onEdit={() => setModalItem(item)}
-              onDeactivate={() => handleDeactivate(item)}
+              onDeactivate={() => setDeactivateTarget(item)}
             />
           ))}
         </div>
@@ -576,6 +574,18 @@ export function ItemsScreen({ businessId, session }: { businessId: string; sessi
           onClose={() => setModalItem(null)}
         />
       )}
+
+      <ConfirmModal
+        isOpen={deactivateTarget !== null}
+        title="Nonaktifkan Alat?"
+        description={`"${deactivateTarget?.name}" tidak akan muncul lagi di Catat Transaksi. Riwayat transaksi lama yang memakainya tetap utuh.`}
+        confirmLabel="Nonaktifkan"
+        onConfirm={async () => {
+          const { error: err } = await setItemActive(deactivateTarget!.id, false);
+          if (err) throw new Error(err);
+        }}
+        onClose={() => setDeactivateTarget(null)}
+      />
     </div>
   );
 }

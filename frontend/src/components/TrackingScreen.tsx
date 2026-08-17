@@ -20,6 +20,7 @@ import { useTrackings } from '../hooks/useTrackings';
 import type { TrackingBooking } from '../hooks/useTrackings';
 import { ReturnModal } from './ReturnModal';
 import { AddFineModal } from './AddFineModal';
+import { ConfirmModal } from './ConfirmModal';
 import { ScrollableRow } from './ScrollableRow';
 import {
   formatDateIndo,
@@ -40,6 +41,7 @@ export function TrackingScreen({ session, businessName }: { session: Session; bu
   const [searchQuery, setSearchQuery] = useState('');
   const [returnTarget, setReturnTarget] = useState<TrackingBooking | null>(null);
   const [fineTarget, setFineTarget] = useState<TrackingBooking | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<TrackingBooking | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   if (loading) return <p className="text-sm text-[#6E6853]">Memuat...</p>;
@@ -157,10 +159,7 @@ export function TrackingScreen({ session, businessName }: { session: Session; bu
               onPickup={() => runAction(() => pickupBooking(b.id))}
               onAddFine={() => setFineTarget(b)}
               onReturn={() => setReturnTarget(b)}
-              onCancel={() =>
-                window.confirm(`Batalkan transaksi ${b.customer?.name ?? 'ini'}? Jaminan yang ditahan akan otomatis dilepas.`) &&
-                runAction(() => cancelBooking(b.id))
-              }
+              onCancel={() => setCancelTarget(b)}
             />
           ))
         )}
@@ -187,6 +186,18 @@ export function TrackingScreen({ session, businessName }: { session: Session; bu
           setFineTarget(null);
           refresh();
         }}
+      />
+
+      <ConfirmModal
+        isOpen={cancelTarget !== null}
+        title="Batalkan Transaksi?"
+        description={`Transaksi ${cancelTarget?.customer?.name ?? 'ini'} akan dibatalkan. Jaminan yang ditahan otomatis dilepas.`}
+        confirmLabel="Batalkan"
+        onConfirm={async () => {
+          const { error: err } = await cancelBooking(cancelTarget!.id);
+          if (err) throw new Error(err);
+        }}
+        onClose={() => setCancelTarget(null)}
       />
     </div>
   );
