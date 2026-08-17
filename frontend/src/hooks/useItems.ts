@@ -14,6 +14,11 @@ export type Item = {
   description: string | null;
   condition_note: string | null;
   deactivated_at: string | null;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string | null;
+  updated_by: string | null;
+  deactivated_by: string | null;
 };
 
 export type ItemInput = {
@@ -30,7 +35,7 @@ export type ItemInput = {
 };
 
 const SELECT_FIELDS =
-  'id, code, name, category, total_units, price_per_day, discount_min_days, discounted_price_per_day, image_url, description, condition_note, deactivated_at';
+  'id, code, name, category, total_units, price_per_day, discount_min_days, discounted_price_per_day, image_url, description, condition_note, deactivated_at, created_at, created_by, updated_at, updated_by, deactivated_by';
 
 export function useItems(businessId: string | undefined) {
   const [allItems, setAllItems] = useState<Item[]>([]);

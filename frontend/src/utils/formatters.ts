@@ -18,6 +18,18 @@ export function formatDateIndo(dateStr: string, withDay: boolean = true): string
   return new Intl.DateTimeFormat('id-ID', options).format(date);
 }
 
+export function formatDateTimeIndo(isoString: string): string {
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return isoString;
+  return new Intl.DateTimeFormat('id-ID', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
 export function todayStr(): string {
   const d = new Date();
   const y = d.getFullYear();
@@ -102,6 +114,10 @@ const BOOKING_STATUS_LABEL: Record<string, string> = {
   selesai: 'Selesai',
   dibatalkan: 'Dibatalkan',
 };
+
+export function bookingStatusLabel(status: string): string {
+  return BOOKING_STATUS_LABEL[status] ?? status;
+}
 
 export function generateWhatsAppReceipt(data: ReceiptData): string {
   const days = rentalDays(data.startDate, data.endDate);

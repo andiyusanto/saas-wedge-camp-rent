@@ -17,6 +17,7 @@ export type TrackingBooking = {
   items: { name: string; quantity: number }[];
   deposits: { id: string; type: string; amount: number | null; note: string | null; status: string }[];
   penalties: { id: string; type: string; amount: number; description: string | null }[];
+  history: { status: string; changed_by_name: string; created_at: string }[];
   total_price: number;
   dp_paid: number;
 };

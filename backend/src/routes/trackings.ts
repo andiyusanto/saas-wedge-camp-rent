@@ -6,6 +6,7 @@ import { logBookingStatus } from '../lib/audit.js';
 const router = Router();
 
 type BookingItemJoin = { quantity: number; price_at_booking: number; items: { name: string } | null };
+type StatusHistoryJoin = { status: string; changed_by_name: string; created_at: string };
 
 router.get('/trackings', async (req, res) => {
   if (!req.headers.authorization) {
@@ -28,7 +29,7 @@ router.get('/trackings', async (req, res) => {
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select(
-      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, customers(name, phone, address), booking_items(quantity, price_at_booking, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description)',
+      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, customers(name, phone, address), booking_items(quantity, price_at_booking, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description), booking_status_history(status, changed_by_name, created_at)',
     )
     .in('status', ['dipesan', 'aktif'])
     .order('end_date');
@@ -70,6 +71,9 @@ router.get('/trackings', async (req, res) => {
       })),
       deposits: b.deposits ?? [],
       penalties: b.penalties ?? [],
+      history: ((b.booking_status_history ?? []) as unknown as StatusHistoryJoin[])
+        .slice()
+        .sort((x, y) => x.created_at.localeCompare(y.created_at)),
       total_price: b.total_price,
       dp_paid: b.dp_paid,
     };

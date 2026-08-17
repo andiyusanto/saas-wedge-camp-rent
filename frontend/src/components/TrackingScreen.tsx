@@ -12,13 +12,25 @@ import {
   RotateCcw,
   AlertOctagon,
   PackageCheck,
+  History,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { useTrackings } from '../hooks/useTrackings';
 import type { TrackingBooking } from '../hooks/useTrackings';
 import { ReturnModal } from './ReturnModal';
 import { AddFineModal } from './AddFineModal';
 import { ScrollableRow } from './ScrollableRow';
-import { formatDateIndo, formatIDR, depositLabel, fineLabel, generateWhatsAppReceipt, getWhatsAppShareUrl } from '../utils/formatters';
+import {
+  formatDateIndo,
+  formatDateTimeIndo,
+  formatIDR,
+  depositLabel,
+  fineLabel,
+  bookingStatusLabel,
+  generateWhatsAppReceipt,
+  getWhatsAppShareUrl,
+} from '../utils/formatters';
 
 type StatusFilter = 'all' | 'overdue' | 'active' | 'pending_pickup';
 
@@ -266,6 +278,7 @@ function BookingCard({
   const totalFines = b.penalties.reduce((sum, p) => sum + p.amount, 0);
   const activeDeposit = b.deposits.find((d) => d.status === 'ditahan');
   const remaining = Math.max(0, b.total_price - b.dp_paid);
+  const [showHistory, setShowHistory] = useState(false);
 
   let statusBadge = (
     <span className="px-2.5 py-1 rounded-md bg-[#E8EFEA] text-[#2B4739] text-xs font-bold border border-[#2B4739]/30">Sedang Disewa</span>
@@ -391,6 +404,32 @@ function BookingCard({
           </div>
         </div>
       </div>
+
+      {b.history.length > 0 && (
+        <div className="pt-3 mt-3 border-t border-[#E6E1D2]">
+          <button
+            onClick={() => setShowHistory((v) => !v)}
+            className="flex items-center gap-1.5 text-[11px] font-bold text-[#6E6853] hover:text-[#26302B] transition"
+          >
+            <History className="w-3.5 h-3.5" />
+            <span>Riwayat Status ({b.history.length})</span>
+            {showHistory ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+          {showHistory && (
+            <ol className="mt-2 space-y-1.5">
+              {b.history.map((h, idx) => (
+                <li key={idx} className="flex items-start gap-2 text-[11px]">
+                  <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-[#2B4739] mt-1.5" />
+                  <span className="text-[#26302B]">
+                    <strong>{bookingStatusLabel(h.status)}</strong> oleh {h.changed_by_name}
+                    <span className="text-[#6E6853]"> · {formatDateTimeIndo(h.created_at)}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center justify-between pt-3 mt-3 border-t border-[#E6E1D2] gap-2">
         <button

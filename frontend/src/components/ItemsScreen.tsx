@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { Package, Plus, Edit2, Search, Trash2, X, Upload } from 'lucide-react';
 import { useItems } from '../hooks/useItems';
 import type { Item, ItemInput } from '../hooks/useItems';
+import { useTeam } from '../hooks/useTeam';
 import { apiFetch } from '../lib/api';
-import { formatIDR } from '../utils/formatters';
+import { formatDateIndo, formatIDR } from '../utils/formatters';
 import { resizeImageToDataUrl } from '../utils/imageResize';
 import { ScrollableRow } from './ScrollableRow';
 
@@ -277,12 +278,15 @@ function ItemFormModal({
   );
 }
 
-function ItemCard({ item, onEdit, onDeactivate, onReactivate }: {
+function ItemCard({ item, emailByUserId, onEdit, onDeactivate, onReactivate }: {
   item: Item;
+  emailByUserId: Record<string, string>;
   onEdit: () => void;
   onDeactivate?: () => void;
   onReactivate?: () => void;
 }) {
+  const editorEmail = item.updated_by ? emailByUserId[item.updated_by] : null;
+  const creatorEmail = item.created_by ? emailByUserId[item.created_by] : null;
   return (
     <div className="bg-[#FBFAF4] rounded-2xl p-4 border border-[#DBD5C1] shadow-xs flex flex-col justify-between space-y-3 hover:border-[#2B4739]/60 transition">
       <div>
@@ -326,6 +330,11 @@ function ItemCard({ item, onEdit, onDeactivate, onReactivate }: {
           </p>
         )}
         {item.condition_note && <p className="text-[11px] text-[#6E6853] mt-2 italic">{item.condition_note}</p>}
+        <p className="text-[10px] text-[#6E6853] mt-2">
+          {editorEmail && item.updated_at
+            ? `Diperbarui oleh ${editorEmail} · ${formatDateIndo(item.updated_at.slice(0, 10), false)}`
+            : `Ditambahkan${creatorEmail ? ` oleh ${creatorEmail}` : ''} · ${formatDateIndo(item.created_at.slice(0, 10), false)}`}
+        </p>
       </div>
 
       <div className="flex items-center justify-end space-x-2 pt-2 border-t border-[#E6E1D2]">
@@ -359,9 +368,18 @@ function ItemCard({ item, onEdit, onDeactivate, onReactivate }: {
 
 export function ItemsScreen({ businessId, session }: { businessId: string; session: Session }) {
   const { items, inactiveItems, loading, addItem, updateItem, setItemActive } = useItems(businessId);
+  const { members } = useTeam(session, businessId);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Semua');
   const [modalItem, setModalItem] = useState<Item | 'new' | null>(null);
+
+  // Buat baris "diperbarui oleh X" di kartu alat — items.updated_by cuma
+  // simpan user_id, business_members yang punya email-nya (lihat migration
+  // 010; auth.users tidak bisa diquery langsung dari client).
+  const emailByUserId = useMemo(
+    () => Object.fromEntries(members.map((m) => [m.user_id, m.email])),
+    [members],
+  );
 
   const filtered = items.filter((item) => {
     const matchesCategory = selectedCategory === 'Semua' || item.category === selectedCategory;
@@ -433,7 +451,13 @@ export function ItemsScreen({ businessId, session }: { businessId: string; sessi
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((item) => (
-            <ItemCard key={item.id} item={item} onEdit={() => setModalItem(item)} onDeactivate={() => handleDeactivate(item)} />
+            <ItemCard
+              key={item.id}
+              item={item}
+              emailByUserId={emailByUserId}
+              onEdit={() => setModalItem(item)}
+              onDeactivate={() => handleDeactivate(item)}
+            />
           ))}
         </div>
       )}
@@ -443,7 +467,13 @@ export function ItemsScreen({ businessId, session }: { businessId: string; sessi
           <h3 className="text-sm font-bold text-[#6E6853] mb-2">Alat Nonaktif</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 opacity-70">
             {inactiveItems.map((item) => (
-              <ItemCard key={item.id} item={item} onEdit={() => {}} onReactivate={() => setItemActive(item.id, true)} />
+              <ItemCard
+                key={item.id}
+                item={item}
+                emailByUserId={emailByUserId}
+                onEdit={() => {}}
+                onReactivate={() => setItemActive(item.id, true)}
+              />
             ))}
           </div>
         </div>
