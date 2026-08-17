@@ -179,7 +179,7 @@ function AuthForm({ inviteCode }: { inviteCode: string | null }) {
           disabled={resettingDemo}
           className="mt-2 block text-xs text-[#A65C2A] underline hover:text-[#8A4A20] transition disabled:opacity-60"
         >
-          {resettingDemo ? 'Mereset data demo...' : 'Lagi demo ke calon vendor? Reset data demo'}
+          {resettingDemo ? 'Mereset data demo...' : 'Mulai demo akun, Reset data demo'}
         </button>
       </div>
     </main>
