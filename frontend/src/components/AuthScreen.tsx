@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { API_BASE_URL } from '../lib/api';
 
 export function AuthScreen() {
   if (!isSupabaseConfigured) {
@@ -36,6 +37,7 @@ function AuthForm() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [resettingDemo, setResettingDemo] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -58,6 +60,27 @@ function AuthForm() {
     }
 
     setSubmitting(false);
+  }
+
+  async function handleResetDemo() {
+    setResettingDemo(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/demo/reset`, { method: 'POST' });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? `Gagal reset (HTTP ${res.status})`);
+
+      setEmail(body.ownerEmail);
+      setPassword(body.password);
+      setMode('masuk');
+      setMessage('Data demo direset. Tekan Masuk untuk lihat.');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setResettingDemo(false);
+    }
   }
 
   return (
@@ -106,6 +129,15 @@ function AuthForm() {
           className="mt-4 text-xs text-[#6E6853] underline hover:text-[#26302B] transition"
         >
           {mode === 'masuk' ? 'Belum punya akun? Daftar' : 'Sudah punya akun? Masuk'}
+        </button>
+
+        <button
+          type="button"
+          onClick={handleResetDemo}
+          disabled={resettingDemo}
+          className="mt-2 block text-xs text-[#A65C2A] underline hover:text-[#8A4A20] transition disabled:opacity-60"
+        >
+          {resettingDemo ? 'Mereset data demo...' : 'Lagi demo ke calon vendor? Reset data demo'}
         </button>
       </div>
     </main>

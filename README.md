@@ -74,17 +74,21 @@ migrations/     SQL schema — dijalankan manual di Supabase SQL Editor, urutan 
 
 Supaya calon vendor bisa langsung coba alur aplikasi (kalender, catat transaksi, jaminan & denda, kelola karyawan) tanpa harus isi data sendiri dulu, ada satu akun demo yang sudah terisi katalog alat + beberapa contoh transaksi di berbagai status (siap diambil, sedang disewa, terlambat + denda kerusakan) dan dua login (pemilik + karyawan) supaya "peran karyawan cuma label, bukan pembatas akses" bisa langsung dirasakan, bukan cuma dijelaskan.
 
+**Cara 1 — tombol di layar login** (buat yang lagi demo langsung ke vendor, tidak perlu buka terminal): tautan **"Lagi demo ke calon vendor? Reset data demo"** di bawah tombol Masuk. Sekali tekan langsung reset + isi otomatis email/password login pemilik, tinggal tekan Masuk. Dibatasi cooldown 60 detik di server (`POST /api/demo/reset`, lihat `backend/src/routes/demo.ts`) supaya tidak bisa dispam — endpoint ini publik tanpa login, tapi dikunci cuma bisa menyentuh satu business demo yang hardcoded (`backend/src/lib/demoReset.ts`), tidak pernah menerima business_id dari request.
+
+**Cara 2 — command line** (buat reset dari mesin developer, atau dijadwalkan lewat cron/GitHub Actions):
 ```bash
 npm run seed:demo
 ```
+Butuh `backend/.env` sudah terisi dan backend sedang jalan di `npm run dev:backend`. Untuk seed ke backend production, jalankan `API_BASE_URL=https://<url-backend-render-mu> npm run seed:demo`. Logika reset-nya sama persis dengan tombol di Cara 1 (`scripts/seed-demo.mjs` dan `backend/src/lib/demoReset.ts` sengaja dijaga sinkron).
 
-- Butuh `backend/.env` sudah terisi (script baca `SUPABASE_URL`/`SUPABASE_PUBLISHABLE_KEY` dari situ) dan backend sedang jalan di `npm run dev:backend` (booking dibuat lewat endpoint backend asli, bukan insert langsung ke tabel, supaya nomor booking/validasi kapasitas/audit trail tetap konsisten). Untuk seed ke backend production, jalankan `API_BASE_URL=https://<url-backend-render-mu> npm run seed:demo`.
-- **Aman dijalankan berkali-kali** (manual kapan saja, atau dijadwalkan lewat cron/GitHub Actions kalau demo-nya dibagikan ke banyak orang) — setiap run menutup transaksi demo dari run sebelumnya lewat endpoint yang sama dipakai vendor asli (bukan hard-delete, karena `booking_status_history` sengaja append-only — lihat bagian Keterbatasan di bawah), lalu reset katalog alat ke nilai default dan membuat transaksi contoh yang baru.
-- Login default (bisa ditimpa lewat env var `DEMO_OWNER_EMAIL`/`DEMO_KARYAWAN_EMAIL`/`DEMO_PASSWORD`):
-  - Pemilik: `demo.pemilik@sewalog.test` / `CobaSewalog2026`
-  - Karyawan: `demo.karyawan@sewalog.test` / `CobaSewalog2026`
+Kedua cara **aman dijalankan berkali-kali** — setiap reset menutup transaksi demo dari run sebelumnya lewat endpoint yang sama dipakai vendor asli (bukan hard-delete, karena `booking_status_history` sengaja append-only — lihat bagian Keterbatasan di bawah), lalu reset katalog alat ke nilai default dan membuat transaksi contoh yang baru.
 
-> Karena ini akun demo yang **dibagikan bersama** ke banyak calon vendor, dua orang yang mencoba bersamaan bisa saling menimpa perubahan satu sama lain (mis. batalkan transaksi contoh yang baru saja dilihat orang lain) — cukup jalankan ulang `npm run seed:demo` untuk mengembalikannya ke kondisi awal sebelum sesi demo berikutnya.
+Login default (bisa ditimpa lewat env var `DEMO_OWNER_EMAIL`/`DEMO_KARYAWAN_EMAIL`/`DEMO_PASSWORD`, dibaca kedua cara di atas):
+- Pemilik: `demo.pemilik@sewalog.test` / `CobaSewalog2026`
+- Karyawan: `demo.karyawan@sewalog.test` / `CobaSewalog2026`
+
+> Karena ini akun demo yang **dibagikan bersama** ke banyak calon vendor, dua orang yang mencoba bersamaan bisa saling menimpa perubahan satu sama lain (mis. batalkan transaksi contoh yang baru saja dilihat orang lain) — cukup tekan tombol reset di layar login (atau jalankan ulang `npm run seed:demo`) untuk mengembalikannya ke kondisi awal sebelum sesi demo berikutnya.
 
 ## Deploy ke Render (free tier) untuk demo vendor
 

@@ -7,6 +7,7 @@ import bookingsRouter from './routes/bookings.js';
 import trackingsRouter from './routes/trackings.js';
 import teamRouter from './routes/team.js';
 import uploadsRouter from './routes/uploads.js';
+import demoRouter from './routes/demo.js';
 
 // Node global fetch (dipakai @supabase/supabase-js) nyimpen koneksi
 // keep-alive lebih lama dari idle timeout sisi Supabase/Cloudflare — begitu
@@ -33,6 +34,7 @@ app.use('/api', bookingsRouter);
 app.use('/api', trackingsRouter);
 app.use('/api', teamRouter);
 app.use('/api', uploadsRouter);
+app.use('/api', demoRouter);
 
 app.listen(port, () => {
   console.log(`Backend jalan di http://localhost:${port}`);
