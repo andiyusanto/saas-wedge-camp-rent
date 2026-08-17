@@ -1,0 +1,279 @@
+/* Token warna sama persis dengan landing/src/index.css & CLAUDE.md bagian 5.
+   Halaman blog ini statis (di luar build Vite/Tailwind, disajikan apa adanya
+   dari public/blog/), jadi CSS di sini ditulis manual, bukan utility class. */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background-color: #f1eee2;
+  color: #26302b;
+  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.6;
+}
+
+a {
+  color: inherit;
+}
+
+header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background-color: #2b4739;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  border-bottom: 1px solid #1e3429;
+}
+
+.header-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 20px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: #fff;
+}
+
+.brand img {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: #f1eee2;
+  padding: 6px;
+}
+
+.brand span {
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.wa-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #a65c2a;
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  white-space: nowrap;
+}
+
+.wa-btn:hover {
+  background-color: #9e5524;
+}
+
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 40px 20px 20px;
+}
+
+.eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6e6853;
+  margin-bottom: 10px;
+}
+
+h1 {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: #26302b;
+  margin: 0 0 20px;
+}
+
+article h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #26302b;
+  margin: 32px 0 12px;
+}
+
+article p {
+  font-size: 16px;
+  color: #26302b;
+  margin: 0 0 16px;
+}
+
+article ul {
+  margin: 0 0 16px;
+  padding-left: 20px;
+}
+
+article li {
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+.callout {
+  background-color: #fbfaf4;
+  border: 1px solid #dbd5c1;
+  border-radius: 16px;
+  padding: 18px 20px;
+  margin: 24px 0;
+}
+
+.callout strong {
+  color: #2b4739;
+}
+
+.cta-box {
+  background-color: #fbfaf4;
+  border: 1px solid #dbd5c1;
+  border-radius: 16px;
+  text-align: center;
+  padding: 36px 24px;
+  margin: 40px 0 24px;
+}
+
+.cta-box h2 {
+  margin-top: 0 !important;
+  font-size: 22px;
+}
+
+.cta-box p {
+  color: #6e6853;
+  max-width: 420px;
+  margin: 0 auto 20px;
+}
+
+.related {
+  border-top: 1px solid #dbd5c1;
+  padding-top: 20px;
+  margin-top: 20px;
+}
+
+.related .eyebrow {
+  margin-bottom: 12px;
+}
+
+.related ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.related a {
+  text-decoration: none;
+  font-weight: 600;
+  color: #2b4739;
+}
+
+.related a:hover {
+  text-decoration: underline;
+}
+
+.back-home {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #6e6853;
+  text-decoration: none;
+}
+
+.back-home:hover {
+  color: #26302b;
+  text-decoration: underline;
+}
+
+footer {
+  background-color: #1e3429;
+  border-top: 1px solid #3a5c4a;
+  color: #dbd5c1;
+  font-size: 13px;
+}
+
+.footer-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 28px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #fbfaf4;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.footer-brand img {
+  width: 20px;
+  height: 20px;
+}
+
+.footer-inner a {
+  color: #f1eee2;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.footer-inner a:hover {
+  text-decoration: underline;
+}
+
+/* Halaman index /blog/ */
+.post-list {
+  list-style: none;
+  padding: 0;
+  margin: 24px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.post-list a {
+  display: block;
+  background-color: #fbfaf4;
+  border: 1px solid #dbd5c1;
+  border-radius: 16px;
+  padding: 20px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease;
+}
+
+.post-list a:hover {
+  border-color: rgba(43, 71, 57, 0.5);
+}
+
+.post-list h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  color: #26302b;
+}
+
+.post-list p {
+  margin: 0;
+  font-size: 14px;
+  color: #6e6853;
+}

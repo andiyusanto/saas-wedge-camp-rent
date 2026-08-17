@@ -399,6 +399,9 @@ export function LandingPage() {
           <a href={waLink(MSG_UMUM)} target="_blank" rel="noreferrer" className="text-[#F1EEE2] font-semibold hover:underline">
             WhatsApp: {WHATSAPP_DISPLAY}
           </a>
+          <a href="/blog/" className="text-[#DBD5C1] hover:text-[#F1EEE2] hover:underline">
+            Panduan &amp; Tips Rental Alat Kamping
+          </a>
         </div>
       </footer>
     </div>
