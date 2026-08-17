@@ -1,10 +1,16 @@
 import { useEffect } from 'react';
 import type { ComponentType, ReactNode } from 'react';
-import { Calendar, CalendarX, FileWarning, Plus, ShieldAlert, AlertOctagon, Search, Package } from 'lucide-react';
+import { Calendar, CalendarX, FileWarning, Plus, ShieldAlert, AlertOctagon, Search, Package, PlayCircle } from 'lucide-react';
 import { waLink, WHATSAPP_DISPLAY } from './lib/whatsapp';
 
 const MSG_UMUM = 'Halo, saya pemilik rental alat kamping. Mau tanya-tanya soal Sewalog.';
 const MSG_MULAI = 'Halo, saya mau coba Sewalog untuk usaha rental saya.';
+
+// Sengaja hardcode di sini, bukan rahasia — akun demo dipakai bersama,
+// kredensialnya memang dibagikan bebas (lihat README bagian "Akun demo").
+const APP_URL = import.meta.env.VITE_APP_URL || 'http://localhost:5173';
+const DEMO_EMAIL = 'demo.pemilik@sewalog.test';
+const DEMO_PASSWORD = 'CobaSewalog2026';
 
 function WaIcon({ className }: { className?: string }) {
   return (
@@ -367,6 +373,39 @@ export function LandingPage() {
               </li>
             ))}
           </ol>
+        </section>
+
+        <section className="reveal max-w-4xl mx-auto px-4 sm:px-6 py-8">
+          <div className="bg-[#F1EEE2] border border-dashed border-[#DBD5C1] rounded-2xl text-center px-6 py-8">
+            <h2 className="text-lg font-bold text-[#26302B] mb-2">Mau Coba Sendiri Dulu?</h2>
+            <p className="text-sm text-[#6E6853] max-w-md mx-auto mb-5">
+              Gak perlu ngobrol dulu kalau mau lihat-lihat sendiri — pakai akun demo yang sudah terisi contoh alat
+              dan transaksi. Akun ini dipakai bersama banyak orang, jadi kalau datanya berantakan pas kamu buka,
+              tinggal reset lewat tombol di halaman login.
+            </p>
+            <div className="inline-flex flex-col sm:flex-row gap-2 bg-white border border-[#DBD5C1] rounded-xl px-4 py-3 text-left mb-5">
+              <div>
+                <span className="block text-[10px] text-[#6E6853] mb-0.5">Email</span>
+                <span className="text-sm font-semibold text-[#26302B]">{DEMO_EMAIL}</span>
+              </div>
+              <div className="hidden sm:block w-px bg-[#DBD5C1] mx-2" />
+              <div>
+                <span className="block text-[10px] text-[#6E6853] mb-0.5">Password</span>
+                <span className="text-sm font-semibold text-[#26302B]">{DEMO_PASSWORD}</span>
+              </div>
+            </div>
+            <div>
+              <a
+                href={APP_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 bg-white hover:bg-[#F1EEE2] active:scale-95 transition text-[#2B4739] font-semibold px-5 py-2.5 rounded-xl border border-[#2B4739]/30 shadow-xs"
+              >
+                <PlayCircle className="w-4 h-4" />
+                Buka Demo
+              </a>
+            </div>
+          </div>
         </section>
 
         <section className="reveal max-w-4xl mx-auto px-4 sm:px-6 py-9">

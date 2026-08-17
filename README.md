@@ -74,7 +74,7 @@ migrations/     SQL schema — dijalankan manual di Supabase SQL Editor, urutan 
 
 ## Akun demo untuk ditunjukkan ke calon vendor
 
-Supaya calon vendor bisa langsung coba alur aplikasi (kalender, catat transaksi, jaminan & denda, kelola karyawan) tanpa harus isi data sendiri dulu, ada satu akun demo yang sudah terisi katalog alat + beberapa contoh transaksi di berbagai status (siap diambil, sedang disewa, terlambat + denda kerusakan) dan dua login (pemilik + karyawan) supaya "peran karyawan cuma label, bukan pembatas akses" bisa langsung dirasakan, bukan cuma dijelaskan.
+Supaya calon vendor bisa langsung coba alur aplikasi (kalender, catat transaksi, jaminan & denda, kelola karyawan) tanpa harus isi data sendiri dulu, ada satu akun demo yang sudah terisi katalog alat + beberapa contoh transaksi di berbagai status (siap diambil, sedang disewa, terlambat + denda kerusakan) dan dua login (pemilik + karyawan) supaya "peran karyawan cuma label, bukan pembatas akses" bisa langsung dirasakan, bukan cuma dijelaskan. Kredensial yang sama ini juga ditampilkan di bagian "Mau Coba Sendiri Dulu?" pada landing page (`landing/src/LandingPage.tsx`) — jaga tetap sinkron kalau salah satu diubah.
 
 **Cara 1 — tombol di layar login** (buat yang lagi demo langsung ke vendor, tidak perlu buka terminal): tautan **"Lagi demo ke calon vendor? Reset data demo"** di bawah tombol Masuk. Sekali tekan langsung reset + isi otomatis email/password login pemilik, tinggal tekan Masuk. Dibatasi cooldown 60 detik di server (`POST /api/demo/reset`, lihat `backend/src/routes/demo.ts`) supaya tidak bisa dispam — endpoint ini publik tanpa login, tapi dikunci cuma bisa menyentuh satu business demo yang hardcoded (`backend/src/lib/demoReset.ts`), tidak pernah menerima business_id dari request.
 
@@ -149,7 +149,10 @@ Di Render Dashboard → **New → Static Site** → hubungkan repo yang sama lag
 | Build Command | `npm install --include=dev && npm run build --workspace landing` |
 | Publish Directory | `landing/dist` |
 
-Tidak ada environment variable yang perlu diisi — `landing/` murni statis, tanpa Supabase atau panggilan ke backend sama sekali (CTA-nya cuma link `wa.me`).
+Environment variable (opsional, harus diisi **sebelum** build karena Vite meng-inline nilainya saat build):
+- `VITE_APP_URL` = URL frontend dari langkah 3 (contoh: `https://sewalog-frontend.onrender.com`) — dipakai tombol "Buka Demo" di bagian akun demo. Kalau dikosongkan, fallback ke `http://localhost:5173` (cuma benar untuk dev lokal).
+
+Selain itu `landing/` murni statis, tanpa Supabase atau panggilan ke backend sama sekali (CTA utamanya link `wa.me`).
 
 > Ingat ganti nomor placeholder di `landing/src/lib/whatsapp.ts` (`62xxxxxxxxxx`) ke nomor WhatsApp asli sebelum atau langsung setelah deploy pertama — kalau lupa, tombol CTA akan mengarah ke nomor yang salah.
 
