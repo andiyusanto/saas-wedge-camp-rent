@@ -2,6 +2,16 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { todayStr } from '../utils/formatters';
 
+export type HistoryBookingItem = {
+  item_id: string | null;
+  name: string;
+  category: string | null;
+  variant: string | null;
+  size: string | null;
+  color: string | null;
+  quantity: number;
+};
+
 export type HistoryBooking = {
   id: string;
   booking_number: string | null;
@@ -11,12 +21,12 @@ export type HistoryBooking = {
   total_price: number;
   dp_paid: number;
   customer: { name: string; phone: string | null } | null;
-  items: { name: string; quantity: number }[];
+  items: HistoryBookingItem[];
   penalties: { type: string; amount: number }[];
 };
 
 const SELECT_FIELDS =
-  'id, booking_number, status, start_date, end_date, total_price, dp_paid, customers(name, phone), booking_items(quantity, items(name)), penalties(type, amount)';
+  'id, booking_number, status, start_date, end_date, total_price, dp_paid, customers(name, phone), booking_items(quantity, items(id, name, category, variant, size, color)), penalties(type, amount)';
 
 type RawBooking = {
   id: string;
@@ -27,7 +37,19 @@ type RawBooking = {
   total_price: number;
   dp_paid: number;
   customers: { name: string; phone: string | null } | null;
-  booking_items: { quantity: number; items: { name: string } | null }[] | null;
+  booking_items:
+    | {
+        quantity: number;
+        items: {
+          id: string;
+          name: string;
+          category: string | null;
+          variant: string | null;
+          size: string | null;
+          color: string | null;
+        } | null;
+      }[]
+    | null;
   penalties: { type: string; amount: number }[] | null;
 };
 
@@ -41,7 +63,15 @@ function mapBooking(row: RawBooking): HistoryBooking {
     total_price: row.total_price,
     dp_paid: row.dp_paid,
     customer: row.customers,
-    items: (row.booking_items ?? []).map((bi) => ({ name: bi.items?.name ?? '', quantity: bi.quantity })),
+    items: (row.booking_items ?? []).map((bi) => ({
+      item_id: bi.items?.id ?? null,
+      name: bi.items?.name ?? '',
+      category: bi.items?.category ?? null,
+      variant: bi.items?.variant ?? null,
+      size: bi.items?.size ?? null,
+      color: bi.items?.color ?? null,
+      quantity: bi.quantity,
+    })),
     penalties: row.penalties ?? [],
   };
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { History, Receipt, Wallet, AlertCircle, CalendarClock, Download, Search } from 'lucide-react';
+import { History, Receipt, Wallet, AlertCircle, CalendarClock, Download, Search, Package } from 'lucide-react';
 import { useHistory } from '../hooks/useHistory';
 import type { HistoryBooking } from '../hooks/useHistory';
 import { StatCard } from './StatCard';
@@ -88,6 +88,36 @@ export function HistoryScreen({ businessId }: { businessId: string }) {
   const totalTransaksi = nonCancelled.length;
   const sudahDiterima = nonCancelled.reduce((sum, b) => sum + b.dp_paid, 0);
   const piutang = nonCancelled.reduce((sum, b) => sum + Math.max(0, b.total_price - b.dp_paid), 0);
+
+  // Peralatan terlaris — dijumlah dari transaksi non-batal pada rentang
+  // yang sama dengan KPI di atas, bukan flat sepanjang waktu. Dikelompokkan
+  // per item_id (bukan cuma nama) supaya tidak salah gabung kalau ada dua
+  // alat kebetulan senama.
+  const topItemsMap = new Map<
+    string,
+    { name: string; variant: string | null; size: string | null; color: string | null; totalQuantity: number }
+  >();
+  for (const b of nonCancelled) {
+    for (const item of b.items) {
+      const key = item.item_id ?? item.name;
+      const existing = topItemsMap.get(key);
+      if (existing) {
+        existing.totalQuantity += item.quantity;
+      } else {
+        topItemsMap.set(key, {
+          name: item.name,
+          variant: item.variant,
+          size: item.size,
+          color: item.color,
+          totalQuantity: item.quantity,
+        });
+      }
+    }
+  }
+  const topItems = [...topItemsMap.entries()]
+    .map(([key, value]) => ({ key, ...value }))
+    .sort((a, b) => b.totalQuantity - a.totalQuantity)
+    .slice(0, 10);
 
   const [csvUrl, setCsvUrl] = useState<string | null>(null);
 
@@ -191,6 +221,42 @@ export function HistoryScreen({ businessId }: { businessId: string }) {
         <StatCard label="Piutang" value={formatIDR(piutang)} color="warning" icon={AlertCircle} sub="Belum lunas" isText />
         <StatCard label="Jatuh Tempo Hari Ini" value={dueTodayCount} color="danger" icon={CalendarClock} sub="Harus kembali hari ini" />
       </div>
+
+      {!loading && topItems.length > 0 && (
+        <div className="bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] shadow-xs p-4 sm:p-5">
+          <h3 className="text-sm font-bold text-[#26302B] flex items-center gap-2 mb-3">
+            <Package className="w-4 h-4 text-[#2B4739]" />
+            <span>Peralatan Terlaris Disewa</span>
+          </h3>
+          <div className="space-y-2">
+            {topItems.map((item, i) => {
+              const attrLine = [
+                item.variant && `Varian: ${item.variant}`,
+                item.size && `Ukuran: ${item.size}`,
+                item.color && `Warna: ${item.color}`,
+              ]
+                .filter(Boolean)
+                .join('   •   ');
+              return (
+                <div key={item.key} className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-[#F1EEE2] border border-[#DBD5C1]">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="shrink-0 w-6 h-6 rounded-full bg-[#2B4739] text-white font-bold text-[10px] flex items-center justify-center">
+                      {i + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-[#26302B] truncate">{item.name}</p>
+                      {attrLine && <p className="text-[10px] text-[#6E6853] truncate">{attrLine}</p>}
+                    </div>
+                  </div>
+                  <span className="shrink-0 px-2.5 py-1 rounded-lg bg-white border border-[#DBD5C1] text-xs font-bold text-[#2B4739]">
+                    {item.totalQuantity} unit
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <p className="text-sm text-[#6E6853]">Memuat...</p>

@@ -233,8 +233,8 @@ export function GuideScreen() {
         </p>
         <FieldsTable
           rows={[
-            { label: 'Total Transaksi', desc: 'Jumlah transaksi pada rentang tanggal yang dipilih.' },
-            { label: 'Sudah Diterima', desc: 'Total uang muka/pembayaran yang sudah tercatat masuk pada rentang tersebut.' },
+            { label: 'Total Transaksi', desc: 'Jumlah transaksi pada rentang tanggal yang dipilih (tidak termasuk yang Dibatalkan).' },
+            { label: 'Sudah Diterima', desc: 'Total uang muka/pembayaran yang sudah tercatat masuk pada rentang tersebut (tidak termasuk yang Dibatalkan).' },
             { label: 'Piutang', desc: 'Sisa tagihan yang belum lunas dari transaksi yang belum dibatalkan.' },
             {
               label: 'Jatuh Tempo Hari Ini',
@@ -242,10 +242,20 @@ export function GuideScreen() {
             },
           ]}
         />
+        <Note>
+          Transaksi <Ui>Dibatalkan</Ui> sengaja tidak ikut dihitung di keempat angka ringkasan di atas — batal
+          artinya transaksinya tidak pernah benar-benar terjadi. Daftar tabel di bawah tetap menampilkan semua
+          status termasuk yang dibatalkan, cuma angka ringkasannya yang disaring.
+        </Note>
         <p>
           Filter tanggal (default: awal bulan berjalan sampai hari ini), status, dan pencarian nama/kode booking
           bisa dipakai bersamaan. Tombol <Ui>Unduh CSV</Ui> mengekspor daftar yang sedang tampil (sesuai filter
           aktif) ke file Excel/CSV.
+        </p>
+        <p>
+          Bagian <Ui>Peralatan Terlaris Disewa</Ui> menampilkan alat yang paling sering disewa pada rentang tanggal
+          yang sama (juga tidak termasuk transaksi Dibatalkan) — berguna buat lihat alat mana yang perlu ditambah
+          stoknya atau justru jarang dipakai.
         </p>
         <Note>Sama seperti Kelola Karyawan, tab ini cuma terlihat dan bisa diakses oleh pemilik.</Note>
       </Section>
