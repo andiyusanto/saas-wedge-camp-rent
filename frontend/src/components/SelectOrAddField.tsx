@@ -1,10 +1,16 @@
 import { useState } from 'react';
-import { Plus, Check, X } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 
 // Pilih dari nilai yang sudah pernah dipakai di katalog, atau ketik baru.
 // Pola sama seperti fitur setara di Bilbo-Outdoors — tidak ada tabel
 // enum/lookup terpisah, daftar pilihan diturunkan live dari katalog
 // sendiri (lihat getDistinctValues di ItemsScreen.tsx).
+//
+// Aksi (tombol tambah / konfirmasi-batal) sengaja diletakkan DI BAWAH
+// select/input, bukan di sampingnya — field ini dipakai 3-kolom
+// berdampingan (Varian/Ukuran/Warna), jadi tiap kolom cuma ~150px. Tombol
+// icon-only di samping input bikin baris "sedang menambah" jadi sangat
+// sempit dan sulit dibaca; menumpuk vertikal kasih tiap elemen lebar penuh.
 export function SelectOrAddField({
   label,
   value,
@@ -40,7 +46,7 @@ export function SelectOrAddField({
     <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
       {label}
       {adding ? (
-        <div className="flex items-center gap-1.5">
+        <div className="space-y-1.5">
           <input
             type="text"
             autoFocus
@@ -53,34 +59,36 @@ export function SelectOrAddField({
               }
             }}
             placeholder={newInputPlaceholder}
-            className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+            className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
           />
-          <button
-            type="button"
-            onClick={confirmNew}
-            title="Gunakan"
-            className="p-2 rounded-lg bg-[#2B4739] hover:bg-[#1E3429] text-white transition shrink-0"
-          >
-            <Check className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setAdding(false);
-              setNewValue('');
-            }}
-            title="Batal"
-            className="p-2 rounded-lg bg-white border border-[#DBD5C1] text-[#6E6853] hover:bg-[#F1EEE2] transition shrink-0"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={confirmNew}
+              className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-[#2B4739] hover:bg-[#1E3429] text-white text-xs font-semibold transition"
+            >
+              <Check className="w-3.5 h-3.5" />
+              Gunakan
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAdding(false);
+                setNewValue('');
+              }}
+              className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-white border border-[#DBD5C1] text-[#6E6853] hover:bg-[#F1EEE2] text-xs font-semibold transition"
+            >
+              <X className="w-3.5 h-3.5" />
+              Batal
+            </button>
+          </div>
         </div>
       ) : (
-        <div className="flex items-center gap-1.5">
+        <div className="space-y-1">
           <select
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+            className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
           >
             <option value="">(Tidak ada)</option>
             {selectOptions.map((opt) => (
@@ -92,10 +100,9 @@ export function SelectOrAddField({
           <button
             type="button"
             onClick={() => setAdding(true)}
-            title={addButtonLabel}
-            className="p-2 rounded-lg bg-white border border-[#DBD5C1] text-[#2B4739] hover:bg-[#E8EFEA] transition shrink-0"
+            className="text-[11px] font-semibold text-[#2B4739] hover:underline"
           >
-            <Plus className="w-4 h-4" />
+            + {addButtonLabel}
           </button>
         </div>
       )}
