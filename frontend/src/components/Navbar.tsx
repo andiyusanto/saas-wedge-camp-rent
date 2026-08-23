@@ -1,14 +1,15 @@
-import { Calendar, ShieldAlert, Package, Plus, LogOut, Users, BookOpen, Store } from 'lucide-react';
+import { Calendar, ShieldAlert, Package, Plus, LogOut, Users, BookOpen, Store, History } from 'lucide-react';
 import { ScrollableRow } from './ScrollableRow';
 import type { MemberRole } from '../hooks/useBusiness';
 
-export type Tab = 'kalender' | 'tracking' | 'alat' | 'tim' | 'panduan';
+export type Tab = 'kalender' | 'tracking' | 'alat' | 'tim' | 'riwayat' | 'panduan';
 
 const TABS: { id: Tab; label: string; icon: typeof Calendar; ownerOnly?: boolean }[] = [
   { id: 'kalender', label: 'Kalender Ketersediaan', icon: Calendar },
   { id: 'tracking', label: 'Jaminan & Denda', icon: ShieldAlert },
   { id: 'alat', label: 'Katalog & Stok Alat', icon: Package },
   { id: 'tim', label: 'Kelola Karyawan', icon: Users, ownerOnly: true },
+  { id: 'riwayat', label: 'Riwayat Transaksi', icon: History, ownerOnly: true },
   { id: 'panduan', label: 'Panduan', icon: BookOpen },
 ];
 

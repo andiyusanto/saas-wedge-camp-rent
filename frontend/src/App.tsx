@@ -10,6 +10,7 @@ import { CalendarScreen } from './components/CalendarScreen';
 import { NewBookingModal } from './components/NewBookingModal';
 import { TrackingScreen } from './components/TrackingScreen';
 import { TeamScreen } from './components/TeamScreen';
+import { HistoryScreen } from './components/HistoryScreen';
 import { GuideScreen } from './components/GuideScreen';
 import { Navbar } from './components/Navbar';
 import type { Tab } from './components/Navbar';
@@ -30,11 +31,11 @@ function App() {
   const [tab, setTab] = useState<Tab>('kalender');
   const [refreshSignal, setRefreshSignal] = useState(0);
 
-  // Jaring pengaman kalau karyawan sempat berada di tab 'tim' (mis. baru
-  // saja diturunkan dari owner ke karyawan oleh pemilik lain) — Navbar
+  // Jaring pengaman kalau karyawan sempat berada di tab owner-only (mis.
+  // baru saja diturunkan dari owner ke karyawan oleh pemilik lain) — Navbar
   // sendiri sudah menyembunyikan tab-nya, ini cuma jaga-jaga isi <main>.
   useEffect(() => {
-    if (tab === 'tim' && role !== null && role !== 'owner') {
+    if ((tab === 'tim' || tab === 'riwayat') && role !== null && role !== 'owner') {
       setTab('kalender');
     }
   }, [tab, role]);
@@ -96,6 +97,7 @@ function App() {
         )}
         {tab === 'alat' && <ItemsScreen businessId={business.id} session={session} />}
         {tab === 'tim' && role === 'owner' && <TeamScreen session={session} businessId={business.id} />}
+        {tab === 'riwayat' && role === 'owner' && <HistoryScreen businessId={business.id} />}
         {tab === 'panduan' && <GuideScreen />}
       </main>
 

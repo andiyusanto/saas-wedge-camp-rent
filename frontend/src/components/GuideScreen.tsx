@@ -92,6 +92,7 @@ const TOC: { id: string; num: string; title: string }[] = [
   { id: 'g-4', num: '4', title: 'Catat Transaksi Sewa' },
   { id: 'g-5', num: '5', title: 'Jaminan & Denda' },
   { id: 'g-6', num: '6', title: 'Kelola Karyawan' },
+  { id: 'g-7', num: '7', title: 'Riwayat Transaksi' },
   { id: 'g-a', num: 'A', title: 'Catatan Penting' },
 ];
 
@@ -222,6 +223,31 @@ export function GuideScreen() {
           otomatis kedaluwarsa dalam 7 hari kalau belum dipakai, dan bisa dicabut manual kapan saja lewat tombol hapus
           di daftar undangan.
         </Note>
+      </Section>
+
+      <Section id="g-7" num="7" title="Riwayat Transaksi" kicker="Khusus pemilik — rekap semua transaksi termasuk yang sudah selesai/dibatalkan, plus ringkasan omset & piutang.">
+        <p>
+          Beda dari layar Jaminan &amp; Denda yang cuma menampilkan transaksi aktif, Riwayat Transaksi menampilkan{' '}
+          <Ui>semua</Ui> status — termasuk yang sudah <Ui>Selesai</Ui> atau <Ui>Dibatalkan</Ui>, yang setelah
+          ditutup tidak akan muncul lagi di layar lain manapun.
+        </p>
+        <FieldsTable
+          rows={[
+            { label: 'Total Transaksi', desc: 'Jumlah transaksi pada rentang tanggal yang dipilih.' },
+            { label: 'Sudah Diterima', desc: 'Total uang muka/pembayaran yang sudah tercatat masuk pada rentang tersebut.' },
+            { label: 'Piutang', desc: 'Sisa tagihan yang belum lunas dari transaksi yang belum dibatalkan.' },
+            {
+              label: 'Jatuh Tempo Hari Ini',
+              desc: 'Transaksi aktif yang jadwal kembalinya hari ini — angka ini selalu real-time, tidak ikut rentang tanggal yang dipilih.',
+            },
+          ]}
+        />
+        <p>
+          Filter tanggal (default: awal bulan berjalan sampai hari ini), status, dan pencarian nama/kode booking
+          bisa dipakai bersamaan. Tombol <Ui>Unduh CSV</Ui> mengekspor daftar yang sedang tampil (sesuai filter
+          aktif) ke file Excel/CSV.
+        </p>
+        <Note>Sama seperti Kelola Karyawan, tab ini cuma terlihat dan bisa diakses oleh pemilik.</Note>
       </Section>
 
       <Section id="g-a" num="A." title="Catatan Penting">
