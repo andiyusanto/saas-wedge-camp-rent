@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { History, Receipt, Wallet, AlertCircle, CalendarClock, Download, Search, Package } from 'lucide-react';
+import { History, Receipt, Wallet, AlertCircle, CalendarClock, Download, Search, Package, ChevronDown, ChevronUp } from 'lucide-react';
 import { useHistory } from '../hooks/useHistory';
 import type { HistoryBooking } from '../hooks/useHistory';
 import { StatCard } from './StatCard';
@@ -91,21 +91,22 @@ export function HistoryScreen({ businessId }: { businessId: string }) {
 
   // Peralatan terlaris — dijumlah dari transaksi non-batal pada rentang
   // yang sama dengan KPI di atas, bukan flat sepanjang waktu. Dikelompokkan
-  // per item_id (bukan cuma nama) supaya tidak salah gabung kalau ada dua
-  // alat kebetulan senama.
-  const topItemsMap = new Map<
+  // per item_id dulu (bukan cuma nama, supaya tidak salah gabung kalau ada
+  // dua alat kebetulan senama), lalu dikelompokkan lagi per kategori.
+  const itemsMap = new Map<
     string,
-    { name: string; variant: string | null; size: string | null; color: string | null; totalQuantity: number }
+    { name: string; category: string; variant: string | null; size: string | null; color: string | null; totalQuantity: number }
   >();
   for (const b of nonCancelled) {
     for (const item of b.items) {
       const key = item.item_id ?? item.name;
-      const existing = topItemsMap.get(key);
+      const existing = itemsMap.get(key);
       if (existing) {
         existing.totalQuantity += item.quantity;
       } else {
-        topItemsMap.set(key, {
+        itemsMap.set(key, {
           name: item.name,
+          category: item.category ?? 'Lainnya',
           variant: item.variant,
           size: item.size,
           color: item.color,
@@ -114,10 +115,34 @@ export function HistoryScreen({ businessId }: { businessId: string }) {
       }
     }
   }
-  const topItems = [...topItemsMap.entries()]
-    .map(([key, value]) => ({ key, ...value }))
-    .sort((a, b) => b.totalQuantity - a.totalQuantity)
-    .slice(0, 10);
+
+  const categoryMap = new Map<
+    string,
+    { category: string; totalQuantity: number; items: { key: string; name: string; variant: string | null; size: string | null; color: string | null; totalQuantity: number }[] }
+  >();
+  for (const [key, item] of itemsMap) {
+    const group = categoryMap.get(item.category);
+    const entry = { key, name: item.name, variant: item.variant, size: item.size, color: item.color, totalQuantity: item.totalQuantity };
+    if (group) {
+      group.totalQuantity += item.totalQuantity;
+      group.items.push(entry);
+    } else {
+      categoryMap.set(item.category, { category: item.category, totalQuantity: item.totalQuantity, items: [entry] });
+    }
+  }
+  const categoryGroups = [...categoryMap.values()]
+    .map((g) => ({ ...g, items: g.items.sort((a, b) => b.totalQuantity - a.totalQuantity) }))
+    .sort((a, b) => b.totalQuantity - a.totalQuantity);
+
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  function toggleCategory(category: string) {
+    setCollapsedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(category)) next.delete(category);
+      else next.add(category);
+      return next;
+    });
+  }
 
   const [csvUrl, setCsvUrl] = useState<string | null>(null);
 
@@ -222,35 +247,55 @@ export function HistoryScreen({ businessId }: { businessId: string }) {
         <StatCard label="Jatuh Tempo Hari Ini" value={dueTodayCount} color="danger" icon={CalendarClock} sub="Harus kembali hari ini" />
       </div>
 
-      {!loading && topItems.length > 0 && (
+      {!loading && categoryGroups.length > 0 && (
         <div className="bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] shadow-xs p-4 sm:p-5">
           <h3 className="text-sm font-bold text-[#26302B] flex items-center gap-2 mb-3">
             <Package className="w-4 h-4 text-[#2B4739]" />
             <span>Peralatan Terlaris Disewa</span>
           </h3>
           <div className="space-y-2">
-            {topItems.map((item, i) => {
-              const attrLine = [
-                item.variant && `Varian: ${item.variant}`,
-                item.size && `Ukuran: ${item.size}`,
-                item.color && `Warna: ${item.color}`,
-              ]
-                .filter(Boolean)
-                .join('   •   ');
+            {categoryGroups.map((group, gi) => {
+              const isCollapsed = collapsedCategories.has(group.category);
               return (
-                <div key={item.key} className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-[#F1EEE2] border border-[#DBD5C1]">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="shrink-0 w-6 h-6 rounded-full bg-[#2B4739] text-white font-bold text-[10px] flex items-center justify-center">
-                      {i + 1}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-[#26302B] truncate">{item.name}</p>
-                      {attrLine && <p className="text-[10px] text-[#6E6853] truncate">{attrLine}</p>}
+                <div key={group.category} className="rounded-xl border border-[#DBD5C1] overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleCategory(group.category)}
+                    className="w-full flex items-center justify-between gap-3 p-2.5 bg-[#F1EEE2] hover:bg-[#E6E1D2] transition"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="shrink-0 w-6 h-6 rounded-full bg-[#2B4739] text-white font-bold text-[10px] flex items-center justify-center">
+                        {String(gi + 1).padStart(2, '0')}
+                      </span>
+                      <span className="text-xs font-bold text-[#26302B] uppercase tracking-wide truncate">{group.category}</span>
+                      {isCollapsed ? <ChevronDown className="w-3.5 h-3.5 text-[#6E6853] shrink-0" /> : <ChevronUp className="w-3.5 h-3.5 text-[#6E6853] shrink-0" />}
                     </div>
-                  </div>
-                  <span className="shrink-0 px-2.5 py-1 rounded-lg bg-white border border-[#DBD5C1] text-xs font-bold text-[#2B4739]">
-                    {item.totalQuantity} unit
-                  </span>
+                    <span className="shrink-0 px-2.5 py-1 rounded-lg bg-white border border-[#DBD5C1] text-xs font-bold text-[#2B4739]">
+                      {group.totalQuantity} unit
+                    </span>
+                  </button>
+                  {!isCollapsed && (
+                    <div className="divide-y divide-[#E6E1D2] bg-white">
+                      {group.items.map((item) => {
+                        const attrLine = [
+                          item.variant && `Varian: ${item.variant}`,
+                          item.size && `Ukuran: ${item.size}`,
+                          item.color && `Warna: ${item.color}`,
+                        ]
+                          .filter(Boolean)
+                          .join('   •   ');
+                        return (
+                          <div key={item.key} className="flex items-center justify-between gap-3 px-3 py-2">
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold text-[#26302B] truncate">{item.name}</p>
+                              {attrLine && <p className="text-[10px] text-[#6E6853] truncate">{attrLine}</p>}
+                            </div>
+                            <span className="shrink-0 text-xs font-bold text-[#6E6853]">{item.totalQuantity} unit</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })}

@@ -254,8 +254,9 @@ export function GuideScreen() {
         </p>
         <p>
           Bagian <Ui>Peralatan Terlaris Disewa</Ui> menampilkan alat yang paling sering disewa pada rentang tanggal
-          yang sama (juga tidak termasuk transaksi Dibatalkan) — berguna buat lihat alat mana yang perlu ditambah
-          stoknya atau justru jarang dipakai.
+          yang sama (juga tidak termasuk transaksi Dibatalkan), dikelompokkan per kategori — tekan judul kategori
+          buat buka/tutup daftar alatnya. Berguna buat lihat alat mana yang perlu ditambah stoknya atau justru
+          jarang dipakai.
         </p>
         <Note>Sama seperti Kelola Karyawan, tab ini cuma terlihat dan bisa diakses oleh pemilik.</Note>
       </Section>
