@@ -79,11 +79,15 @@ export function HistoryScreen({ businessId }: { businessId: string }) {
     return matchesStatus && matchesSearch;
   });
 
-  const totalTransaksi = bookings.length;
-  const sudahDiterima = bookings.reduce((sum, b) => sum + b.dp_paid, 0);
-  const piutang = bookings
-    .filter((b) => b.status !== 'dibatalkan')
-    .reduce((sum, b) => sum + Math.max(0, b.total_price - b.dp_paid), 0);
+  // Transaksi dibatalkan sengaja dikecualikan dari ketiga KPI ini — batal
+  // artinya transaksinya tidak pernah benar-benar terjadi, jadi tidak
+  // boleh ikut dihitung sebagai volume/omset/piutang. Daftar di bawah
+  // tetap menampilkan status dibatalkan (riwayat tetap lengkap), cuma
+  // angka ringkasan di atas yang menyaringnya.
+  const nonCancelled = bookings.filter((b) => b.status !== 'dibatalkan');
+  const totalTransaksi = nonCancelled.length;
+  const sudahDiterima = nonCancelled.reduce((sum, b) => sum + b.dp_paid, 0);
+  const piutang = nonCancelled.reduce((sum, b) => sum + Math.max(0, b.total_price - b.dp_paid), 0);
 
   const [csvUrl, setCsvUrl] = useState<string | null>(null);
 
