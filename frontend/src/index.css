@@ -65,3 +65,25 @@
 @utility text-sewa-danger {
   color: #a8412e;
 }
+
+/* Cetak Nota Sewa (InvoiceModal) — sembunyikan seluruh halaman kecuali
+   subtree #print-invoice-root saat dicetak/disimpan sebagai PDF, supaya
+   nav/kartu lain yang ada di belakang modal tidak ikut kecetak. */
+@media print {
+  body {
+    background-color: #fff;
+  }
+  body * {
+    visibility: hidden;
+  }
+  #print-invoice-root,
+  #print-invoice-root * {
+    visibility: visible;
+  }
+  #print-invoice-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}

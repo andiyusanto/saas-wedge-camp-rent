@@ -15,14 +15,17 @@ import {
   History,
   ChevronDown,
   ChevronUp,
+  Printer,
 } from 'lucide-react';
-import { useTrackings } from '../hooks/useTrackings';
+import { useTrackings, buildReceiptData } from '../hooks/useTrackings';
 import type { TrackingBooking } from '../hooks/useTrackings';
 import { ReturnModal } from './ReturnModal';
 import { AddFineModal } from './AddFineModal';
 import { ConfirmModal } from './ConfirmModal';
+import { InvoiceModal } from './InvoiceModal';
 import { ScrollableRow } from './ScrollableRow';
 import { StatCard } from './StatCard';
+import type { ReceiptData } from '../utils/formatters';
 import {
   formatDateIndo,
   formatDateTimeIndo,
@@ -43,6 +46,7 @@ export function TrackingScreen({ session, businessName }: { session: Session; bu
   const [returnTarget, setReturnTarget] = useState<TrackingBooking | null>(null);
   const [fineTarget, setFineTarget] = useState<TrackingBooking | null>(null);
   const [cancelTarget, setCancelTarget] = useState<TrackingBooking | null>(null);
+  const [invoiceData, setInvoiceData] = useState<ReceiptData | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   if (loading) return <p className="text-sm text-[#6E6853]">Memuat...</p>;
@@ -77,24 +81,12 @@ export function TrackingScreen({ session, businessName }: { session: Session; bu
 
   function handleShareWA(b: TrackingBooking) {
     if (!b.customer?.phone) return;
-    const activeDeposit = b.deposits.find((d) => d.status === 'ditahan') ?? b.deposits[0];
-    const text = generateWhatsAppReceipt({
-      bookingNumber: b.booking_number ?? '-',
-      customerName: b.customer.name,
-      customerPhone: b.customer.phone,
-      startDate: b.start_date,
-      endDate: b.end_date,
-      items: b.items.map((i) => ({ name: i.name, quantity: i.quantity, price_per_day: 0 })),
-      totalPrice: b.total_price,
-      dpPaid: b.dp_paid,
-      depositType: activeDeposit?.type ?? null,
-      depositNote: activeDeposit?.note ?? null,
-      depositStatus: (activeDeposit?.status as 'ditahan' | 'dikembalikan' | null) ?? null,
-      status: b.is_pending_pickup ? 'dipesan' : 'aktif',
-      fines: b.penalties,
-      businessName,
-    });
+    const text = generateWhatsAppReceipt(buildReceiptData(b, businessName));
     window.open(getWhatsAppShareUrl(b.customer.phone, text), '_blank');
+  }
+
+  function handlePrintInvoice(b: TrackingBooking) {
+    setInvoiceData(buildReceiptData(b, businessName));
   }
 
   return (
@@ -157,6 +149,7 @@ export function TrackingScreen({ session, businessName }: { session: Session; bu
               key={b.id}
               booking={b}
               onShareWA={() => handleShareWA(b)}
+              onPrintInvoice={() => handlePrintInvoice(b)}
               onPickup={() => runAction(() => pickupBooking(b.id))}
               onAddFine={() => setFineTarget(b)}
               onReturn={() => setReturnTarget(b)}
@@ -200,6 +193,8 @@ export function TrackingScreen({ session, businessName }: { session: Session; bu
         }}
         onClose={() => setCancelTarget(null)}
       />
+
+      <InvoiceModal isOpen={invoiceData !== null} onClose={() => setInvoiceData(null)} data={invoiceData} />
     </div>
   );
 }
@@ -240,6 +235,7 @@ function FilterButton({
 function BookingCard({
   booking: b,
   onShareWA,
+  onPrintInvoice,
   onPickup,
   onAddFine,
   onReturn,
@@ -247,6 +243,7 @@ function BookingCard({
 }: {
   booking: TrackingBooking;
   onShareWA: () => void;
+  onPrintInvoice: () => void;
   onPickup: () => void;
   onAddFine: () => void;
   onReturn: () => void;
@@ -420,13 +417,22 @@ function BookingCard({
       )}
 
       <div className="flex flex-wrap items-center justify-between pt-3 mt-3 border-t border-[#E6E1D2] gap-2">
-        <button
-          onClick={onShareWA}
-          className="px-3 py-1.5 rounded-lg bg-[#2B4739] hover:bg-[#1E3429] text-white text-xs font-semibold flex items-center gap-1.5 transition"
-        >
-          <Send className="w-3.5 h-3.5 text-[#A65C2A]" />
-          <span>Kirim Struk WA</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={onShareWA}
+            className="px-3 py-1.5 rounded-lg bg-[#2B4739] hover:bg-[#1E3429] text-white text-xs font-semibold flex items-center gap-1.5 transition"
+          >
+            <Send className="w-3.5 h-3.5 text-[#A65C2A]" />
+            <span>Kirim Struk WA</span>
+          </button>
+          <button
+            onClick={onPrintInvoice}
+            className="px-3 py-1.5 rounded-lg bg-white border border-[#DBD5C1] hover:bg-[#F1EEE2] text-[#26302B] text-xs font-semibold flex items-center gap-1.5 transition"
+          >
+            <Printer className="w-3.5 h-3.5 text-[#2B4739]" />
+            <span>Cetak Nota</span>
+          </button>
+        </div>
 
         <div className="flex flex-wrap items-center gap-2">
           {b.is_pending_pickup && (

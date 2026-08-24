@@ -69,6 +69,7 @@ router.get('/trackings', async (req, res) => {
       items: ((b.booking_items ?? []) as unknown as BookingItemJoin[]).map((bi) => ({
         name: bi.items?.name ?? '',
         quantity: bi.quantity,
+        price_per_day: bi.price_at_booking,
       })),
       deposits: b.deposits ?? [],
       penalties: b.penalties ?? [],
