@@ -8,6 +8,8 @@
 // pemanggil, supaya endpoint publik yang memakai ini (routes/demo.ts) tidak
 // bisa disalahgunakan untuk menyentuh data vendor asli.
 
+import { todayInWIB, addDays } from './dates.js';
+
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const ANON_KEY = process.env.SUPABASE_PUBLISHABLE_KEY!;
 
@@ -24,10 +26,11 @@ function selfApiBaseUrl(): string {
   return `http://localhost:${process.env.PORT ?? 3001}`;
 }
 
+// Lewat todayInWIB()/addDays() (bukan Date lokal server + toISOString), biar
+// tidak kena jebakan pergeseran tanggal yang sama seperti dijelaskan di
+// lib/dates.ts — Sewalog pakai WIB (UTC+7) sebagai default timezone.
 function todayPlus(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return addDays(todayInWIB(), days);
 }
 
 function computeItemRentalPrice(

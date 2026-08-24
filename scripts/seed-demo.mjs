@@ -28,10 +28,25 @@ if (!SUPABASE_URL || !ANON_KEY) {
   process.exit(1);
 }
 
+// Sewalog pakai WIB (UTC+7) sebagai default timezone — semua vendor pilot
+// ada di Malang Raya (lihat CLAUDE.md bagian 3). Tanggal dihitung relatif ke
+// WIB, bukan timezone lokal mesin yang menjalankan script ini, biar tidak
+// bergeser tergantung di mana script dijalankan — sama seperti
+// backend/src/lib/dates.ts, dijaga tetap sinkron kalau salah satu diubah.
+const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+function todayInWIB() {
+  return new Date(Date.now() + WIB_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+function addDays(dateStr, amount) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const ms = Date.UTC(y, m - 1, d) + amount * 86_400_000;
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
 function todayPlus(days) {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return addDays(todayInWIB(), days);
 }
 
 function computeItemRentalPrice(pricePerDay, discountMinDays, discountedPricePerDay, days) {

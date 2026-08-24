@@ -34,6 +34,7 @@ Urutan fase:
 - Backend: Express
 - Database & Auth: Supabase (Postgres + RLS)
 - Platform: **Web app, mobile-first** — bukan native Android/iOS untuk tahap ini.
+- Zona waktu: **WIB (UTC+7)** sebagai default — lihat penjelasan di bawah.
 
 ### Kenapa web, bukan native app
 Distribusi ke vendor harus nol-friksi (kirim link, langsung buka browser — bukan sideload APK atau app store review) karena vendor masih tahap "coba dulu tanpa komitmen". Kecepatan iterasi juga lebih penting di fase validasi daripada pengalaman native.
@@ -43,6 +44,11 @@ Pemakaian nyata terjadi sambil berdiri di depan rak alat, pelanggan menunggu di 
 
 ### Soal app-like / PWA
 Boleh tambahkan manifest + ikon agar bisa "Add to Home Screen" (biaya kecil, murni penambahan). **Jangan implementasi offline-first caching agresif** — data stok yang di-cache offline berisiko menampilkan info basi ke vendor, yang justru menciptakan ulang masalah double-booking yang coba diselesaikan tools ini. Tunda sampai ada strategi caching yang jelas soal validitas data.
+
+### Zona waktu — kenapa WIB dihardcode, bukan ikut timezone server
+Semua vendor pilot ada di Malang Raya (lihat bagian 3), jadi **WIB (UTC+7) adalah default timezone aplikasi**, bukan opsional atau sesuatu yang perlu dideteksi otomatis. Perhitungan "hari ini" untuk status booking (aktif/dipesan), ketersediaan kalender, dan due-date denda keterlambatan di backend **sengaja dihitung lewat offset WIB tetap** (`backend/src/lib/dates.ts`, `backend/src/lib/penalty.ts`), bukan lewat `Date` lokal server — karena server bisa saja di-deploy di region/timezone berbeda (mis. Render), dan kalau perhitungan tanggal ikut timezone server, status booking/ketersediaan bisa bergeser satu hari tergantung di mana server jalan. Frontend sebaliknya sengaja pakai waktu lokal **browser** (`todayStr()` di `frontend/src/utils/formatters.ts`) — device vendor secara fisik ada di WIB, jadi waktu lokal browser sudah benar tanpa perlu offset manual.
+
+**Kalau nambah logika baru yang melibatkan tanggal/waktu**: di backend, selalu lewat `todayInWIB()`/`addDays()` dari `dates.ts` (jangan `new Date().getDate()`/`setDate()` langsung — itu ikut timezone server, bukan WIB). Skrip demo (`backend/src/lib/demoReset.ts` dan `scripts/seed-demo.mjs`) pernah kena bug ini (`todayPlus()` pakai `Date` lokal + `toISOString()`, tercampur), sudah diperbaiki — jangan diulangi polanya di kode baru.
 
 ## 5. Sistem desain
 
