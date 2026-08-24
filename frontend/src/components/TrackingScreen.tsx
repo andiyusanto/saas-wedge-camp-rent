@@ -287,7 +287,16 @@ function BookingCard({
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 pt-4 text-xs">
         <div className="space-y-2">
-          <h4 className="font-bold text-sm text-[#26302B]">{b.customer?.name}</h4>
+          <div className="flex items-center gap-2">
+            {b.customer_photo_url && (
+              <img
+                src={b.customer_photo_url}
+                alt="Foto penyewa"
+                className="w-9 h-9 rounded-full object-cover border border-[#DBD5C1] shrink-0"
+              />
+            )}
+            <h4 className="font-bold text-sm text-[#26302B]">{b.customer?.name}</h4>
+          </div>
           {b.customer?.phone && (
             <p className="text-[#6E6853] flex items-center gap-1">
               <Phone className="w-3.5 h-3.5 text-[#2B4739]" />

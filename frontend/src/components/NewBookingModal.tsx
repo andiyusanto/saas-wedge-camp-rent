@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { X, Calendar, Plus, CheckCircle2, User, ShieldCheck, History } from 'lucide-react';
+import { X, Calendar, Plus, CheckCircle2, User, ShieldCheck, History, Upload } from 'lucide-react';
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import { useItems } from '../hooks/useItems';
 import type { Business } from '../hooks/useBusiness';
 import { apiFetch } from '../lib/api';
 import { useCustomerSearch, fetchCustomerHistorySummary } from '../hooks/useCustomerSearch';
 import type { CustomerMatch, CustomerHistorySummary } from '../hooks/useCustomerSearch';
+import { resizeImageToDataUrl } from '../utils/imageResize';
 import {
   formatIDR,
   formatDateIndo,
@@ -49,6 +50,8 @@ export function NewBookingModal({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [historySummary, setHistorySummary] = useState<CustomerHistorySummary | null>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [customerPhotoUrl, setCustomerPhotoUrl] = useState('');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [startDate, setStartDate] = useState(todayStr());
   const [endDate, setEndDate] = useState(todayStr());
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -72,6 +75,7 @@ export function NewBookingModal({
     setShowSuggestions(false);
     setHistorySummary(null);
     clearCustomerSuggestions();
+    setCustomerPhotoUrl('');
     setDepositType('ktp');
     setDepositNote('');
     setDepositAmount('');
@@ -139,6 +143,23 @@ export function NewBookingModal({
     setHistorySummary(await fetchCustomerHistorySummary(match.id));
   }
 
+  async function handleUploadCustomerPhoto(file: File) {
+    setUploadingPhoto(true);
+    setError(null);
+    try {
+      const dataUrl = await resizeImageToDataUrl(file);
+      const body = await apiFetch<{ url: string }>(session, '/api/uploads/customer-photo', {
+        method: 'POST',
+        body: JSON.stringify({ businessId: business.id, image: dataUrl }),
+      });
+      setCustomerPhotoUrl(body.url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gagal mengunggah foto.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -160,6 +181,7 @@ export function NewBookingModal({
           ...(selectedCustomerId
             ? { customer_id: selectedCustomerId }
             : { customer: { name: customerName, phone: customerPhone || null, address: customerAddress || null } }),
+          customer_photo_url: customerPhotoUrl || null,
           start_date: startDate,
           end_date: endDate,
           items: selectedItems,
@@ -293,6 +315,38 @@ export function NewBookingModal({
                   }}
                   className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
                 />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block font-semibold text-[#26302B] mb-1">Foto Penyewa (opsional)</label>
+                <div className="flex items-center gap-2">
+                  {customerPhotoUrl && (
+                    <img
+                      src={customerPhotoUrl}
+                      alt="Foto penyewa"
+                      className="h-14 w-14 shrink-0 object-cover rounded-lg border border-[#DBD5C1]"
+                    />
+                  )}
+                  <label className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-dashed border-[#DBD5C1] px-3 py-2.5 text-xs font-semibold text-[#6E6853] hover:bg-[#F1EEE2] cursor-pointer transition">
+                    <Upload className="w-4 h-4" />
+                    {uploadingPhoto ? 'Mengunggah...' : 'Foto Wajah / Setengah Badan'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      disabled={uploadingPhoto}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleUploadCustomerPhoto(file);
+                        e.target.value = '';
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+                <p className="mt-1 text-[10px] text-[#6E6853]">
+                  Bukan foto KTP/dokumen — cukup foto orangnya, buat bukti siapa yang mengambil barang kalau ada
+                  sengketa jaminan nanti.
+                </p>
               </div>
             </div>
           </div>

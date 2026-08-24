@@ -33,8 +33,18 @@ router.post('/bookings', async (req, res) => {
     return;
   }
 
-  const { businessId, customer, customer_id, start_date, end_date, items, deposit, total_price, dp_paid } =
-    req.body ?? {};
+  const {
+    businessId,
+    customer,
+    customer_id,
+    customer_photo_url,
+    start_date,
+    end_date,
+    items,
+    deposit,
+    total_price,
+    dp_paid,
+  } = req.body ?? {};
 
   const requestedItems = items as BookingItemInput[] | undefined;
 
@@ -141,6 +151,7 @@ router.post('/bookings', async (req, res) => {
     .insert({
       business_id: businessId,
       customer_id: customerId,
+      customer_photo_url: typeof customer_photo_url === 'string' ? customer_photo_url : null,
       booking_number: bookingNumber,
       start_date,
       end_date,

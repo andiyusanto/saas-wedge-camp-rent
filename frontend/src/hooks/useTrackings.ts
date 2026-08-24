@@ -6,6 +6,7 @@ export type TrackingBooking = {
   id: string;
   booking_number: string | null;
   customer: { name: string; phone: string | null; address: string | null } | null;
+  customer_photo_url: string | null;
   start_date: string;
   end_date: string;
   due_at: string;

@@ -29,7 +29,7 @@ router.get('/trackings', async (req, res) => {
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select(
-      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, customers(name, phone, address), booking_items(quantity, price_at_booking, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description), booking_status_history(status, changed_by_name, created_at)',
+      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, customer_photo_url, customers(name, phone, address), booking_items(quantity, price_at_booking, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description), booking_status_history(status, changed_by_name, created_at)',
     )
     .in('status', ['dipesan', 'aktif'])
     .order('end_date');
@@ -57,6 +57,7 @@ router.get('/trackings', async (req, res) => {
       id: b.id,
       booking_number: b.booking_number,
       customer: b.customers,
+      customer_photo_url: b.customer_photo_url,
       start_date: b.start_date,
       end_date: b.end_date,
       due_at: dueAt.toISOString(),
