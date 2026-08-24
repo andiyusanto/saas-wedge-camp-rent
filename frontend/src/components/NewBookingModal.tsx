@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { X, Calendar, Plus, CheckCircle2, User, ShieldCheck } from 'lucide-react';
+import { X, Calendar, Plus, CheckCircle2, User, ShieldCheck, History } from 'lucide-react';
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import { useItems } from '../hooks/useItems';
 import type { Business } from '../hooks/useBusiness';
 import { apiFetch } from '../lib/api';
+import { useCustomerSearch, fetchCustomerHistorySummary } from '../hooks/useCustomerSearch';
+import type { CustomerMatch, CustomerHistorySummary } from '../hooks/useCustomerSearch';
 import {
   formatIDR,
+  formatDateIndo,
   rentalDays,
   todayStr,
   generateWhatsAppReceipt,
@@ -36,10 +39,16 @@ export function NewBookingModal({
   onSaved: () => void;
 }) {
   const { items } = useItems(business.id);
+  const { results: customerSuggestions, search: searchCustomers, clear: clearCustomerSuggestions } =
+    useCustomerSearch(business.id);
 
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [historySummary, setHistorySummary] = useState<CustomerHistorySummary | null>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [startDate, setStartDate] = useState(todayStr());
   const [endDate, setEndDate] = useState(todayStr());
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -59,12 +68,22 @@ export function NewBookingModal({
     setCustomerName('');
     setCustomerPhone('');
     setCustomerAddress('');
+    setSelectedCustomerId(null);
+    setShowSuggestions(false);
+    setHistorySummary(null);
+    clearCustomerSuggestions();
     setDepositType('ktp');
     setDepositNote('');
     setDepositAmount('');
     setDpPaid('0');
     setError(null);
   }, [isOpen, preselectedItemId, preselectedStartDate]);
+
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, []);
 
   const days = useMemo(() => rentalDays(startDate, endDate), [startDate, endDate]);
 
@@ -91,6 +110,35 @@ export function NewBookingModal({
     setQuantities((prev) => ({ ...prev, [itemId]: Math.max(0, Math.min(qty, max)) }));
   }
 
+  // Ketikan apapun setelah memilih pelanggan lama dianggap koreksi manual
+  // (mis. nomor HP-nya beda dari catatan lama) — jangan diam-diam menimpa
+  // data pelanggan lama itu, cukup lepas pilihannya dan perlakukan sebagai
+  // pelanggan baru saat disimpan.
+  function dropSelectionIfAny() {
+    if (selectedCustomerId) {
+      setSelectedCustomerId(null);
+      setHistorySummary(null);
+    }
+  }
+
+  function handleNameChange(value: string) {
+    setCustomerName(value);
+    setShowSuggestions(true);
+    dropSelectionIfAny();
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => searchCustomers(value), 300);
+  }
+
+  async function selectCustomer(match: CustomerMatch) {
+    setCustomerName(match.name);
+    setCustomerPhone(match.phone ?? '');
+    setCustomerAddress(match.address ?? '');
+    setSelectedCustomerId(match.id);
+    setShowSuggestions(false);
+    clearCustomerSuggestions();
+    setHistorySummary(await fetchCustomerHistorySummary(match.id));
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -109,7 +157,9 @@ export function NewBookingModal({
         method: 'POST',
         body: JSON.stringify({
           businessId: business.id,
-          customer: { name: customerName, phone: customerPhone || null, address: customerAddress || null },
+          ...(selectedCustomerId
+            ? { customer_id: selectedCustomerId }
+            : { customer: { name: customerName, phone: customerPhone || null, address: customerAddress || null } }),
           start_date: startDate,
           end_date: endDate,
           items: selectedItems,
@@ -182,15 +232,41 @@ export function NewBookingModal({
               <span>1. Data Penyewa</span>
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
+              <div className="relative">
                 <label className="block font-semibold text-[#26302B] mb-1">Nama Penyewa *</label>
                 <input
                   type="text"
                   required
+                  autoComplete="off"
                   value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
+                  onChange={(e) => handleNameChange(e.target.value)}
+                  onFocus={() => customerSuggestions.length > 0 && setShowSuggestions(true)}
+                  onBlur={() => setShowSuggestions(false)}
                   className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
                 />
+                {showSuggestions && customerSuggestions.length > 0 && (
+                  <ul className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border border-[#DBD5C1] rounded-lg shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+                    {customerSuggestions.map((match) => (
+                      <li key={match.id}>
+                        <button
+                          type="button"
+                          onMouseDown={() => selectCustomer(match)}
+                          className="w-full text-left px-3 py-2 hover:bg-[#F1EEE2] transition"
+                        >
+                          <p className="font-semibold text-[#26302B]">{match.name}</p>
+                          {match.phone && <p className="text-[11px] text-[#6E6853]">{match.phone}</p>}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {historySummary && historySummary.count > 0 && (
+                  <p className="mt-1 text-[11px] text-[#2B4739] font-semibold flex items-center gap-1">
+                    <History className="w-3 h-3" />
+                    Pernah sewa {historySummary.count}x
+                    {historySummary.lastBookingDate && `, terakhir ${formatDateIndo(historySummary.lastBookingDate, false)}`}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block font-semibold text-[#26302B] mb-1">No. WhatsApp *</label>
@@ -199,7 +275,10 @@ export function NewBookingModal({
                   required
                   placeholder="081234567890"
                   value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  onChange={(e) => {
+                    setCustomerPhone(e.target.value);
+                    dropSelectionIfAny();
+                  }}
                   className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
                 />
               </div>
@@ -208,7 +287,10 @@ export function NewBookingModal({
                 <input
                   type="text"
                   value={customerAddress}
-                  onChange={(e) => setCustomerAddress(e.target.value)}
+                  onChange={(e) => {
+                    setCustomerAddress(e.target.value);
+                    dropSelectionIfAny();
+                  }}
                   className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
                 />
               </div>

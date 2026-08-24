@@ -33,13 +33,14 @@ router.post('/bookings', async (req, res) => {
     return;
   }
 
-  const { businessId, customer, start_date, end_date, items, deposit, total_price, dp_paid } = req.body ?? {};
+  const { businessId, customer, customer_id, start_date, end_date, items, deposit, total_price, dp_paid } =
+    req.body ?? {};
 
   const requestedItems = items as BookingItemInput[] | undefined;
 
   if (
     !businessId ||
-    !customer?.name ||
+    (!customer_id && !customer?.name) ||
     !start_date ||
     !end_date ||
     !Array.isArray(requestedItems) ||
@@ -94,20 +95,40 @@ router.post('/bookings', async (req, res) => {
     }
   }
 
-  const { data: customerRow, error: customerError } = await supabase
-    .from('customers')
-    .insert({
-      business_id: businessId,
-      name: customer.name,
-      phone: customer.phone ?? null,
-      address: customer.address ?? null,
-    })
-    .select('id')
-    .single();
+  let customerId: string;
+  let createdNewCustomer = false;
 
-  if (customerError || !customerRow) {
-    res.status(400).json({ error: customerError?.message ?? 'Gagal menyimpan penyewa' });
-    return;
+  if (customer_id) {
+    const { data: existingCustomer, error: lookupError } = await supabase
+      .from('customers')
+      .select('id')
+      .eq('id', customer_id)
+      .eq('business_id', businessId)
+      .single();
+
+    if (lookupError || !existingCustomer) {
+      res.status(400).json({ error: 'Data pelanggan tidak ditemukan' });
+      return;
+    }
+    customerId = existingCustomer.id;
+  } else {
+    const { data: customerRow, error: customerError } = await supabase
+      .from('customers')
+      .insert({
+        business_id: businessId,
+        name: customer.name,
+        phone: customer.phone ?? null,
+        address: customer.address ?? null,
+      })
+      .select('id')
+      .single();
+
+    if (customerError || !customerRow) {
+      res.status(400).json({ error: customerError?.message ?? 'Gagal menyimpan penyewa' });
+      return;
+    }
+    customerId = customerRow.id;
+    createdNewCustomer = true;
   }
 
   // Jalan diambil hari ini -> langsung 'aktif' (alur walk-in biasa).
@@ -119,7 +140,7 @@ router.post('/bookings', async (req, res) => {
     .from('bookings')
     .insert({
       business_id: businessId,
-      customer_id: customerRow.id,
+      customer_id: customerId,
       booking_number: bookingNumber,
       start_date,
       end_date,
@@ -131,7 +152,7 @@ router.post('/bookings', async (req, res) => {
     .single();
 
   if (bookingError || !bookingRow) {
-    await supabase.from('customers').delete().eq('id', customerRow.id);
+    if (createdNewCustomer) await supabase.from('customers').delete().eq('id', customerId);
     res.status(400).json({ error: bookingError?.message ?? 'Gagal menyimpan transaksi' });
     return;
   }
@@ -150,7 +171,7 @@ router.post('/bookings', async (req, res) => {
 
   if (biError) {
     await supabase.from('bookings').delete().eq('id', bookingRow.id);
-    await supabase.from('customers').delete().eq('id', customerRow.id);
+    if (createdNewCustomer) await supabase.from('customers').delete().eq('id', customerId);
     res.status(400).json({ error: biError.message });
     return;
   }
@@ -167,7 +188,7 @@ router.post('/bookings', async (req, res) => {
     if (depositError) {
       await supabase.from('booking_items').delete().eq('booking_id', bookingRow.id);
       await supabase.from('bookings').delete().eq('id', bookingRow.id);
-      await supabase.from('customers').delete().eq('id', customerRow.id);
+      if (createdNewCustomer) await supabase.from('customers').delete().eq('id', customerId);
       res.status(400).json({ error: depositError.message });
       return;
     }
