@@ -42,7 +42,7 @@ export function useCustomerSearch(businessId: string | undefined) {
         .from('customers')
         .select('id, name, phone, address')
         .eq('business_id', businessId)
-        .or(`name.ilike.%${safeQuery}%,phone.ilike.%${safeQuery}%`)
+        .or(`name.ilike.%${safeQuery}%,phone.ilike.%${safeQuery}%,address.ilike.%${safeQuery}%`)
         .order('name')
         .limit(8);
       setResults((data as CustomerMatch[] | null) ?? []);

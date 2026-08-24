@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { X, Calendar, Plus, CheckCircle2, User, ShieldCheck, History, Upload } from 'lucide-react';
+import { X, Calendar, Plus, CheckCircle2, User, ShieldCheck, History, Upload, Search } from 'lucide-react';
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import { useItems } from '../hooks/useItems';
 import type { Business } from '../hooks/useBusiness';
@@ -55,6 +55,7 @@ export function NewBookingModal({
   const [startDate, setStartDate] = useState(todayStr());
   const [endDate, setEndDate] = useState(todayStr());
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [itemSearchQuery, setItemSearchQuery] = useState('');
   const [depositType, setDepositType] = useState<DepositType>('ktp');
   const [depositNote, setDepositNote] = useState('');
   const [depositAmount, setDepositAmount] = useState('');
@@ -68,6 +69,7 @@ export function NewBookingModal({
     setStartDate(preselectedStartDate || todayStr());
     setEndDate(preselectedStartDate || todayStr());
     setQuantities(preselectedItemId ? { [preselectedItemId]: 1 } : {});
+    setItemSearchQuery('');
     setCustomerName('');
     setCustomerPhone('');
     setCustomerAddress('');
@@ -95,6 +97,19 @@ export function NewBookingModal({
     () => Object.entries(quantities).filter(([, qty]) => qty > 0),
     [quantities],
   );
+
+  const filteredItems = useMemo(() => {
+    const q = itemSearchQuery.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter(
+      (item) =>
+        item.name.toLowerCase().includes(q) ||
+        (item.category ?? '').toLowerCase().includes(q) ||
+        (item.variant ?? '').toLowerCase().includes(q) ||
+        (item.size ?? '').toLowerCase().includes(q) ||
+        (item.color ?? '').toLowerCase().includes(q),
+    );
+  }, [items, itemSearchQuery]);
 
   const totalPrice = selectedEntries.reduce((sum, [itemId, qty]) => {
     const item = items.find((i) => i.id === itemId);
@@ -276,7 +291,11 @@ export function NewBookingModal({
                           className="w-full text-left px-3 py-2 hover:bg-[#F1EEE2] transition"
                         >
                           <p className="font-semibold text-[#26302B]">{match.name}</p>
-                          {match.phone && <p className="text-[11px] text-[#6E6853]">{match.phone}</p>}
+                          {(match.phone || match.address) && (
+                            <p className="text-[11px] text-[#6E6853]">
+                              {[match.phone, match.address].filter(Boolean).join('   •   ')}
+                            </p>
+                          )}
                         </button>
                       </li>
                     ))}
@@ -402,8 +421,24 @@ export function NewBookingModal({
                 Belum ada alat di katalog. Tambahkan dulu di tab "Katalog & Stok Alat".
               </p>
             ) : (
+              <>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#6E6853]" />
+                  <input
+                    type="text"
+                    value={itemSearchQuery}
+                    onChange={(e) => setItemSearchQuery(e.target.value)}
+                    placeholder="Cari alat (nama, varian, ukuran, warna)..."
+                    className="w-full pl-8 pr-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] text-xs focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+                  />
+                </div>
+                {filteredItems.length === 0 && (
+                  <p className="text-center text-[#6E6853] py-3 italic bg-white/50 rounded-lg border border-dashed border-[#DBD5C1]">
+                    Tidak ada alat yang cocok dengan pencarian.
+                  </p>
+                )}
               <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                {items.map((item) => {
+                {filteredItems.map((item) => {
                   const qty = quantities[item.id] ?? 0;
                   const checked = qty > 0;
                   const subtotal = qty * computeItemRentalPrice(item.price_per_day, item.discount_min_days, item.discounted_price_per_day, days);
@@ -419,6 +454,17 @@ export function NewBookingModal({
                         />
                         <span className="min-w-0">
                           <p className="font-bold text-[#26302B] truncate">{item.name}</p>
+                          {(item.variant || item.size || item.color) && (
+                            <p className="text-[9px] text-[#6E6853] font-semibold uppercase tracking-wide truncate">
+                              {[
+                                item.variant && `Varian: ${item.variant}`,
+                                item.size && `Ukuran: ${item.size}`,
+                                item.color && `Warna: ${item.color}`,
+                              ]
+                                .filter(Boolean)
+                                .join('   •   ')}
+                            </p>
+                          )}
                           <p className="text-[11px] text-[#6E6853]">
                             {formatIDR(item.price_per_day)}/hr
                             {checked && (
@@ -454,6 +500,7 @@ export function NewBookingModal({
                   );
                 })}
               </div>
+              </>
             )}
             <p className="text-[10px] text-[#6E6853]">
               Kapasitas dicek ulang otomatis saat disimpan — kalau ada alat yang sudah kepakai di tanggal itu, akan
