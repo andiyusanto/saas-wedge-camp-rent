@@ -176,11 +176,17 @@ export function GuideScreen() {
         <Steps
           items={[
             <>Tekan <Ui>Catat Transaksi</Ui> di navbar (selalu terlihat, tidak perlu berpindah tab dulu).</>,
-            <>Isi nama &amp; nomor WhatsApp penyewa, lalu centang satu atau lebih alat — bisa multi-item dalam satu transaksi.</>,
+            <>Ketik nama penyewa — kalau pernah sewa sebelumnya, daftar saran pelanggan lama muncul otomatis. Pilih salah satu untuk mengisi HP/Alamat sekaligus, atau lanjut ketik biasa untuk pelanggan baru.</>,
+            <>Isi nomor WhatsApp penyewa (kalau belum otomatis terisi), lalu centang satu atau lebih alat — bisa multi-item dalam satu transaksi.</>,
             <>Pilih tanggal ambil &amp; kembali. Total harga terhitung otomatis, termasuk harga bertingkat kalau alatnya punya diskon sewa lama (lihat bagian 3).</>,
             <>Pilih jenis jaminan (KTP/SIM/STNK/Paspor/Uang/Lainnya), lalu tekan <Ui>Simpan &amp; Terbitkan Nota</Ui>.</>,
           ]}
         />
+        <Note>
+          Memilih pelanggan lama dari daftar saran menautkan transaksi baru ke data pelanggan yang sama (bukan bikin
+          baris baru) — muncul catatan kecil "Pernah sewa Nx" sebagai konfirmasi. Kalau salah satu field diedit manual
+          setelah memilih, pilihan itu otomatis dilepas dan dianggap pelanggan baru saat disimpan.
+        </Note>
         <Note>
           Struk transaksi bisa langsung dikirim ke pelanggan lewat tombol <Ui>Kirim Struk WA</Ui> di layar Jaminan &amp;
           Denda (bagian 5) — tidak perlu ketik ulang rincian secara manual.
