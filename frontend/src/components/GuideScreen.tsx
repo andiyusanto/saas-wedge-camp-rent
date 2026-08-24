@@ -195,7 +195,8 @@ export function GuideScreen() {
         </Note>
         <Note>
           Struk transaksi bisa langsung dikirim ke pelanggan lewat tombol <Ui>Kirim Struk WA</Ui> di layar Jaminan &amp;
-          Denda (bagian 5) — tidak perlu ketik ulang rincian secara manual.
+          Denda (bagian 5) — tidak perlu ketik ulang rincian secara manual. Ada juga tombol <Ui>Cetak Nota</Ui> di
+          sebelahnya untuk versi cetak/PDF (lihat bagian 5).
         </Note>
       </Section>
 
@@ -217,6 +218,11 @@ export function GuideScreen() {
           Transaksi bisa <Ui>Dibatalkan</Ui> kapan saja sebelum selesai — jaminan yang ditahan otomatis dilepas begitu
           dibatalkan.
         </p>
+        <Note>
+          Tombol <Ui>Cetak Nota</Ui> di tiap kartu transaksi membuka versi nota yang bisa langsung dicetak atau
+          disimpan sebagai PDF lewat dialog print browser (pilih tujuan "Simpan sebagai PDF") — tidak perlu aplikasi
+          tambahan.
+        </Note>
       </Section>
 
       <Section id="g-6" num="6" title="Kelola Karyawan" kicker="Undang staf lewat link, tanpa perlu bikin username/password dari sisi pemilik.">
