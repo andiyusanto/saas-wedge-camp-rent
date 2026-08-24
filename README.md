@@ -15,7 +15,7 @@ SaaS tools operasional untuk UKM rental alat kamping/outdoor di Malang Raya (Kot
 
 **Tiga fitur inti MVP**
 1. **Kalender ketersediaan** — daftar per-alat dengan strip status beberapa hari ke depan (tersedia / sisa sedikit / penuh), bisa geser tanggal maju-mundur, filter kategori & pencarian. Dihitung on-the-fly dari data booking, bukan tabel tersimpan terpisah.
-2. **Catat transaksi** — form bertahap: data penyewa (nama, WhatsApp, alamat — mengetik nama memicu pencarian pelanggan lama, memilih salah satu reuse data pelanggan yang sama beserta catatan "Pernah sewa Nx" alih-alih selalu bikin baris pelanggan baru), periode sewa, pilih alat (multi-item dengan validasi kapasitas otomatis, harga bertingkat terhitung otomatis kalau alatnya punya diskon sewa lama), jenis jaminan (KTP/SIM/STNK/Paspor/Uang/Lainnya + catatan), uang muka (DP), total harga otomatis. Booking dengan tanggal ambil hari ini langsung berstatus aktif; tanggal ambil di masa depan berstatus "dipesan" sampai ditandai diambil. Nomor booking (`SWL-YYYYMMDD-NN`) dan struk WhatsApp otomatis (`wa.me`) dibuat setiap transaksi.
+2. **Catat transaksi** — form bertahap: data penyewa (nama, WhatsApp, alamat — mengetik nama memicu pencarian pelanggan lama, memilih salah satu reuse data pelanggan yang sama beserta catatan "Pernah sewa Nx" alih-alih selalu bikin baris pelanggan baru; foto wajah/setengah badan penyewa opsional lewat kamera, disimpan ke R2 — sengaja bukan foto KTP/dokumen identitas untuk membatasi data sensitif yang disimpan, ditampilkan sebagai thumbnail di kartu transaksi Jaminan & Denda), periode sewa, pilih alat (multi-item dengan validasi kapasitas otomatis, harga bertingkat terhitung otomatis kalau alatnya punya diskon sewa lama), jenis jaminan (KTP/SIM/STNK/Paspor/Uang/Lainnya + catatan), uang muka (DP), total harga otomatis. Booking dengan tanggal ambil hari ini langsung berstatus aktif; tanggal ambil di masa depan berstatus "dipesan" sampai ditandai diambil. Nomor booking (`SWL-YYYYMMDD-NN`) dan struk WhatsApp otomatis (`wa.me`) dibuat setiap transaksi.
 3. **Jaminan & denda** — dashboard ringkasan (jumlah telat, jaminan ditahan, sedang disewa, tunggakan denda) dengan filter & pencarian. Bisa tambah denda ad-hoc kapan saja (tanpa harus lewat proses pengembalian), lalu proses pengembalian: denda keterlambatan (saran otomatis berbasis toleransi jam per-vendor, bisa ditimpa), denda kerusakan, dan denda kehilangan dicatat sebagai tiga hal terpisah — tidak digabung jadi satu angka — plus opsi tandai jaminan sudah dikembalikan. Transaksi juga bisa dibatalkan sebelum diproses.
 
 ## Tech stack
@@ -60,6 +60,7 @@ migrations/     SQL schema — dijalankan manual di Supabase SQL Editor, urutan 
    13. `014_team_management_owner_only.sql`
    14. `015_items_variant_size_color.sql`
    15. `016_invite_preview.sql`
+   16. `017_booking_customer_photo.sql`
 
 3. **Buat bucket Cloudflare R2** — buat bucket baru di [dash.cloudflare.com](https://dash.cloudflare.com) → R2, aktifkan akses publik (custom domain atau URL `pub-xxxx.r2.dev` bawaan), lalu buat API Token (Account API Token, permission **Object Read & Write**, dibatasi ke bucket ini saja).
 

@@ -177,7 +177,8 @@ export function GuideScreen() {
           items={[
             <>Tekan <Ui>Catat Transaksi</Ui> di navbar (selalu terlihat, tidak perlu berpindah tab dulu).</>,
             <>Ketik nama penyewa — kalau pernah sewa sebelumnya, daftar saran pelanggan lama muncul otomatis. Pilih salah satu untuk mengisi HP/Alamat sekaligus, atau lanjut ketik biasa untuk pelanggan baru.</>,
-            <>Isi nomor WhatsApp penyewa (kalau belum otomatis terisi), lalu centang satu atau lebih alat — bisa multi-item dalam satu transaksi.</>,
+            <>Isi nomor WhatsApp penyewa (kalau belum otomatis terisi). Opsional: tekan <Ui>Foto Wajah / Setengah Badan</Ui> untuk ambil foto singkat penyewa dari kamera.</>,
+            <>Centang satu atau lebih alat — bisa multi-item dalam satu transaksi.</>,
             <>Pilih tanggal ambil &amp; kembali. Total harga terhitung otomatis, termasuk harga bertingkat kalau alatnya punya diskon sewa lama (lihat bagian 3).</>,
             <>Pilih jenis jaminan (KTP/SIM/STNK/Paspor/Uang/Lainnya), lalu tekan <Ui>Simpan &amp; Terbitkan Nota</Ui>.</>,
           ]}
@@ -186,6 +187,11 @@ export function GuideScreen() {
           Memilih pelanggan lama dari daftar saran menautkan transaksi baru ke data pelanggan yang sama (bukan bikin
           baris baru) — muncul catatan kecil "Pernah sewa Nx" sebagai konfirmasi. Kalau salah satu field diedit manual
           setelah memilih, pilihan itu otomatis dilepas dan dianggap pelanggan baru saat disimpan.
+        </Note>
+        <Note>
+          Foto penyewa sengaja bukan foto KTP/dokumen — cukup wajah/setengah badan, untuk bukti siapa yang mengambil
+          barang kalau ada sengketa jaminan nanti, tanpa menyimpan data sensitif seperti NIK. Muncul sebagai foto
+          bulat kecil di samping nama pelanggan pada kartu transaksi di layar Jaminan &amp; Denda (bagian 5).
         </Note>
         <Note>
           Struk transaksi bisa langsung dikirim ke pelanggan lewat tombol <Ui>Kirim Struk WA</Ui> di layar Jaminan &amp;
