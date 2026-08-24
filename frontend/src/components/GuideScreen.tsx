@@ -176,9 +176,9 @@ export function GuideScreen() {
         <Steps
           items={[
             <>Tekan <Ui>Catat Transaksi</Ui> di navbar (selalu terlihat, tidak perlu berpindah tab dulu).</>,
-            <>Ketik nama penyewa — kalau pernah sewa sebelumnya, daftar saran pelanggan lama muncul otomatis. Pilih salah satu untuk mengisi HP/Alamat sekaligus, atau lanjut ketik biasa untuk pelanggan baru.</>,
+            <>Ketik nama penyewa — kalau pernah sewa sebelumnya, daftar saran pelanggan lama muncul otomatis (dicari dari nama, HP, atau alamat, jadi bisa ketik salah satu yang paling diingat). Tiap saran menampilkan HP dan alamat sekaligus supaya mudah dibedakan kalau ada nama yang sama. Pilih salah satu untuk mengisi HP/Alamat sekaligus, atau lanjut ketik biasa untuk pelanggan baru.</>,
             <>Isi nomor WhatsApp penyewa (kalau belum otomatis terisi). Opsional: tekan <Ui>Foto Wajah / Setengah Badan</Ui> untuk ambil foto singkat penyewa dari kamera.</>,
-            <>Centang satu atau lebih alat — bisa multi-item dalam satu transaksi.</>,
+            <>Cari alat lewat kotak pencarian (nama, varian, ukuran, atau warna) kalau katalog sudah banyak, lalu centang satu atau lebih alat — bisa multi-item dalam satu transaksi. Varian/ukuran/warna alat (kalau diisi) ditampilkan di bawah nama alat supaya tidak salah pilih antar varian yang mirip.</>,
             <>Pilih tanggal ambil &amp; kembali. Total harga terhitung otomatis, termasuk harga bertingkat kalau alatnya punya diskon sewa lama (lihat bagian 3).</>,
             <>Pilih jenis jaminan (KTP/SIM/STNK/Paspor/Uang/Lainnya), lalu tekan <Ui>Simpan &amp; Terbitkan Nota</Ui>.</>,
           ]}
