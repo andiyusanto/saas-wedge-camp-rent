@@ -7,6 +7,7 @@ SaaS tools operasional untuk UKM rental alat kamping/outdoor di Malang Raya (Kot
 **Fondasi**
 - Login & daftar (email/password, Supabase Auth)
 - Onboarding — buat profil usaha otomatis saat pertama login
+- Info Usaha (owner-only) — edit nama usaha, nama pemilik, no. telepon, dan toleransi telat (jam) kapan saja lewat ikon gerigi di navbar (migration 018 membatasi RLS `businesses` UPDATE ke owner, sebelumnya semua anggota bisa update)
 - Katalog & stok alat — kode alat, kategori, varian/ukuran/warna opsional (pilih dari nilai yang sudah pernah dipakai di katalog atau ketik baru, pola sama seperti Bilbo-Outdoors), foto (unggah langsung dari galeri/kamera, otomatis dikompres & disimpan ke Cloudflare R2 — bukan tempel URL manual), deskripsi, catatan kondisi, jumlah unit, harga sewa/hari, harga bertingkat opsional (tarif lebih murah per hari setelah sewa melewati N hari); bisa diedit atau dinonaktifkan (soft-delete, histori booking lama tetap utuh)
 - Kelola karyawan — undang staf lewat link sekali-pakai (kedaluwarsa 7 hari), tanpa perlu pemilik membuatkan username/password. Peran (`karyawan`/`owner`) murni label atribusi untuk fitur operasional (kalender, transaksi, jaminan & denda, katalog) — akses di situ sama untuk semua anggota. Satu pengecualian: menu Kelola Karyawan itu sendiri (undang/keluarkan anggota) cuma bisa diakses pemilik, ditegakkan di RLS (migration 014) dan backend, bukan cuma disembunyikan di UI. Layar login yang dibuka lewat link undangan (`?invite=...`) menampilkan nama usaha & peran yang mengundang **sebelum** login (`GET /api/team/invites/preview`, migration 016 — function `SECURITY DEFINER` yang dibatasi ketat, cuma untuk kode undangan yang valid).
 - Riwayat Transaksi (owner-only) — rekap semua transaksi termasuk yang sudah Selesai/Dibatalkan (Jaminan & Denda cuma menampilkan status aktif, jadi transaksi yang sudah ditutup sebelumnya tidak terlihat di mana pun lagi). Kartu ringkasan (Total Transaksi, Sudah Diterima, Piutang, Jatuh Tempo Hari Ini — tiga pertama sengaja tidak menghitung transaksi Dibatalkan), filter tanggal/status/pencarian, ekspor CSV, dan bagian Peralatan Terlaris Disewa (dikelompokkan per kategori, collapsible, diurutkan dari jumlah unit tersewa terbanyak). Query langsung ke Supabase dari frontend (bukan lewat backend) karena tidak butuh perhitungan live seperti Jaminan & Denda — data historis sudah final.
@@ -61,6 +62,7 @@ migrations/     SQL schema — dijalankan manual di Supabase SQL Editor, urutan 
    14. `015_items_variant_size_color.sql`
    15. `016_invite_preview.sql`
    16. `017_booking_customer_photo.sql`
+   17. `018_business_settings_owner_only.sql`
 
 3. **Buat bucket Cloudflare R2** — buat bucket baru di [dash.cloudflare.com](https://dash.cloudflare.com) → R2, aktifkan akses publik (custom domain atau URL `pub-xxxx.r2.dev` bawaan), lalu buat API Token (Account API Token, permission **Object Read & Write**, dibatasi ke bucket ini saja).
 

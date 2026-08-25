@@ -145,6 +145,11 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           layar <Ui>Undangan Bergabung</Ui> alih-alih Setup Usaha — pilih <Ui>Gabung Sekarang</Ui> untuk masuk ke usaha
           yang mengundang, atau <Ui>Lewati</Ui> kalau memang mau bikin usaha sendiri.
         </Note>
+        <Note>
+          Data usaha (nama, nama pemilik, no. telepon, dan toleransi telat sebelum kena denda) bisa diubah kapan saja
+          lewat ikon <Ui>gerigi (Info Usaha)</Ui> di navbar, di sebelah tombol keluar — cuma terlihat dan bisa diakses
+          oleh pemilik.
+        </Note>
       </Section>
 
       <Section id="g-2" num="2" title="Kalender Ketersediaan" kicker="Layar utama — ringkasan stok tiap alat untuk beberapa hari ke depan.">
