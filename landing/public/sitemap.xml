@@ -25,4 +25,19 @@
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
+  <url>
+    <loc>https://sewalog.com/blog/harga-sewa-per-hari-vs-per-jam-alat-camping.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://sewalog.com/blog/strategi-rental-alat-camping-musim-liburan.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://sewalog.com/blog/cara-hitung-denda-telat-sewa-alat-camping-adil.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
 </urlset>
