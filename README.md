@@ -79,7 +79,15 @@ migrations/     SQL schema — dijalankan manual di Supabase SQL Editor, urutan 
 
 ## Akun demo untuk ditunjukkan ke calon vendor
 
-Supaya calon vendor bisa langsung coba alur aplikasi (kalender, catat transaksi, transaksi aktif, kelola usaha) tanpa harus isi data sendiri dulu, ada satu akun demo yang sudah terisi katalog alat + beberapa contoh transaksi di berbagai status (siap diambil, sedang disewa, terlambat + denda kerusakan) dan dua login (pemilik + karyawan) supaya "peran karyawan cuma label, bukan pembatas akses" bisa langsung dirasakan, bukan cuma dijelaskan. Kredensial yang sama ini juga ditampilkan di bagian "Mau Coba Sendiri Dulu?" pada landing page (`landing/src/LandingPage.tsx`) — jaga tetap sinkron kalau salah satu diubah.
+Supaya calon vendor bisa langsung coba alur aplikasi (kalender, catat transaksi, transaksi aktif, kelola usaha) tanpa harus isi data sendiri dulu, ada satu akun demo yang sudah terisi katalog alat (dengan foto asli CC-licensed dari Wikimedia Commons, diunggah lewat R2 — bukan placeholder kosong, dan dua di antaranya punya nilai Varian buat contoh field itu) dan dua login (pemilik + karyawan) supaya "peran karyawan cuma label, bukan pembatas akses" bisa langsung dirasakan, bukan cuma dijelaskan. Kredensial yang sama ini juga ditampilkan di bagian "Mau Coba Sendiri Dulu?" pada landing page (`landing/src/LandingPage.tsx`) — jaga tetap sinkron kalau salah satu diubah.
+
+Skenario transaksi contoh sengaja dibuat beragam supaya tiap fitur bisnis inti ada contoh nyatanya begitu direset, bukan cuma bisa dilihat kalau staf bikin sendiri saat demo:
+- **Siap diambil** (Dimas Prasetyo) dan **sedang disewa on-time** (Rina Wulandari) — status dasar.
+- **Terlambat, belum diproses** (Bagus Setiawan) — badge TERLAMBAT + saran denda keterlambatan dihitung live, plus denda kerusakan yang sudah tercatat.
+- **Pelanggan lama** (Ahmad Fauzi) — dua transaksi, satu sudah *selesai* dan satu lagi *aktif*, reuse `customer_id` yang sama — supaya saran "Pernah sewa 2x" di Catat Transaksi ada contohnya tanpa perlu bikin transaksi duplikat manual.
+- **Sudah ditutup, terlambat, dengan dua jenis denda sekaligus** (Siti Rahma, status *telat*) — denda keterlambatan + kehilangan tercatat bersamaan pada satu transaksi, contoh nyata dari prinsip "dua jenis denda dipisah eksplisit" yang sudah selesai diproses, bukan cuma tersirat dari badge yang belum ditindaklanjuti.
+
+Kelima skenario ini sekaligus mencakup keenam jenis jaminan (KTP/SIM/STNK/Paspor/Uang/Lainnya).
 
 **Cara 1 — tombol di layar login** (buat yang lagi demo langsung ke vendor, tidak perlu buka terminal): tautan **"Lagi demo ke calon vendor? Reset data demo"** di bawah tombol Masuk. Sekali tekan langsung reset + isi otomatis email/password login pemilik, tinggal tekan Masuk. Dibatasi cooldown 60 detik di server (`POST /api/demo/reset`, lihat `backend/src/routes/demo.ts`) supaya tidak bisa dispam — endpoint ini publik tanpa login, tapi dikunci cuma bisa menyentuh satu business demo yang hardcoded (`backend/src/lib/demoReset.ts`), tidak pernah menerima business_id dari request.
 

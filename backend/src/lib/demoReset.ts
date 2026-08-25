@@ -118,14 +118,25 @@ type ItemDef = {
   discounted_price_per_day: number | null;
   description: string | null;
   condition_note: string | null;
+  image_url: string | null;
 };
+
+// Foto CC-licensed dari Wikimedia Commons, diunggah sekali lewat endpoint
+// upload asli (/api/uploads/item-image) ke R2 — bukan link langsung ke
+// Wikimedia, supaya konsisten dengan alur foto vendor sungguhan dan tidak
+// bergantung ketersediaan Wikimedia saat demo. Sumber: EurekaTent.JPG (CC
+// BY-SA 3.0, SriMesh), Mummy_bag.jpg (public domain), IWATANI_PORTABLE_GAS
+// _STOVE.jpg (CC BY-SA 4.0, Dinkun Chen), Self-inflating_mat.jpg (CC BY
+// 3.0, Pierrelagrange), Berghaus_Vulcan.jpg (CC BY-SA 2.5, LHOON),
+// Petzl_Zoom_headlamp.jpg (CC BY 2.0, Olgierd/Flickr).
+const R2_BASE = 'https://image.sewalog.com/items/a8d1e327-5e1a-4d5e-b657-489c93a46e36';
 
 const ITEM_DEFS: ItemDef[] = [
   {
     code: 'TND-01',
     name: 'Tenda Dome 4 Orang',
     category: 'Tenda',
-    variant: null,
+    variant: 'Family Series',
     size: null,
     color: 'Hijau Army',
     total_units: 8,
@@ -134,6 +145,7 @@ const ITEM_DEFS: ItemDef[] = [
     discounted_price_per_day: 45000,
     description: 'Tenda dome kapasitas 4 orang, cocok untuk keluarga/kelompok kecil.',
     condition_note: 'Kondisi baik, sudah dicek waterproof.',
+    image_url: `${R2_BASE}/06373295-e87c-48a1-8608-370aea0feceb.jpg`,
   },
   {
     code: 'SB-02',
@@ -148,6 +160,7 @@ const ITEM_DEFS: ItemDef[] = [
     discounted_price_per_day: 10000,
     description: 'Sleeping bag ukuran dewasa, tahan suhu dingin dataran tinggi.',
     condition_note: null,
+    image_url: `${R2_BASE}/e392549d-1895-4e68-a4b4-eae8d496a6f3.jpg`,
   },
   {
     code: 'KP-03',
@@ -162,6 +175,7 @@ const ITEM_DEFS: ItemDef[] = [
     discounted_price_per_day: null,
     description: 'Kompor portable lengkap dengan tabung gas kecil.',
     condition_note: null,
+    image_url: `${R2_BASE}/34d26f85-c0b4-4b53-810a-5d7c8d43165a.jpg`,
   },
   {
     code: 'MT-04',
@@ -176,12 +190,13 @@ const ITEM_DEFS: ItemDef[] = [
     discounted_price_per_day: null,
     description: null,
     condition_note: null,
+    image_url: `${R2_BASE}/20f6d80c-8489-4f12-b1ba-f430615b013d.jpg`,
   },
   {
     code: 'CR-05',
     name: 'Carrier 60L',
     category: 'Tas',
-    variant: null,
+    variant: 'Trekking Series',
     size: '60L',
     color: 'Hijau Army',
     total_units: 10,
@@ -190,6 +205,7 @@ const ITEM_DEFS: ItemDef[] = [
     discounted_price_per_day: 25000,
     description: 'Tas carrier 60 liter, cocok untuk pendakian 2-4 hari.',
     condition_note: null,
+    image_url: `${R2_BASE}/eb953a9a-5339-4962-8338-c7616e5d2edc.jpg`,
   },
   {
     code: 'HL-06',
@@ -204,6 +220,7 @@ const ITEM_DEFS: ItemDef[] = [
     discounted_price_per_day: null,
     description: null,
     condition_note: null,
+    image_url: `${R2_BASE}/61a5169f-d1ec-4e7f-8ecd-ac872d7d0445.jpg`,
   },
 ];
 
@@ -308,7 +325,7 @@ export async function resetDemoData(): Promise<DemoResetResult> {
     } else {
       const [row] = await rest<any[]>('items', ownerToken, {
         method: 'POST',
-        body: JSON.stringify({ business_id: businessId, image_url: null, ...def }),
+        body: JSON.stringify({ business_id: businessId, ...def }),
       });
       items[def.code] = row;
     }
@@ -316,10 +333,11 @@ export async function resetDemoData(): Promise<DemoResetResult> {
 
   // --- Transaksi contoh ---
   async function createBooking(params: {
-    customer: { name: string; phone: string };
+    customer?: { name: string; phone: string };
+    customer_id?: string;
     start_date: string;
     end_date: string;
-    deposit: { type: string; amount?: number };
+    deposit: { type: string; amount?: number; note?: string };
     entries: [string, number][];
   }) {
     const days = rentalDays(params.start_date, params.end_date);
@@ -332,7 +350,7 @@ export async function resetDemoData(): Promise<DemoResetResult> {
       method: 'POST',
       body: JSON.stringify({
         businessId,
-        customer: params.customer,
+        ...(params.customer_id ? { customer_id: params.customer_id } : { customer: params.customer }),
         start_date: params.start_date,
         end_date: params.end_date,
         items: params.entries.map(([code, qty]) => ({ item_id: items[code].id, quantity: qty })),
@@ -340,6 +358,19 @@ export async function resetDemoData(): Promise<DemoResetResult> {
         total_price,
       }),
     });
+  }
+
+  // Cari id pelanggan yang baru saja dibuat by nama+telepon — dipakai buat
+  // reuse customer_id di booking kedua (pelanggan lama), BUKAN cuma
+  // mengulang nama yang sama (itu bakal bikin baris customers baru lagi,
+  // sama seperti bug lama sebelum fitur reuse pelanggan dibangun).
+  async function findCustomerId(name: string, phone: string): Promise<string> {
+    const rows = await rest<{ id: string }[]>(
+      `customers?select=id&business_id=eq.${businessId}&name=eq.${encodeURIComponent(name)}&phone=eq.${encodeURIComponent(phone)}&order=created_at.desc&limit=1`,
+      ownerToken,
+    );
+    if (!rows.length) throw new Error(`Customer ${name} tidak ditemukan setelah dibuat`);
+    return rows[0].id;
   }
 
   await createBooking({
@@ -358,6 +389,8 @@ export async function resetDemoData(): Promise<DemoResetResult> {
     entries: [['SB-02', 2], ['KP-03', 1], ['HL-06', 2]],
   });
 
+  // Terlambat, BELUM diproses lewat Pengembalian — nunjukkin badge TERLAMBAT
+  // + saran denda keterlambatan yang dihitung live, sebelum staf memprosesnya.
   const overdueBooking = await createBooking({
     customer: { name: 'Bagus Setiawan', phone: '081234000003' },
     start_date: todayPlus(-6),
@@ -371,6 +404,59 @@ export async function resetDemoData(): Promise<DemoResetResult> {
       type: 'kerusakan',
       amount: 50000,
       description: 'Resleting tenda rusak, dilaporkan penyewa sebelum barang dikembalikan.',
+    }),
+  });
+
+  // Pelanggan lama (repeat customer): booking pertama langsung ditutup
+  // (selesai, tepat waktu — end_date hari ini, diproses saat ini juga jadi
+  // selalu dalam toleransi), lalu booking kedua reuse customer_id yang sama
+  // supaya "Pernah sewa 1x" langsung ada contohnya begitu demo direset,
+  // bukan cuma bisa dilihat kalau staf sendiri bikin transaksi duplikat.
+  await createBooking({
+    customer: { name: 'Ahmad Fauzi', phone: '081234000004' },
+    start_date: todayPlus(-3),
+    end_date: todayPlus(0),
+    deposit: { type: 'paspor' },
+    entries: [['MT-04', 1], ['HL-06', 1]],
+  });
+  const ahmadCustomerId = await findCustomerId('Ahmad Fauzi', '081234000004');
+  const [ahmadFirstBooking] = await rest<{ id: string }[]>(
+    `bookings?select=id&business_id=eq.${businessId}&customer_id=eq.${ahmadCustomerId}&order=created_at.desc&limit=1`,
+    ownerToken,
+  );
+  await selfApi(`/api/bookings/${ahmadFirstBooking.id}/return`, ownerToken, {
+    method: 'POST',
+    body: JSON.stringify({ late_fee_amount: 0, extra_penalties: [], return_deposits: true }),
+  });
+
+  await createBooking({
+    customer_id: ahmadCustomerId,
+    start_date: todayPlus(0),
+    end_date: todayPlus(2),
+    deposit: { type: 'stnk' },
+    entries: [['SB-02', 1], ['KP-03', 1]],
+  });
+
+  // Transaksi yang sudah DITUTUP tapi telat, dengan DUA jenis denda
+  // sekaligus (keterlambatan + kehilangan) — supaya prinsip "dua jenis
+  // denda dipisah eksplisit" punya contoh transaksi yang benar-benar
+  // selesai diproses, bukan cuma tersirat dari badge TERLAMBAT yang belum
+  // diproses (lihat booking Bagus Setiawan di atas untuk sisi "sebelum").
+  const lateBooking = await createBooking({
+    customer: { name: 'Siti Rahma', phone: '081234000005' },
+    start_date: todayPlus(-4),
+    end_date: todayPlus(-2),
+    deposit: { type: 'lainnya', note: 'Jaminan motor — kesepakatan langsung dengan pelanggan, dipegang terpisah' },
+    entries: [['CR-05', 1], ['MT-04', 2]],
+  });
+  await selfApi(`/api/bookings/${lateBooking.id}/return`, ownerToken, {
+    method: 'POST',
+    body: JSON.stringify({
+      late_fee_amount: 110000,
+      extra_penalties: [
+        { type: 'kehilangan', amount: 40000, description: '1 matras camping hilang, tidak dikembalikan pelanggan.' },
+      ],
+      return_deposits: true,
     }),
   });
 
