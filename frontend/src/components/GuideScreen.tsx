@@ -97,9 +97,10 @@ const TOC: { id: string; num: string; title: string }[] = [
   { id: 'g-2', num: '2', title: 'Kalender Ketersediaan' },
   { id: 'g-3', num: '3', title: 'Katalog & Stok Alat' },
   { id: 'g-4', num: '4', title: 'Catat Transaksi Sewa' },
-  { id: 'g-5', num: '5', title: 'Jaminan & Denda' },
+  { id: 'g-5', num: '5', title: 'Transaksi Aktif' },
   { id: 'g-6', num: '6', title: 'Kelola Usaha' },
   { id: 'g-7', num: '7', title: 'Riwayat Transaksi' },
+  { id: 'g-8', num: '8', title: 'Toko Online' },
   { id: 'g-a', num: 'A', title: 'Catatan Penting' },
 ];
 
@@ -212,16 +213,16 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         <Note>
           Foto penyewa sengaja bukan foto KTP/dokumen — cukup wajah/setengah badan, untuk bukti siapa yang mengambil
           barang kalau ada sengketa jaminan nanti, tanpa menyimpan data sensitif seperti NIK. Muncul sebagai foto
-          bulat kecil di samping nama pelanggan pada kartu transaksi di layar Jaminan &amp; Denda (bagian 5).
+          bulat kecil di samping nama pelanggan pada kartu transaksi di layar Transaksi Aktif (bagian 5).
         </Note>
         <Note>
-          Struk transaksi bisa langsung dikirim ke pelanggan lewat tombol <Ui>Kirim Struk WA</Ui> di layar Jaminan &amp;
-          Denda (bagian 5) — tidak perlu ketik ulang rincian secara manual. Ada juga tombol <Ui>Cetak Nota</Ui> di
+          Struk transaksi bisa langsung dikirim ke pelanggan lewat tombol <Ui>Kirim Struk WA</Ui> di layar Transaksi
+          Aktif (bagian 5) — tidak perlu ketik ulang rincian secara manual. Ada juga tombol <Ui>Cetak Nota</Ui> di
           sebelahnya untuk versi cetak/PDF (lihat bagian 5).
         </Note>
       </Section>
 
-      <Section id="g-5" num="5" title="Jaminan & Denda" kicker="Daftar transaksi aktif — status pengambilan barang, jaminan yang ditahan, dan dua jenis denda dipisah eksplisit.">
+      <Section id="g-5" num="5" title="Transaksi Aktif" kicker="Daftar transaksi aktif — status pengambilan barang, jaminan yang ditahan, dan dua jenis denda dipisah eksplisit.">
         <p>Empat kartu ringkasan di atas: Sewa Terlambat, Jaminan Ditahan, Sedang Disewa, dan Tunggakan Denda. Bisa difilter per status transaksi di bawahnya.</p>
         <p className="font-bold text-xs mt-2">Alur satu transaksi</p>
         <Steps
@@ -261,7 +262,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         />
         <Note>
           Peran <Ui>Karyawan</Ui> di sini murni label atribusi (siapa yang mencatat transaksi/perubahan) untuk semua
-          fitur operasional — karyawan bisa memakai Kalender, Catat Transaksi, Jaminan &amp; Denda, dan Katalog &amp;
+          fitur operasional — karyawan bisa memakai Kalender, Catat Transaksi, Transaksi Aktif, dan Katalog &amp;
           Stok Alat sama seperti pemilik. Satu pengecualian: tab <Ui>Kelola Usaha</Ui> ini sendiri (Info Usaha maupun
           Kelola Karyawan) cuma terlihat dan bisa dipakai oleh pemilik — karyawan tidak bisa mengundang atau
           mengeluarkan anggota tim. Link undangan otomatis kedaluwarsa dalam 7 hari kalau belum dipakai, dan bisa
@@ -272,7 +273,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
 
       <Section id="g-7" num="7" title="Riwayat Transaksi" kicker="Khusus pemilik — rekap semua transaksi termasuk yang sudah selesai/dibatalkan, plus ringkasan omset & piutang.">
         <p>
-          Beda dari layar Jaminan &amp; Denda yang cuma menampilkan transaksi aktif, Riwayat Transaksi menampilkan{' '}
+          Beda dari layar Transaksi Aktif yang cuma menampilkan status yang sedang berjalan, Riwayat Transaksi menampilkan{' '}
           <Ui>semua</Ui> status — termasuk yang sudah <Ui>Selesai</Ui> atau <Ui>Dibatalkan</Ui>, yang setelah
           ditutup tidak akan muncul lagi di layar lain manapun.
         </p>
@@ -306,9 +307,20 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         <Note>Sama seperti Kelola Usaha, tab ini cuma terlihat dan bisa diakses oleh pemilik.</Note>
       </Section>
 
+      <Section id="g-8" num="8" title="Toko Online" kicker="Belum jadi fitur — halaman ini buat lihat seberapa banyak pemilik usaha yang tertarik.">
+        <p>
+          Tab ini menjelaskan rencana <strong>link toko online sendiri</strong> per usaha (mis.{' '}
+          <span className="font-mono text-xs">app.sewalog.com/nama-tokomu</span>) supaya pelanggan bisa lihat
+          ketersediaan dan transaksi sendiri tanpa chat WhatsApp dulu. Fiturnya <strong>belum dibangun</strong> —
+          tab ini sengaja ditampilkan lebih dulu buat lihat seberapa banyak pemilik usaha yang tertarik, lewat
+          tombol <Ui>Tertarik? Kasih Tahu Kami</Ui> yang membuka WhatsApp.
+        </p>
+        <Note>Sama seperti Kelola Usaha, tab ini cuma terlihat dan bisa diakses oleh pemilik.</Note>
+      </Section>
+
       <Section id="g-a" num="A." title="Catatan Penting">
         <ul className="list-disc pl-5 space-y-1.5 text-xs text-[#26302B]">
-          <li><strong>Mobile-first</strong> — semua alur inti (kalender, catat transaksi, jaminan &amp; denda) didesain dipakai sambil berdiri di depan rak alat, bukan di depan laptop.</li>
+          <li><strong>Mobile-first</strong> — semua alur inti (kalender, catat transaksi, transaksi aktif) didesain dipakai sambil berdiri di depan rak alat, bukan di depan laptop.</li>
           <li><strong>Data selalu real-time</strong> — Sewalog sengaja tidak menyimpan data offline/cache agresif, supaya stok yang tampil tidak pernah basi dan menyebabkan double-booking.</li>
           <li><strong>Isolasi data per usaha</strong> — setiap usaha hanya bisa melihat data miliknya sendiri, termasuk kalau kamu tergabung di lebih dari satu usaha lewat undangan.</li>
           <li><strong>Wilayah tervalidasi saat ini</strong>: Malang Raya (Kota Malang, Kabupaten Malang, Kota Batu).</li>

@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
 
-// Dipakai bersama di Jaminan & Denda dan Riwayat — dulu didefinisikan
+// Dipakai bersama di Transaksi Aktif dan Riwayat — dulu didefinisikan
 // lokal di TrackingScreen.tsx, diekstrak supaya tidak diduplikasi.
 export function StatCard({
   label,

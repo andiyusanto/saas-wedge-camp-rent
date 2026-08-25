@@ -91,7 +91,7 @@ Warna logo (`#3E8361`, `#F0913F`, `#8FBB6F`, `#FBF2DA`) khusus dipakai untuk log
 
 1. **Kalender ketersediaan** — list per-item dengan strip status beberapa hari ke depan (bukan grid kalender bulanan penuh). Ketersediaan **dihitung on-the-fly**, tidak disimpan sebagai tabel terpisah — lihat catatan di `skema-final.sql`.
 2. **Catat transaksi** — form input cepat: nama penyewa, kontak, pilih alat (multi-item), tanggal ambil/kembali, jenis jaminan, total harga. Minim ketikan, karena diisi sambil melayani pelanggan yang menunggu.
-3. **Tracking jaminan & denda** — daftar transaksi aktif dengan status (telat/rusak/hilang), dan **dua jenis denda dipisah eksplisit**: denda keterlambatan vs denda kerusakan/kehilangan (bisa muncul bersamaan dalam satu booking, jangan digabung jadi satu angka).
+3. **Transaksi Aktif (tracking jaminan & denda)** — daftar transaksi aktif dengan status (telat/rusak/hilang), dan **dua jenis denda dipisah eksplisit**: denda keterlambatan vs denda kerusakan/kehilangan (bisa muncul bersamaan dalam satu booking, jangan digabung jadi satu angka). Nama tab di UI sengaja "Transaksi Aktif" (bukan "Jaminan & Denda") — lebih mencerminkan fungsi utamanya (tracking siklus transaksi: ambil-kembali), bukan cuma dua sub-perhatian finansial di dalamnya.
 
 Fitur di luar tiga ini (rekap laporan, manajemen multi-cabang, marketplace publik) **belum masuk MVP** — jangan ditambahkan tanpa validasi kebutuhan dari pilot.
 
@@ -112,7 +112,7 @@ Skema lengkap dan RLS policy final ada di `skema-final.sql` (bawa ke folder migr
 - Manajemen multi-cabang / multi-karyawan per vendor
 - Tabel wilayah di luar Malang Raya
 - Level kecamatan di data wilayah
-- Storefront online publik per-vendor + payment gateway (`app.sewalog.com/[nama-toko]`) — dievaluasi Agustus 2026, **ditunda bukan ditolak**. Alasan & syarat lengkap sebelum dibangun ada di `research/online-checkout-payment-roadmap-2026-08.md` (ringkas: nol bukti kebutuhan nyata dari vendor pilot, integrasi pembayaran Bilbo-Outdoors sendiri — kasus lebih sederhana — belum stabil untuk pelanggan asli, dan pertanyaan lisensi PJP dari Bank Indonesia belum terjawab, butuh opini hukum tertulis sebelum lanjut).
+- Storefront online publik per-vendor + payment gateway (`app.sewalog.com/[nama-toko]`) — dievaluasi Agustus 2026, **ditunda bukan ditolak**. Alasan & syarat lengkap sebelum dibangun ada di `research/online-checkout-payment-roadmap-2026-08.md` (ringkas: nol bukti kebutuhan nyata dari vendor pilot, integrasi pembayaran Bilbo-Outdoors sendiri — kasus lebih sederhana — belum stabil untuk pelanggan asli, dan pertanyaan lisensi PJP dari Bank Indonesia belum terjawab, butuh opini hukum tertulis sebelum lanjut). Ada tab **Toko Online** (owner-only) di UI sebagai fake-door — cuma penjelasan rencana + tombol "Tertarik? Kasih Tahu Kami" ke WhatsApp, bukan fitur sungguhan — dipakai buat lihat sinyal minat vendor pilot secara murah sebelum commit ke pembangunan aslinya (syarat #2 di roadmap).
 
 ## 9. Timeline & fase kerja saat ini
 
