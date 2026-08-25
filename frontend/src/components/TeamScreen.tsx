@@ -3,14 +3,26 @@ import type { Session } from '@supabase/supabase-js';
 import { Users, UserPlus, Copy, Trash2, Check } from 'lucide-react';
 import { useTeam } from '../hooks/useTeam';
 import type { TeamInvite, TeamMember } from '../hooks/useTeam';
+import type { Business, BusinessUpdateInput } from '../hooks/useBusiness';
 import { ConfirmModal } from './ConfirmModal';
+import { BusinessInfoSection } from './BusinessInfoSection';
 import { formatDateIndo } from '../utils/formatters';
 
 function inviteUrl(code: string) {
   return `${window.location.origin}${window.location.pathname}?invite=${code}`;
 }
 
-export function TeamScreen({ session, businessId }: { session: Session; businessId: string }) {
+export function TeamScreen({
+  session,
+  businessId,
+  business,
+  onSaveBusiness,
+}: {
+  session: Session;
+  businessId: string;
+  business: Business;
+  onSaveBusiness: (input: BusinessUpdateInput) => Promise<{ error: string | null }>;
+}) {
   const { members, invites, loading, error, createInvite, revokeInvite, removeMember } = useTeam(session, businessId);
   const [role, setRole] = useState<'owner' | 'karyawan'>('karyawan');
   const [creating, setCreating] = useState(false);
@@ -42,6 +54,8 @@ export function TeamScreen({ session, businessId }: { session: Session; business
 
   return (
     <div className="space-y-6">
+      <BusinessInfoSection business={business} onSave={onSaveBusiness} />
+
       <div className="bg-[#FBFAF4] p-4 sm:p-5 rounded-2xl border border-[#DBD5C1] shadow-xs space-y-3">
         <h2 className="text-lg font-bold text-[#26302B] flex items-center gap-2">
           <Users className="w-5 h-5 text-[#2B4739]" />

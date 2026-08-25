@@ -1,37 +1,31 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { X, Store, CheckCircle2 } from 'lucide-react';
-import { ModalBackdrop, ModalPanel } from './ModalShell';
+import { Store, CheckCircle2 } from 'lucide-react';
 import type { Business, BusinessUpdateInput } from '../hooks/useBusiness';
 
-export function EditBusinessModal({
-  isOpen,
-  onClose,
+export function BusinessInfoSection({
   business,
   onSave,
 }: {
-  isOpen: boolean;
-  onClose: () => void;
-  business: Business | null;
+  business: Business;
   onSave: (input: BusinessUpdateInput) => Promise<{ error: string | null }>;
 }) {
-  const [name, setName] = useState('');
-  const [ownerName, setOwnerName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [toleranceHours, setToleranceHours] = useState('6');
+  const [name, setName] = useState(business.name);
+  const [ownerName, setOwnerName] = useState(business.owner_name ?? '');
+  const [phone, setPhone] = useState(business.phone ?? '');
+  const [toleranceHours, setToleranceHours] = useState(String(business.late_tolerance_hours));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
 
+  // business bisa berubah dari luar (refresh setelah tab lain aktif) —
+  // sinkronkan field kalau belum ada perubahan yang sedang diketik.
   useEffect(() => {
-    if (!isOpen || !business) return;
     setName(business.name);
     setOwnerName(business.owner_name ?? '');
     setPhone(business.phone ?? '');
     setToleranceHours(String(business.late_tolerance_hours));
-    setError(null);
-  }, [isOpen, business]);
-
-  if (!isOpen) return null;
+  }, [business]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -41,6 +35,7 @@ export function EditBusinessModal({
     }
     setSubmitting(true);
     setError(null);
+    setSaved(false);
 
     const { error: saveError } = await onSave({
       name: name.trim(),
@@ -54,23 +49,19 @@ export function EditBusinessModal({
       setError(saveError);
       return;
     }
-    onClose();
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
   }
 
   return (
-    <ModalBackdrop>
-      <ModalPanel className="bg-[#FBFAF4] w-full max-w-md rounded-2xl border border-[#DBD5C1] shadow-xl overflow-hidden my-auto max-h-[92vh] flex flex-col">
-        <div className="bg-[#2B4739] px-5 py-4 text-white flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2">
-            <Store className="w-5 h-5 text-[#A65C2A]" />
-            <h2 className="text-lg font-bold">Info Usaha</h2>
-          </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/10 text-white transition">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+    <div className="bg-[#FBFAF4] p-4 sm:p-5 rounded-2xl border border-[#DBD5C1] shadow-xs space-y-3">
+      <h2 className="text-lg font-bold text-[#26302B] flex items-center gap-2">
+        <Store className="w-5 h-5 text-[#2B4739]" />
+        <span>Info Usaha</span>
+      </h2>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-3.5 text-sm overflow-y-auto">
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
             Nama usaha *
             <input
@@ -109,36 +100,26 @@ export function EditBusinessModal({
               onChange={(e) => setToleranceHours(e.target.value)}
               className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] font-bold focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
             />
-            <span className="text-[11px] text-[#6E6853] font-normal">
-              Berapa jam setelah janji kembali sebelum transaksi dianggap terlambat dan mulai kena denda.
-            </span>
           </label>
+        </div>
+        <p className="text-[11px] text-[#6E6853]">
+          Toleransi telat: berapa jam setelah janji kembali sebelum transaksi dianggap terlambat dan mulai kena denda.
+        </p>
 
-          {error && (
-            <p className="text-xs font-semibold text-[#A8412E] bg-[#FAF0EE] border border-[#A8412E]/30 rounded-lg p-2.5">
-              {error}
-            </p>
-          )}
+        {error && <p className="text-xs font-semibold text-[#A8412E]">{error}</p>}
 
-          <div className="pt-2 flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2.5 rounded-xl border border-[#DBD5C1] hover:bg-[#F1EEE2] text-[#26302B] font-semibold text-xs transition"
-            >
-              Batal
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="px-5 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs shadow-md transition flex items-center gap-2 active:scale-95 disabled:opacity-60"
-            >
-              <CheckCircle2 className="w-4 h-4 text-[#A65C2A]" />
-              <span>{submitting ? 'Menyimpan...' : 'Simpan Perubahan'}</span>
-            </button>
-          </div>
-        </form>
-      </ModalPanel>
-    </ModalBackdrop>
+        <div className="flex items-center gap-3 pt-1 border-t border-[#E6E1D2]">
+          <button
+            type="submit"
+            disabled={submitting}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-semibold text-sm shadow-sm transition disabled:opacity-60"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            {submitting ? 'Menyimpan...' : 'Simpan'}
+          </button>
+          {saved && <span className="text-xs font-semibold text-[#2B4739]">Tersimpan.</span>}
+        </div>
+      </form>
+    </div>
   );
 }

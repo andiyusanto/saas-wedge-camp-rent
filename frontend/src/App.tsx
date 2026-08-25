@@ -12,7 +12,6 @@ import { TrackingScreen } from './components/TrackingScreen';
 import { TeamScreen } from './components/TeamScreen';
 import { HistoryScreen } from './components/HistoryScreen';
 import { GuideScreen } from './components/GuideScreen';
-import { EditBusinessModal } from './components/EditBusinessModal';
 import { Navbar } from './components/Navbar';
 import type { Tab } from './components/Navbar';
 
@@ -31,7 +30,6 @@ function App() {
   const { business, role, loading: businessLoading, refresh: refreshBusiness, updateBusiness } = useBusiness(session);
   const [tab, setTab] = useState<Tab>('kalender');
   const [refreshSignal, setRefreshSignal] = useState(0);
-  const [isBusinessSettingsOpen, setIsBusinessSettingsOpen] = useState(false);
 
   // Jaring pengaman kalau karyawan sempat berada di tab owner-only (mis.
   // baru saja diturunkan dari owner ke karyawan oleh pemilik lain) — Navbar
@@ -53,7 +51,12 @@ function App() {
 
   if (!session) return <AuthScreen inviteCode={inviteCode} />;
 
-  if (businessLoading) return null;
+  // Cuma blank total di load awal (belum ada data business sama sekali) —
+  // refresh() dipanggil ulang setelah update (mis. simpan Info Usaha) juga
+  // sempat men-set loading=true, dan kalau gate ini tidak dikecualikan pas
+  // business sudah ada, seluruh app (termasuk form yang lagi diisi) blank
+  // sekejap tiap kali refresh, bukan cuma di load awal.
+  if (businessLoading && !business) return null;
 
   if (!business) {
     if (inviteCode && !inviteSkipped) {
@@ -88,7 +91,6 @@ function App() {
         businessName={business.name}
         role={role}
         onLogout={() => supabase?.auth.signOut()}
-        onOpenBusinessSettings={() => setIsBusinessSettingsOpen(true)}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-12">
@@ -99,7 +101,9 @@ function App() {
           <TrackingScreen key={`trk-${refreshSignal}`} session={session} businessName={business.name} />
         )}
         {tab === 'alat' && <ItemsScreen businessId={business.id} session={session} />}
-        {tab === 'tim' && role === 'owner' && <TeamScreen session={session} businessId={business.id} />}
+        {tab === 'tim' && role === 'owner' && (
+          <TeamScreen session={session} businessId={business.id} business={business} onSaveBusiness={updateBusiness} />
+        )}
         {tab === 'riwayat' && role === 'owner' && <HistoryScreen businessId={business.id} />}
         {tab === 'panduan' && <GuideScreen businessName={business.name} />}
       </main>
@@ -118,13 +122,6 @@ function App() {
           }}
         />
       )}
-
-      <EditBusinessModal
-        isOpen={isBusinessSettingsOpen}
-        onClose={() => setIsBusinessSettingsOpen(false)}
-        business={business}
-        onSave={updateBusiness}
-      />
 
       <footer className="bg-[#1E3429] border-t border-[#3A5C4A] text-[#DBD5C1] text-xs py-4 px-4 text-center">
         <p className="font-semibold text-[#FBFAF4]">
