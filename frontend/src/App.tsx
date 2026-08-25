@@ -12,6 +12,7 @@ import { TrackingScreen } from './components/TrackingScreen';
 import { TeamScreen } from './components/TeamScreen';
 import { HistoryScreen } from './components/HistoryScreen';
 import { GuideScreen } from './components/GuideScreen';
+import { EditBusinessModal } from './components/EditBusinessModal';
 import { Navbar } from './components/Navbar';
 import type { Tab } from './components/Navbar';
 
@@ -27,9 +28,10 @@ function clearInviteCodeFromUrl() {
 
 function App() {
   const { session, loading: authLoading } = useAuth();
-  const { business, role, loading: businessLoading, refresh: refreshBusiness } = useBusiness(session);
+  const { business, role, loading: businessLoading, refresh: refreshBusiness, updateBusiness } = useBusiness(session);
   const [tab, setTab] = useState<Tab>('kalender');
   const [refreshSignal, setRefreshSignal] = useState(0);
+  const [isBusinessSettingsOpen, setIsBusinessSettingsOpen] = useState(false);
 
   // Jaring pengaman kalau karyawan sempat berada di tab owner-only (mis.
   // baru saja diturunkan dari owner ke karyawan oleh pemilik lain) — Navbar
@@ -86,6 +88,7 @@ function App() {
         businessName={business.name}
         role={role}
         onLogout={() => supabase?.auth.signOut()}
+        onOpenBusinessSettings={() => setIsBusinessSettingsOpen(true)}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-12">
@@ -115,6 +118,13 @@ function App() {
           }}
         />
       )}
+
+      <EditBusinessModal
+        isOpen={isBusinessSettingsOpen}
+        onClose={() => setIsBusinessSettingsOpen(false)}
+        business={business}
+        onSave={updateBusiness}
+      />
 
       <footer className="bg-[#1E3429] border-t border-[#3A5C4A] text-[#DBD5C1] text-xs py-4 px-4 text-center">
         <p className="font-semibold text-[#FBFAF4]">

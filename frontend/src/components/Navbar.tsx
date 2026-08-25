@@ -1,4 +1,4 @@
-import { Calendar, ShieldAlert, Package, Plus, LogOut, Users, BookOpen, Store, History } from 'lucide-react';
+import { Calendar, ShieldAlert, Package, Plus, LogOut, Users, BookOpen, Store, History, Settings } from 'lucide-react';
 import { ScrollableRow } from './ScrollableRow';
 import type { MemberRole } from '../hooks/useBusiness';
 
@@ -20,6 +20,7 @@ export function Navbar({
   businessName,
   role,
   onLogout,
+  onOpenBusinessSettings,
 }: {
   activeTab: Tab;
   setActiveTab: (tab: Tab) => void;
@@ -27,6 +28,7 @@ export function Navbar({
   businessName: string;
   role: MemberRole | null;
   onLogout: () => void;
+  onOpenBusinessSettings: () => void;
 }) {
   const visibleTabs = TABS.filter((t) => !t.ownerOnly || role === 'owner');
   return (
@@ -62,6 +64,15 @@ export function Navbar({
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Catat Transaksi</span>
             </button>
+            {role === 'owner' && (
+              <button
+                onClick={onOpenBusinessSettings}
+                title="Info Usaha"
+                className="p-2 rounded-xl bg-[#1E3429] hover:bg-[#15251D] border border-[#3A5C4A] text-[#DBD5C1] transition"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            )}
             <button
               onClick={onLogout}
               title="Keluar"
