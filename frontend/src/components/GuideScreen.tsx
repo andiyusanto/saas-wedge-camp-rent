@@ -137,6 +137,12 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           pintu) di pojok kanan atas navbar.
         </p>
         <p>
+          Lupa password? Tekan <Ui>Lupa Password?</Ui> di halaman login, isi email, lalu cek inbox (termasuk folder
+          spam) untuk link reset. Klik link itu untuk masuk ke layar <Ui>Buat Password Baru</Ui>, isi password baru,
+          dan langsung masuk memakainya. Berlaku sama untuk pemilik maupun karyawan — password itu urusan akun login,
+          bukan peran usaha.
+        </p>
+        <p>
           Akun baru tanpa usaha akan diarahkan ke <Ui>Setup Usaha</Ui> — isi nama usaha, nama pemilik, dan nomor
           telepon, lalu <Ui>Simpan &amp; Lanjut</Ui>. Setelah itu langsung masuk ke Kalender Ketersediaan.
         </p>
