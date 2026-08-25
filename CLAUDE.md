@@ -112,6 +112,7 @@ Skema lengkap dan RLS policy final ada di `skema-final.sql` (bawa ke folder migr
 - Manajemen multi-cabang / multi-karyawan per vendor
 - Tabel wilayah di luar Malang Raya
 - Level kecamatan di data wilayah
+- Storefront online publik per-vendor + payment gateway (`app.sewalog.com/[nama-toko]`) — dievaluasi Agustus 2026, **ditunda bukan ditolak**. Alasan & syarat lengkap sebelum dibangun ada di `research/online-checkout-payment-roadmap-2026-08.md` (ringkas: nol bukti kebutuhan nyata dari vendor pilot, integrasi pembayaran Bilbo-Outdoors sendiri — kasus lebih sederhana — belum stabil untuk pelanggan asli, dan pertanyaan lisensi PJP dari Bank Indonesia belum terjawab, butuh opini hukum tertulis sebelum lanjut).
 
 ## 9. Timeline & fase kerja saat ini
 
