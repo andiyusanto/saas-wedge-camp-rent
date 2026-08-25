@@ -3,6 +3,7 @@ import { supabase } from './lib/supabaseClient';
 import { useAuth } from './hooks/useAuth';
 import { useBusiness } from './hooks/useBusiness';
 import { AuthScreen } from './components/AuthScreen';
+import { ResetPasswordScreen } from './components/ResetPasswordScreen';
 import { OnboardingScreen } from './components/OnboardingScreen';
 import { RedeemInviteScreen } from './components/RedeemInviteScreen';
 import { ItemsScreen } from './components/ItemsScreen';
@@ -26,7 +27,7 @@ function clearInviteCodeFromUrl() {
 }
 
 function App() {
-  const { session, loading: authLoading } = useAuth();
+  const { session, loading: authLoading, isPasswordRecovery, clearPasswordRecovery } = useAuth();
   const { business, role, loading: businessLoading, refresh: refreshBusiness, updateBusiness } = useBusiness(session);
   const [tab, setTab] = useState<Tab>('kalender');
   const [refreshSignal, setRefreshSignal] = useState(0);
@@ -48,6 +49,12 @@ function App() {
   const [inviteSkipped, setInviteSkipped] = useState(false);
 
   if (authLoading) return null;
+
+  // Supabase kasih sesi sementara begitu link reset password di email
+  // diklik — sengaja disela di sini SEBELUM cek !session, karena sesi itu
+  // teknisnya valid dan kalau tidak disela user langsung masuk ke app
+  // dengan sesi recovery tanpa sempat ganti password.
+  if (isPasswordRecovery) return <ResetPasswordScreen onDone={clearPasswordRecovery} />;
 
   if (!session) return <AuthScreen inviteCode={inviteCode} />;
 

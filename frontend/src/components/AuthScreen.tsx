@@ -71,7 +71,7 @@ function InviteBanner({ inviteCode }: { inviteCode: string }) {
 }
 
 function AuthForm({ inviteCode }: { inviteCode: string | null }) {
-  const [mode, setMode] = useState<'masuk' | 'daftar'>('masuk');
+  const [mode, setMode] = useState<'masuk' | 'daftar' | 'lupa'>('masuk');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState<string | null>(null);
@@ -102,6 +102,32 @@ function AuthForm({ inviteCode }: { inviteCode: string | null }) {
     setSubmitting(false);
   }
 
+  async function handleForgotPassword(e: FormEvent) {
+    e.preventDefault();
+    if (!supabase) return;
+
+    setSubmitting(true);
+    setError(null);
+    setMessage(null);
+
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + window.location.pathname,
+    });
+
+    setSubmitting(false);
+
+    // Supabase sengaja tidak membedakan respons untuk email terdaftar vs
+    // tidak (mencegah orang lain mengecek email siapa saja yang punya akun)
+    // — resetError di sini cuma muncul untuk error teknis asli (format email
+    // salah, rate limit, dsb), bukan "email tidak ditemukan", jadi pesan
+    // sukses tetap generik apa pun hasilnya kalau tidak ada resetError.
+    if (resetError) {
+      setError(resetError.message);
+      return;
+    }
+    setMessage('Kalau email itu terdaftar, link reset password sudah dikirim. Cek inbox (termasuk folder spam).');
+  }
+
   async function handleResetDemo() {
     setResettingDemo(true);
     setError(null);
@@ -121,6 +147,57 @@ function AuthForm({ inviteCode }: { inviteCode: string | null }) {
     } finally {
       setResettingDemo(false);
     }
+  }
+
+  if (mode === 'lupa') {
+    return (
+      <main className="min-h-screen flex items-center justify-center p-4 bg-[#F1EEE2]">
+        <div className="w-full max-w-sm bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] shadow-sm p-6">
+          <Brand />
+          <h2 className="text-sm font-bold text-[#26302B] mt-4">Lupa Password</h2>
+          <p className="text-xs text-[#6E6853] mt-1">
+            Masukkan email akun Sewalog kamu, kami kirim link buat bikin password baru.
+          </p>
+
+          <form onSubmit={handleForgotPassword} className="flex flex-col gap-3.5 mt-4">
+            <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
+              Email
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoFocus
+                className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+              />
+            </label>
+
+            {error && <p className="text-sm text-[#A8412E]">{error}</p>}
+            {message && <p className="text-sm text-[#2B4739]">{message}</p>}
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="mt-1 px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-sm shadow-sm transition active:scale-95 disabled:opacity-60"
+            >
+              {submitting ? 'Mengirim...' : 'Kirim Link Reset'}
+            </button>
+          </form>
+
+          <button
+            type="button"
+            onClick={() => {
+              setMode('masuk');
+              setError(null);
+              setMessage(null);
+            }}
+            className="mt-4 text-xs text-[#6E6853] underline hover:text-[#26302B] transition"
+          >
+            Kembali ke Masuk
+          </button>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -152,6 +229,20 @@ function AuthForm({ inviteCode }: { inviteCode: string | null }) {
               className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
             />
           </label>
+
+          {mode === 'masuk' && (
+            <button
+              type="button"
+              onClick={() => {
+                setMode('lupa');
+                setError(null);
+                setMessage(null);
+              }}
+              className="self-end -mt-2 text-xs text-[#6E6853] underline hover:text-[#26302B] transition"
+            >
+              Lupa Password?
+            </button>
+          )}
 
           {error && <p className="text-sm text-[#A8412E]">{error}</p>}
           {message && <p className="text-sm text-[#2B4739]">{message}</p>}
