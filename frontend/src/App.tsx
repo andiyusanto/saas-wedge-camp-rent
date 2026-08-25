@@ -98,7 +98,7 @@ function App() {
         {tab === 'alat' && <ItemsScreen businessId={business.id} session={session} />}
         {tab === 'tim' && role === 'owner' && <TeamScreen session={session} businessId={business.id} />}
         {tab === 'riwayat' && role === 'owner' && <HistoryScreen businessId={business.id} />}
-        {tab === 'panduan' && <GuideScreen />}
+        {tab === 'panduan' && <GuideScreen businessName={business.name} />}
       </main>
 
       {isNewBookingOpen && (

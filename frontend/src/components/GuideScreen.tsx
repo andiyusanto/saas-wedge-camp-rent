@@ -1,8 +1,15 @@
 import type { ReactNode } from 'react';
-import { BookOpen } from 'lucide-react';
+import { BookOpen, MessageCircle } from 'lucide-react';
 
 // Panduan pemakaian in-app, mengikuti alur fitur nyata di Sewalog. Jaga tetap
 // sinkron kalau alur di tab lain berubah (label tombol, urutan langkah, dsb).
+
+// TODO: ganti dengan nomor WhatsApp asli Sewalog sebelum production deploy
+// (sama seperti landing/src/lib/whatsapp.ts). SENGAJA tidak lewat
+// getWhatsAppShareUrl() di formatters.ts — fungsi itu strip semua karakter
+// non-digit (dirancang buat nomor HP pelanggan asli), yang diam-diam
+// menghapus placeholder "xxxxxxxxxx" ini jadi cuma "62".
+const SEWALOG_SUPPORT_WHATSAPP = '62xxxxxxxxxx';
 
 function Ui({ children }: { children: ReactNode }) {
   return (
@@ -96,7 +103,10 @@ const TOC: { id: string; num: string; title: string }[] = [
   { id: 'g-a', num: 'A', title: 'Catatan Penting' },
 ];
 
-export function GuideScreen() {
+export function GuideScreen({ businessName }: { businessName: string }) {
+  const feedbackMessage = `Halo Sewalog, saya dari usaha "${businessName}" mau kasih masukan/keluhan soal aplikasi:\n\n`;
+  const feedbackUrl = `https://wa.me/${SEWALOG_SUPPORT_WHATSAPP}?text=${encodeURIComponent(feedbackMessage)}`;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -287,6 +297,16 @@ export function GuideScreen() {
           <li><strong>Wilayah tervalidasi saat ini</strong>: Malang Raya (Kota Malang, Kabupaten Malang, Kota Batu).</li>
         </ul>
       </Section>
+
+      <a
+        href={feedbackUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-dashed border-[#DBD5C1] text-[#2B4739] text-sm font-semibold hover:bg-[#F1EEE2] transition"
+      >
+        <MessageCircle className="w-4 h-4" />
+        Kirim Masukan / Keluhan lewat WhatsApp
+      </a>
     </div>
   );
 }
