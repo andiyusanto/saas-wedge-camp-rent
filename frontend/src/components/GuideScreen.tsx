@@ -98,7 +98,7 @@ const TOC: { id: string; num: string; title: string }[] = [
   { id: 'g-3', num: '3', title: 'Katalog & Stok Alat' },
   { id: 'g-4', num: '4', title: 'Catat Transaksi Sewa' },
   { id: 'g-5', num: '5', title: 'Jaminan & Denda' },
-  { id: 'g-6', num: '6', title: 'Kelola Karyawan' },
+  { id: 'g-6', num: '6', title: 'Kelola Usaha' },
   { id: 'g-7', num: '7', title: 'Riwayat Transaksi' },
   { id: 'g-a', num: 'A', title: 'Catatan Penting' },
 ];
@@ -147,8 +147,8 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         </Note>
         <Note>
           Data usaha (nama, nama pemilik, no. telepon, dan toleransi telat sebelum kena denda) bisa diubah kapan saja
-          lewat ikon <Ui>gerigi (Info Usaha)</Ui> di navbar, di sebelah tombol keluar — cuma terlihat dan bisa diakses
-          oleh pemilik.
+          lewat bagian <Ui>Info Usaha</Ui> di tab <Ui>Kelola Usaha</Ui> (lihat bagian 6) — cuma terlihat dan bisa
+          diakses oleh pemilik.
         </Note>
       </Section>
 
@@ -240,10 +240,15 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         </Note>
       </Section>
 
-      <Section id="g-6" num="6" title="Kelola Karyawan" kicker="Undang staf lewat link, tanpa perlu bikin username/password dari sisi pemilik.">
+      <Section id="g-6" num="6" title="Kelola Usaha" kicker="Info usaha dan kelola staf, digabung jadi satu tab karena sama-sama urusan admin sesekali, bukan dipakai harian.">
+        <p>
+          Bagian <Ui>Info Usaha</Ui> di paling atas tab ini untuk ubah nama usaha, nama pemilik, no. telepon, dan
+          toleransi telat (lihat bagian 1). Di bawahnya ada bagian <Ui>Kelola Karyawan</Ui> untuk undang staf lewat
+          link, tanpa perlu bikin username/password dari sisi pemilik:
+        </p>
         <Steps
           items={[
-            <>Buka tab <Ui>Kelola Karyawan</Ui>, pilih peran (<Ui>Karyawan</Ui> atau <Ui>Pemilik (co-owner)</Ui>), lalu tekan <Ui>Buat Link Undangan</Ui>.</>,
+            <>Pilih peran (<Ui>Karyawan</Ui> atau <Ui>Pemilik (co-owner)</Ui>), lalu tekan <Ui>Buat Link Undangan</Ui>.</>,
             <>Salin link (ikon salin di samping kode) dan kirim ke calon karyawan lewat WhatsApp.</>,
             <>Karyawan membuka link tersebut, daftar/masuk dengan akunnya sendiri, lalu menekan <Ui>Gabung Sekarang</Ui> — otomatis masuk ke usaha yang sama, tanpa isi form Setup Usaha lagi.</>,
           ]}
@@ -251,9 +256,10 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         <Note>
           Peran <Ui>Karyawan</Ui> di sini murni label atribusi (siapa yang mencatat transaksi/perubahan) untuk semua
           fitur operasional — karyawan bisa memakai Kalender, Catat Transaksi, Jaminan &amp; Denda, dan Katalog &amp;
-          Stok Alat sama seperti pemilik. Satu pengecualian: tab <Ui>Kelola Karyawan</Ui> ini sendiri cuma terlihat
-          dan bisa dipakai oleh pemilik — karyawan tidak bisa mengundang atau mengeluarkan anggota tim. Link undangan
-          otomatis kedaluwarsa dalam 7 hari kalau belum dipakai, dan bisa dicabut manual kapan saja lewat tombol hapus
+          Stok Alat sama seperti pemilik. Satu pengecualian: tab <Ui>Kelola Usaha</Ui> ini sendiri (Info Usaha maupun
+          Kelola Karyawan) cuma terlihat dan bisa dipakai oleh pemilik — karyawan tidak bisa mengundang atau
+          mengeluarkan anggota tim. Link undangan otomatis kedaluwarsa dalam 7 hari kalau belum dipakai, dan bisa
+          dicabut manual kapan saja lewat tombol hapus
           di daftar undangan.
         </Note>
       </Section>
@@ -291,7 +297,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           buat buka/tutup daftar alatnya. Berguna buat lihat alat mana yang perlu ditambah stoknya atau justru
           jarang dipakai.
         </p>
-        <Note>Sama seperti Kelola Karyawan, tab ini cuma terlihat dan bisa diakses oleh pemilik.</Note>
+        <Note>Sama seperti Kelola Usaha, tab ini cuma terlihat dan bisa diakses oleh pemilik.</Note>
       </Section>
 
       <Section id="g-a" num="A." title="Catatan Penting">
