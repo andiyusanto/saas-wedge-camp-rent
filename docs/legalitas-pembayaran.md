@@ -46,18 +46,44 @@ tapi lihat disclaimer di atas soal batas keandalan isinya.
   digital. Perlu dicek ulang lewat pencarian KBLI di OSS begitu fase
   Rimbasewa dimulai — jangan pakai 63122 tanpa verifikasi ulang.
 
-## 2. Prinsip arsitektur pembayaran — desain default, BUKAN kesimpulan hukum final
+## 2. Prinsip arsitektur pembayaran — STATUS: BELUM TERJAWAB, JANGAN ANGGAP SELESAI
+
+**KOREKSI (per tinjauan berikutnya):** Versi paling awal dokumen ini
+menyatakan "Rimbasewa TIDAK PERLU izin PJP" sebagai kesimpulan final. Itu
+**overclaim** dan sudah dikoreksi — jangan jadikan klaim itu rujukan lagi
+di mana pun ia muncul (termasuk sisa-sisanya di bagian lain dokumen ini
+kalau ada yang kelewat diperbarui).
+
+**Kenyataannya:** pertanyaan "apakah platform yang numpang di atas PJP
+berlisensi (lewat fitur submerchant Midtrans/Xendit), tanpa pernah
+menampung dana sendiri, tetap butuh izin/pendaftaran ke Bank Indonesia" —
+ini **genuinely belum ada jawaban pasti di sumber publik**. Tidak ada
+panduan resmi BI, tidak ada opini firma hukum, tidak ada kasus yang
+langsung membahas skenario "SaaS reseller yang duduk di atas PJP
+berlisensi, tidak pernah menampung dana" secara eksplisit — konsisten
+dengan temuan `research/pjp-licensing-submerchant-2026-08.md`.
+
+**Ada juga pergeseran regulasi yang membuat ini makin perlu ditinjau ulang
+sebelum arsitektur pembayaran difinalisasi:** PBI No. 10 Tahun 2025
+(menggantikan kerangka lama, efektif 31 Maret 2026) memperkenalkan
+kategori baru **"Penyelenggara Penunjang"** — pihak yang mendukung
+ekosistem pembayaran tanpa jadi PJP penuh, dibagi tiga tingkat (kritikal,
+penting, standar), dengan kewajiban pendaftaran untuk kategori kritikal
+dan penting. Belum jelas apakah model marketplace seperti Rimbasewa akan
+masuk kategori ini atau tidak — ini pertanyaan terbuka, bukan sesuatu yang
+bisa dijawab dari penalaran umum.
 
 **Architecture default yang dipakai selama status legalnya belum
 dikonfirmasi**: Rimbasewa/Sewalog tidak pernah menyelenggarakan aktivitas
 pembayaran sendiri — arsitekturnya selalu "numpang rel" payment gateway
 yang sudah berlisensi (Midtrans / Xendit), bukan menahan dana sendiri.
 Ini dipilih sebagai **postur paling aman yang tersedia** selagi pertanyaan
-soal perlu-tidaknya izin PJP masih terbuka (lihat disclaimer di atas) —
-bukan karena sudah dikonfirmasi otomatis aman dari kewajiban itu.
+di atas masih terbuka — bukan karena sudah dikonfirmasi otomatis aman dari
+kewajiban itu.
 
-**Batasan keras yang harus dijaga di level desain sistem, terlepas dari
-jawaban akhir pertanyaan lisensi:**
+**Batasan keras yang TETAP harus dijaga di level desain sistem** (ini
+bagian yang tidak berubah, karena ini soal praktik yang aman terlepas dari
+bagaimana pertanyaan izin di atas terjawab):
 > Dana dari penyewa TIDAK BOLEH pernah masuk ke rekening/entitas
 > Rimbasewa/Sewalog sendiri di luar sistem Midtrans/Xendit. Alurnya harus
 > selalu: penyewa → saldo Midtrans/Xendit → split otomatis (fitur
@@ -67,6 +93,13 @@ jawaban akhir pertanyaan lisensi:**
 > membutuhkan izin PJP sendiri dari Bank Indonesia, yang mensyaratkan modal
 > minimum ratusan juta hingga belasan miliar rupiah tergantung kategori
 > aktivitas.
+
+**Item wajib sebelum arsitektur pembayaran Rimbasewa difinalisasi atau
+dibangun ke produksi: opini tertulis dari praktisi hukum berlisensi
+(bukan riset AI, riset internal, atau kebijakan kontraktual payment
+gateway) yang secara spesifik membahas status Rimbasewa di bawah PBI
+10/2025.** Tidak ada substitusi untuk ini — riset AI (termasuk dokumen
+ini) hanya untuk orientasi awal, bukan dasar keputusan arsitektur final.
 
 Kalau ada permintaan fitur (dari user manapun, termasuk Andi) yang implisit
 butuh Rimbasewa/Sewalog menahan dana sebelum diteruskan ke vendor — flag
