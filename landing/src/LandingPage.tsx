@@ -6,6 +6,36 @@ import { waLink, WHATSAPP_DISPLAY } from './lib/whatsapp';
 const MSG_UMUM = 'Halo, saya pemilik rental alat kamping. Mau tanya-tanya soal Sewalog.';
 const MSG_MULAI = 'Halo, saya mau coba Sewalog untuk usaha rental saya.';
 
+// Teks di bawah ini HARUS sama persis dengan FAQPage schema di index.html
+// (di dalam <head>). Kalau ubah jawaban di sini, update yang di sana juga.
+const FAQ_ITEMS: { question: string; answer: string }[] = [
+  {
+    question: 'Apa itu Sewalog?',
+    answer:
+      'Sewalog adalah tools operasional untuk usaha rental alat kamping dan outdoor. Sewalog membantu pemilik usaha kelola stok alat, catat transaksi sewa, dan pantau jaminan & denda — semua dari HP, tanpa aplikasi terpisah atau catatan manual.',
+  },
+  {
+    question: 'Siapa yang cocok pakai Sewalog?',
+    answer:
+      'Sewalog cocok untuk pemilik atau staf usaha rental alat kamping dan outdoor, khususnya yang berlokasi di Malang Raya saat ini. Sewalog dirancang untuk dipakai sambil melayani pelanggan langsung di depan rak alat, bukan buat kerjaan kantor di depan laptop.',
+  },
+  {
+    question: 'Apakah Sewalog berbayar?',
+    answer:
+      'Untuk saat ini Sewalog gratis, karena masih tahap uji coba bersama vendor pilot di Malang Raya. Belum ada skema harga final yang ditentukan.',
+  },
+  {
+    question: 'Bagaimana cara mulai pakai Sewalog?',
+    answer:
+      'Cara mulai pakai Sewalog adalah dengan menghubungi kami lewat WhatsApp. Ceritakan cara sewa alat di tempat kamu, nanti kami bantu setup akun dan masukkan data alat — tanpa kontrak, tanpa kartu kredit.',
+  },
+  {
+    question: 'Apakah data alat dan transaksi aman?',
+    answer:
+      'Data alat dan transaksi disimpan dengan sistem yang memisahkan data tiap usaha secara terpisah (multi-tenant dengan Row Level Security), jadi satu usaha tidak bisa mengakses data usaha lain meski memakai aplikasi yang sama.',
+  },
+];
+
 const APP_URL = import.meta.env.VITE_APP_URL || 'http://localhost:5173';
 
 function WaIcon({ className }: { className?: string }) {
@@ -409,6 +439,18 @@ export function LandingPage() {
               <WaIcon className="w-5 h-5" />
               Hubungi Kami Sekarang
             </a>
+          </div>
+        </section>
+
+        <section className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+          <h2 className="reveal text-2xl font-bold text-[#26302B] mb-5">Pertanyaan yang Sering Ditanya</h2>
+          <div className="reveal space-y-4">
+            {FAQ_ITEMS.map((item) => (
+              <div key={item.question} className="bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] shadow-xs p-5">
+                <h3 className="text-base font-bold text-[#26302B] mb-1.5">{item.question}</h3>
+                <p className="text-sm text-[#6E6853]">{item.answer}</p>
+              </div>
+            ))}
           </div>
         </section>
       </main>
