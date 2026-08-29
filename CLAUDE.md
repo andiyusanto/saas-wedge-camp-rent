@@ -114,6 +114,17 @@ Skema lengkap dan RLS policy final ada di `skema-final.sql` (bawa ke folder migr
 - Level kecamatan di data wilayah
 - Storefront online publik per-vendor + payment gateway (`app.sewalog.com/[nama-toko]`) — dievaluasi Agustus 2026, **ditunda bukan ditolak**. Alasan & syarat lengkap sebelum dibangun ada di `research/online-checkout-payment-roadmap-2026-08.md` (ringkas: nol bukti kebutuhan nyata dari vendor pilot, integrasi pembayaran Bilbo-Outdoors sendiri — kasus lebih sederhana — belum stabil untuk pelanggan asli, dan pertanyaan lisensi PJP dari Bank Indonesia belum terjawab, butuh opini hukum tertulis sebelum lanjut). Ada tab **Toko Online** (owner-only) di UI sebagai fake-door — cuma penjelasan rencana + tombol "Tertarik? Kasih Tahu Kami" ke WhatsApp, bukan fitur sungguhan — dipakai buat lihat sinyal minat vendor pilot secara murah sebelum commit ke pembangunan aslinya (syarat #2 di roadmap).
 
+## Pembayaran & Legal
+
+Sebelum mengerjakan apapun yang menyentuh payment gateway, submerchant,
+atau alur dana vendor — baca `docs/legalitas-pembayaran.md` dulu. Ada
+batasan arsitektur keras di sana (dana penyewa tidak boleh pernah singgah
+di rekening/entitas Sewalog/Rimbasewa sendiri) yang tidak boleh dilanggar,
+independen dari status lisensi PJP yang masih belum terjawab (lihat
+disclaimer di paling atas file itu dan `research/pjp-licensing-submerchant-2026-08.md`
+— jangan anggap pertanyaan lisensinya sudah selesai hanya karena ada
+dokumen yang membahasnya).
+
 ## 9. Timeline & fase kerja saat ini
 
 1. Validasi vendor (kunjungan fisik + DM) — berjalan paralel dengan setup teknis
