@@ -311,10 +311,12 @@ export function GuideScreen({ businessName }: { businessName: string }) {
       <Section id="g-8" num="8" title="Etalase Online" kicker="Halaman publik read-only berisi katalog alat & kontak usahamu — sudah bisa dipakai sekarang, gratis, tanpa login.">
         <p>
           Nyalakan toggle <Ui>Aktifkan Etalase Online</Ui> untuk dapat link publik (mis.{' '}
-          <span className="font-mono text-xs">.../toko/nama-usahamu</span>) yang bisa dibagikan ke siapa saja lewat
-          WhatsApp/Instagram bio — dibuka tanpa perlu login, menampilkan nama usaha, kota, deskripsi, alamat, jam
-          operasional, tombol WhatsApp, dan katalog alat (foto, kategori, harga per hari). Pengunjung juga bisa pilih
-          tanggal di halaman itu untuk lihat jumlah unit tersisa per alat pada tanggal tersebut.
+          <span className="font-mono text-xs">toko.sewalog.com/nama-usahamu</span>) yang bisa dibagikan ke siapa saja
+          lewat WhatsApp/Instagram bio — dibuka tanpa perlu login, menampilkan nama usaha, kota, deskripsi, alamat,
+          jam operasional, tombol WhatsApp, dan katalog alat (foto, kategori, harga per hari). Pengunjung juga bisa
+          isi tanggal ambil &amp; kembali di halaman itu untuk lihat sisa unit tersedia per alat sepanjang periode
+          itu (bukan cuma satu hari) — kalau ada hari di tengah periode yang stoknya lebih sedikit, angka yang
+          ditampilkan ikut angka terendah itu, bukan cuma hari pertama.
         </p>
         <Note>
           <strong>Ini murni etalase informasi + pencarian ketersediaan, bukan toko online</strong> — tidak ada
