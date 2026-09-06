@@ -103,23 +103,48 @@ router.get('/:slug', async (req, res, next) => {
   await handleTokoRequest(req, res, req.params.slug);
 });
 
-// Pencarian ketersediaan per tanggal — JSON, dipanggil lewat fetch() dari
-// script inline di renderPage() di bawah, BUKAN bagian dari HTML awal
-// (jadi tidak mengganggu syarat "OG tags tanpa JS" di atas). Exposure
-// jumlah unit tersisa persis di sini SENGAJA, keputusan produk yang
-// membalik aturan "total_units privat" — lihat komentar di migration
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+// Batas atas rentang tanggal yang boleh dicek publik — generate_series di
+// get_public_availability() (migration 021) cross join per-hari, jadi
+// rentang tak terbatas dari endpoint publik-tanpa-login bisa disalahgunakan
+// buat query berat. 60 hari lebih dari cukup buat kebutuhan sewa alat
+// kamping (jarang lebih dari beberapa minggu).
+const MAX_AVAILABILITY_RANGE_DAYS = 60;
+
+// Pencarian ketersediaan per RENTANG tanggal (bukan satu tanggal — rental
+// alat berlangsung beberapa hari, jadi yang relevan buat penyewa adalah
+// "cukup stok di SEMUA hari dalam rentang ini", sama seperti validasi
+// kapasitas POST /bookings, bukan cuma satu hari) — JSON, dipanggil lewat
+// fetch() dari script inline di renderPage() di bawah, BUKAN bagian dari
+// HTML awal (jadi tidak mengganggu syarat "OG tags tanpa JS" di atas).
+// Exposure jumlah unit tersisa persis di sini SENGAJA, keputusan produk
+// yang membalik aturan "total_units privat" — lihat komentar di migration
 // 020_public_availability_search.sql sebelum mengubah ini.
 router.get('/api/public/etalase/:slug/availability', async (req, res) => {
   const slug = req.params.slug;
-  const date = req.query.date;
+  const startDate = req.query.start_date;
+  const endDate = req.query.end_date;
 
-  if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    res.status(400).json({ error: 'Parameter date wajib diisi, format YYYY-MM-DD.' });
+  if (typeof startDate !== 'string' || !DATE_RE.test(startDate) || typeof endDate !== 'string' || !DATE_RE.test(endDate)) {
+    res.status(400).json({ error: 'Parameter start_date dan end_date wajib diisi, format YYYY-MM-DD.' });
+    return;
+  }
+  if (endDate < startDate) {
+    res.status(400).json({ error: 'end_date tidak boleh sebelum start_date.' });
+    return;
+  }
+  const rangeDays = (new Date(`${endDate}T00:00:00Z`).getTime() - new Date(`${startDate}T00:00:00Z`).getTime()) / 86_400_000 + 1;
+  if (rangeDays > MAX_AVAILABILITY_RANGE_DAYS) {
+    res.status(400).json({ error: `Rentang tanggal maksimal ${MAX_AVAILABILITY_RANGE_DAYS} hari.` });
     return;
   }
 
   const supabase = createAnonClient();
-  const { data, error } = await supabase.rpc('get_public_availability', { p_slug: slug, p_date: date });
+  const { data, error } = await supabase.rpc('get_public_availability', {
+    p_slug: slug,
+    p_start_date: startDate,
+    p_end_date: endDate,
+  });
 
   if (error) {
     res.status(400).json({ error: error.message });
@@ -269,9 +294,11 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
 
   <section>
     <h2 style="font-size:1rem;margin:0 0 4px;color:#26302B;">Katalog Alat</h2>
-    <p style="margin:0 0 10px;font-size:0.8rem;color:#6E6853;">Pilih tanggal untuk cek sisa unit tersedia per alat (butuh JavaScript aktif) — atau langsung hubungi kami lewat WhatsApp.</p>
+    <p style="margin:0 0 10px;font-size:0.8rem;color:#6E6853;">Pilih tanggal ambil &amp; kembali untuk cek sisa unit tersedia per alat sepanjang periode itu (butuh JavaScript aktif) — atau langsung hubungi kami lewat WhatsApp.</p>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px;">
-      <input type="date" id="avail-date" style="padding:8px 10px;border-radius:10px;border:1px solid #DBD5C1;background:#fff;color:#26302B;font:inherit;" />
+      <input type="date" id="avail-start" aria-label="Tanggal ambil" style="padding:8px 10px;border-radius:10px;border:1px solid #DBD5C1;background:#fff;color:#26302B;font:inherit;" />
+      <span style="color:#6E6853;font-size:0.8rem;">s/d</span>
+      <input type="date" id="avail-end" aria-label="Tanggal kembali" style="padding:8px 10px;border-radius:10px;border:1px solid #DBD5C1;background:#fff;color:#26302B;font:inherit;" />
       <button type="button" id="avail-check" style="padding:8px 14px;border-radius:10px;border:none;background:#2B4739;color:#fff;font-weight:700;font-size:0.8rem;cursor:pointer;">Cek Ketersediaan</button>
     </div>
     <p id="avail-status" style="margin:4px 0 0;font-size:0.75rem;color:#6E6853;min-height:1em;"></p>
@@ -288,9 +315,19 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
 <script>
 (function () {
   var slug = ${JSON.stringify(slug)};
-  var dateInput = document.getElementById('avail-date');
+  var startInput = document.getElementById('avail-start');
+  var endInput = document.getElementById('avail-end');
   var btn = document.getElementById('avail-check');
   var status = document.getElementById('avail-status');
+
+  // Begitu tanggal ambil diisi, default-kan tanggal kembali ke hari yang
+  // sama kalau belum diisi/masih lebih awal — kebanyakan pengunjung cuma
+  // mau isi satu tanggal dulu buat cek sewa 1 hari.
+  startInput.addEventListener('change', function () {
+    if (!endInput.value || endInput.value < startInput.value) {
+      endInput.value = startInput.value;
+    }
+  });
 
   // Threshold "sisa sedikit" ini SENGAJA disalin dari LOW_STOCK_RATIO di
   // backend/src/lib/availability.ts (0.2) — cuma dipakai buat warna badge
@@ -306,20 +343,30 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
   }
 
   btn.addEventListener('click', function () {
-    var date = dateInput.value;
-    if (!date) {
-      status.textContent = 'Pilih tanggal dulu.';
+    var start = startInput.value;
+    var end = endInput.value || start;
+    if (!start) {
+      status.textContent = 'Pilih tanggal ambil dulu.';
+      return;
+    }
+    if (end < start) {
+      status.textContent = 'Tanggal kembali tidak boleh sebelum tanggal ambil.';
       return;
     }
     status.textContent = 'Memuat ketersediaan...';
-    fetch('/api/public/etalase/' + encodeURIComponent(slug) + '/availability?date=' + encodeURIComponent(date))
+    fetch(
+      '/api/public/etalase/' + encodeURIComponent(slug) + '/availability?start_date=' + encodeURIComponent(start) +
+        '&end_date=' + encodeURIComponent(end)
+    )
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (!data || !data.items) {
           status.textContent = 'Gagal memuat ketersediaan.';
           return;
         }
-        status.textContent = 'Ketersediaan untuk tanggal ' + date + ':';
+        status.textContent = start === end
+          ? 'Ketersediaan untuk tanggal ' + start + ':'
+          : 'Ketersediaan untuk ' + start + ' s/d ' + end + ' (sisa unit terendah sepanjang periode ini):';
         data.items.forEach(function (it) {
           var el = document.querySelector('[data-avail="' + it.id + '"]');
           if (!el) return;
