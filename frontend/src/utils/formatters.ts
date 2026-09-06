@@ -30,6 +30,19 @@ export function formatDateTimeIndo(isoString: string): string {
   }).format(date);
 }
 
+// Dipakai buat auto-generate slug Etalase Online dari nama usaha
+// (EtalaseOnlineScreen.tsx) — vendor tetap bisa edit manual sesudahnya.
+// Keunikan slug-nya sendiri dijaga di level database (unique constraint,
+// migration 019), bukan di sini.
+export function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '') // lepas diakritik (mis. "é" -> "e")
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 export function todayStr(): string {
   const d = new Date();
   const y = d.getFullYear();

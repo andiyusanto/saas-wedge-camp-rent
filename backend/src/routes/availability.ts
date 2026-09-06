@@ -1,19 +1,9 @@
 import { Router } from 'express';
 import { createRequestClient } from '../lib/supabaseClient.js';
-import { fetchActiveBookingItems, usedUnitsOn } from '../lib/availability.js';
+import { fetchActiveBookingItems, usedUnitsOn, computeAvailabilityStatus } from '../lib/availability.js';
 import { todayInWIB, addDays } from '../lib/dates.js';
 
 const router = Router();
-
-const LOW_STOCK_RATIO = 0.2;
-
-type Status = 'tersedia' | 'sisa_sedikit' | 'penuh';
-
-function computeStatus(remaining: number, totalUnits: number): Status {
-  if (remaining <= 0) return 'penuh';
-  const threshold = Math.max(1, Math.floor(totalUnits * LOW_STOCK_RATIO));
-  return remaining <= threshold ? 'sisa_sedikit' : 'tersedia';
-}
 
 // Ketersediaan sengaja dihitung on-the-fly dari booking_items + bookings.status
 // (bukan tabel tersimpan) — lihat catatan di migrations/skema-final.sql.
@@ -63,7 +53,7 @@ router.get('/availability', async (req, res) => {
       total_units: item.total_units,
       price_per_day: item.price_per_day,
       remaining,
-      status: remaining.map((r) => computeStatus(r, item.total_units)),
+      status: remaining.map((r) => computeAvailabilityStatus(r, item.total_units)),
     };
   });
 

@@ -8,6 +8,7 @@ import trackingsRouter from './routes/trackings.js';
 import teamRouter from './routes/team.js';
 import uploadsRouter from './routes/uploads.js';
 import demoRouter from './routes/demo.js';
+import etalaseRouter from './routes/etalase.js';
 
 // Node global fetch (dipakai @supabase/supabase-js) nyimpen koneksi
 // keep-alive lebih lama dari idle timeout sisi Supabase/Cloudflare — begitu
@@ -19,6 +20,12 @@ setGlobalDispatcher(new Agent({ keepAliveTimeout: 4_000, keepAliveMaxTimeout: 10
 
 const app = express();
 const port = process.env.PORT ?? 3001;
+
+// Render (dan platform PaaS lain) selalu ada di belakang reverse proxy —
+// tanpa ini req.protocol selalu 'http' meski client aslinya akses lewat
+// https, yang bikin canonical/og:url di routes/etalase.ts salah kalau
+// PUBLIC_BASE_URL tidak diisi manual.
+app.set('trust proxy', 1);
 
 app.use(cors({ origin: process.env.FRONTEND_ORIGIN ?? 'http://localhost:5173' }));
 // Default 100kb terlalu kecil buat foto ter-resize (base64 nambah ~33%
@@ -35,6 +42,9 @@ app.use('/api', trackingsRouter);
 app.use('/api', teamRouter);
 app.use('/api', uploadsRouter);
 app.use('/api', demoRouter);
+// Bukan di bawah /api — ini halaman HTML publik (/toko/{slug}), bukan
+// endpoint JSON, lihat komentar arsitektur di routes/etalase.ts.
+app.use(etalaseRouter);
 
 app.listen(port, () => {
   console.log(`Backend jalan di http://localhost:${port}`);

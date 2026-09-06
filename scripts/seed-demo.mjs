@@ -342,6 +342,35 @@ async function main() {
     }
   }
 
+  // --- Etalase Online contoh (published, sama persis logikanya dengan
+  // demoReset.ts — supaya verifikasi hidup /toko/{slug} bisa langsung
+  // dilakukan sehabis seed, tanpa perlu isi manual dulu) ---
+  console.log('-- Mengaktifkan Etalase Online demo --');
+  const [malangRegency] = await rest(`regencies?select=id&name=eq.Kota Malang`, ownerToken);
+  const existingPublicPage = await rest(`public_pages?select=business_id&business_id=eq.${businessId}`, ownerToken);
+  const publicPagePayload = {
+    published: true,
+    slug: 'demo-coba-sewalog',
+    description: 'Rental alat camping & outdoor terlengkap di Malang — tenda, sleeping bag, kompor, hingga carrier. Siap sewa harian, alat terawat.',
+    address: 'Jl. Coba Sewalog No. 1, Malang',
+    regency_id: malangRegency?.id ?? null,
+    operating_hours: 'Setiap hari 08.00–20.00 WIB',
+    public_phone: '081234567890',
+  };
+  if (existingPublicPage.length === 0) {
+    await rest('public_pages', ownerToken, {
+      method: 'POST',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ business_id: businessId, ...publicPagePayload }),
+    });
+  } else {
+    await rest(`public_pages?business_id=eq.${businessId}`, ownerToken, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify(publicPagePayload),
+    });
+  }
+
   // --- Seed transaksi contoh (dibuat lewat backend, bukan insert langsung) ---
   console.log('-- Membuat transaksi contoh --');
 

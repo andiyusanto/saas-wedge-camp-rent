@@ -95,6 +95,10 @@ Warna logo (`#3E8361`, `#F0913F`, `#8FBB6F`, `#FBF2DA`) khusus dipakai untuk log
 
 Fitur di luar tiga ini (rekap laporan, manajemen multi-cabang, marketplace publik) **belum masuk MVP** — jangan ditambahkan tanpa validasi kebutuhan dari pilot.
 
+**Etalase Online** (dibangun September 2026, di luar tiga fitur inti di atas) — halaman publik read-only per vendor di `/toko/{slug}`, tanpa login, murni katalog alat + info kontak (jam operasional, alamat, tombol WhatsApp). **Bukan marketplace, bukan toko online/checkout** — transaksi tetap manual lewat WA, tidak ada keranjang/pemesanan/pembayaran di halaman ini, dan tidak ada pencarian/browsing lintas vendor (satu halaman = satu vendor, isinya data yang sama yang sudah mereka input untuk manajemen internal). Sengaja dipisah dari tab **Toko Online** yang sudah lebih dulu ada (lihat non-goal storefront+payment di bagian 8) — "Etalase" (lihat-lihat, sudah bisa dipakai sekarang) vs "Toko" (transaksi sungguhan, masih dievaluasi) beda maknanya, dua tab ini sengaja tidak digabung. Data disimpan di tabel `public_pages` (migration 019), **terpisah dari `business_profiles`** supaya tidak mencampur consent "vendor punya etalase publik" dengan consent opt-in Rimbasewa (lihat bagian 7). Halaman publiknya sendiri di-render langsung oleh backend Express (`backend/src/routes/etalase.ts`) sebagai HTML string per-request — bukan route React (frontend 100% di belakang login, tanpa client-side routing) dan bukan file statis ala `landing/public/blog/*.html`, karena Open Graph tags wajib ada di HTML mentah tanpa JS supaya preview link WhatsApp benar, dan backend adalah satu-satunya proses live di stack ini yang bisa mencerminkan perubahan publish/edit vendor secara langsung.
+
+**Pencarian ketersediaan per tanggal** (ditambahkan segera setelah rilis awal) — halaman `/toko/{slug}` juga punya date-picker yang menampilkan **jumlah unit tersisa persis** per alat untuk tanggal yang dipilih, lewat fetch JS ke `GET /api/public/etalase/{slug}/availability` (RPC `get_public_availability`, migration 020). Ini **pembalikan sadar** dari sikap awal "`total_units` selalu privat, cuma ajakan 'Hubungi kami untuk cek ketersediaan'" — vendor pemilik produk (bukan hasil observasi/asumsi Claude) secara eksplisit memilih exposure paling terbuka dari tiga opsi yang ditawarkan (tanpa cek / status kasar tersedia-terbatas-penuh / jumlah persis). Kalau nanti mau ditarik lagi ke exposure lebih tertutup, lihat komentar keputusan di `migrations/020_public_availability_search.sql`.
+
 ## 7. Skema database
 
 Skema lengkap dan RLS policy final ada di `skema-final.sql` (bawa ke folder migrations). Poin-poin kunci:
@@ -106,13 +110,13 @@ Skema lengkap dan RLS policy final ada di `skema-final.sql` (bawa ke folder migr
 
 ## 8. Non-goals (sengaja belum dikerjakan)
 
-- Marketplace publik / listing lintas vendor
+- Marketplace publik / listing lintas vendor (Rimbasewa) — pencarian/browsing lintas vendor, perbandingan antar vendor, sistem matching. Etalase Online (bagian 6) murni satu halaman per satu vendor dari data yang sudah mereka input sendiri, bukan cikal-bakal ini.
 - Native mobile app (Android/iOS)
 - Offline-first / PWA caching agresif
 - Manajemen multi-cabang / multi-karyawan per vendor
 - Tabel wilayah di luar Malang Raya
 - Level kecamatan di data wilayah
-- Storefront online publik per-vendor + payment gateway (`app.sewalog.com/[nama-toko]`) — dievaluasi Agustus 2026, **ditunda bukan ditolak**. Alasan & syarat lengkap sebelum dibangun ada di `research/online-checkout-payment-roadmap-2026-08.md` (ringkas: nol bukti kebutuhan nyata dari vendor pilot, integrasi pembayaran Bilbo-Outdoors sendiri — kasus lebih sederhana — belum stabil untuk pelanggan asli, dan pertanyaan lisensi PJP dari Bank Indonesia belum terjawab, butuh opini hukum tertulis sebelum lanjut). Ada tab **Toko Online** (owner-only) di UI sebagai fake-door — cuma penjelasan rencana + tombol "Tertarik? Kasih Tahu Kami" ke WhatsApp, bukan fitur sungguhan — dipakai buat lihat sinyal minat vendor pilot secara murah sebelum commit ke pembangunan aslinya (syarat #2 di roadmap).
+- **Toko online berbayar per-vendor + payment gateway/checkout** (`app.sewalog.com/[nama-toko]` dengan transaksi/pembayaran online sungguhan, bukan cuma etalase info) — dievaluasi Agustus 2026, **ditunda bukan ditolak**. Alasan & syarat lengkap sebelum dibangun ada di `research/online-checkout-payment-roadmap-2026-08.md` (ringkas: nol bukti kebutuhan nyata dari vendor pilot, integrasi pembayaran Bilbo-Outdoors sendiri — kasus lebih sederhana — belum stabil untuk pelanggan asli, dan pertanyaan lisensi PJP dari Bank Indonesia belum terjawab, butuh opini hukum tertulis sebelum lanjut). Ada tab **Toko Online** (owner-only) di UI sebagai fake-door — cuma penjelasan rencana + tombol "Tertarik? Kasih Tahu Kami" ke WhatsApp, bukan fitur sungguhan — dipakai buat lihat sinyal minat vendor pilot secara murah sebelum commit ke pembangunan aslinya (syarat #2 di roadmap). **Catatan: halaman info/katalog publik per-vendor TANPA pembayaran sudah dibangun terpisah sebagai fitur "Etalase Online" (lihat bagian 6)** — non-goal di baris ini murni soal transaksi/pembayaran online sungguhan, bukan soal ada-tidaknya halaman publik itu sendiri.
 
 ## Pembayaran & Legal
 

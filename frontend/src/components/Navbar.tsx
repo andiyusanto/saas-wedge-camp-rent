@@ -2,7 +2,7 @@ import { Calendar, ShieldAlert, Package, Plus, LogOut, Users, BookOpen, Store, H
 import { ScrollableRow } from './ScrollableRow';
 import type { MemberRole } from '../hooks/useBusiness';
 
-export type Tab = 'kalender' | 'tracking' | 'alat' | 'tim' | 'riwayat' | 'toko-online' | 'panduan';
+export type Tab = 'kalender' | 'tracking' | 'alat' | 'tim' | 'riwayat' | 'etalase-online' | 'toko-online' | 'panduan';
 
 const TABS: { id: Tab; label: string; icon: typeof Calendar; ownerOnly?: boolean }[] = [
   { id: 'kalender', label: 'Kalender Ketersediaan', icon: Calendar },
@@ -10,6 +10,12 @@ const TABS: { id: Tab; label: string; icon: typeof Calendar; ownerOnly?: boolean
   { id: 'alat', label: 'Katalog & Stok Alat', icon: Package },
   { id: 'tim', label: 'Kelola Usaha', icon: Users, ownerOnly: true },
   { id: 'riwayat', label: 'Riwayat Transaksi', icon: History, ownerOnly: true },
+  // Dua tab ini SENGAJA dipisah, bukan digabung — "Etalase" (lihat-lihat,
+  // sudah bisa dipakai sekarang, gratis) vs "Toko" (transaksi sungguhan,
+  // masih rencana masa depan yang dievaluasi) — lihat komentar di
+  // OnlineStoreScreen.tsx & EtalaseOnlineScreen.tsx. Ditaruh berdekatan
+  // di navbar supaya hubungannya tetap terasa tanpa disatukan.
+  { id: 'etalase-online', label: 'Etalase Online', icon: Store, ownerOnly: true },
   { id: 'toko-online', label: 'Toko Online', icon: Globe, ownerOnly: true },
   { id: 'panduan', label: 'Panduan', icon: BookOpen },
 ];

@@ -1,5 +1,19 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+// Dipindah ke sini (dari routes/availability.ts) supaya bisa dipakai ulang
+// oleh routes/etalase.ts (pencarian ketersediaan publik di Etalase Online)
+// tanpa duplikasi logika tier "tersedia/sisa sedikit/penuh" — dua tempat
+// itu WAJIB selalu sepakat soal kapan status berubah warna.
+export const LOW_STOCK_RATIO = 0.2;
+
+export type AvailabilityStatus = 'tersedia' | 'sisa_sedikit' | 'penuh';
+
+export function computeAvailabilityStatus(remaining: number, totalUnits: number): AvailabilityStatus {
+  if (remaining <= 0) return 'penuh';
+  const threshold = Math.max(1, Math.floor(totalUnits * LOW_STOCK_RATIO));
+  return remaining <= threshold ? 'sisa_sedikit' : 'tersedia';
+}
+
 export type BookingItemRow = {
   item_id: string;
   quantity: number;

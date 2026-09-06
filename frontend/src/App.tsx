@@ -14,6 +14,7 @@ import { TeamScreen } from './components/TeamScreen';
 import { HistoryScreen } from './components/HistoryScreen';
 import { GuideScreen } from './components/GuideScreen';
 import { OnlineStoreScreen } from './components/OnlineStoreScreen';
+import { EtalaseOnlineScreen } from './components/EtalaseOnlineScreen';
 import { Navbar } from './components/Navbar';
 import type { Tab } from './components/Navbar';
 
@@ -37,7 +38,11 @@ function App() {
   // baru saja diturunkan dari owner ke karyawan oleh pemilik lain) — Navbar
   // sendiri sudah menyembunyikan tab-nya, ini cuma jaga-jaga isi <main>.
   useEffect(() => {
-    if ((tab === 'tim' || tab === 'riwayat' || tab === 'toko-online') && role !== null && role !== 'owner') {
+    if (
+      (tab === 'tim' || tab === 'riwayat' || tab === 'etalase-online' || tab === 'toko-online') &&
+      role !== null &&
+      role !== 'owner'
+    ) {
       setTab('kalender');
     }
   }, [tab, role]);
@@ -113,6 +118,9 @@ function App() {
           <TeamScreen session={session} businessId={business.id} business={business} onSaveBusiness={updateBusiness} />
         )}
         {tab === 'riwayat' && role === 'owner' && <HistoryScreen businessId={business.id} />}
+        {tab === 'etalase-online' && role === 'owner' && (
+          <EtalaseOnlineScreen businessId={business.id} businessName={business.name} businessPhone={business.phone} />
+        )}
         {tab === 'toko-online' && role === 'owner' && <OnlineStoreScreen businessName={business.name} />}
         {tab === 'panduan' && <GuideScreen businessName={business.name} />}
       </main>

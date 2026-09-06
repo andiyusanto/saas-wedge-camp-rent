@@ -100,7 +100,8 @@ const TOC: { id: string; num: string; title: string }[] = [
   { id: 'g-5', num: '5', title: 'Transaksi Aktif' },
   { id: 'g-6', num: '6', title: 'Kelola Usaha' },
   { id: 'g-7', num: '7', title: 'Riwayat Transaksi' },
-  { id: 'g-8', num: '8', title: 'Toko Online' },
+  { id: 'g-8', num: '8', title: 'Etalase Online' },
+  { id: 'g-9', num: '9', title: 'Toko Online' },
   { id: 'g-a', num: 'A', title: 'Catatan Penting' },
 ];
 
@@ -307,14 +308,41 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         <Note>Sama seperti Kelola Usaha, tab ini cuma terlihat dan bisa diakses oleh pemilik.</Note>
       </Section>
 
-      <Section id="g-8" num="8" title="Toko Online" kicker="Belum jadi fitur — halaman ini buat lihat seberapa banyak pemilik usaha yang tertarik.">
+      <Section id="g-8" num="8" title="Etalase Online" kicker="Halaman publik read-only berisi katalog alat & kontak usahamu — sudah bisa dipakai sekarang, gratis, tanpa login.">
         <p>
-          Tab ini menjelaskan rencana <strong>link toko online sendiri</strong> per usaha (mis.{' '}
-          <span className="font-mono text-xs">app.sewalog.com/nama-tokomu</span>) supaya pelanggan bisa lihat
-          ketersediaan dan transaksi sendiri tanpa chat WhatsApp dulu. Fiturnya <strong>belum dibangun</strong> —
-          tab ini sengaja ditampilkan lebih dulu buat lihat seberapa banyak pemilik usaha yang tertarik, lewat
-          tombol <Ui>Tertarik? Kasih Tahu Kami</Ui> yang membuka WhatsApp.
+          Nyalakan toggle <Ui>Aktifkan Etalase Online</Ui> untuk dapat link publik (mis.{' '}
+          <span className="font-mono text-xs">.../toko/nama-usahamu</span>) yang bisa dibagikan ke siapa saja lewat
+          WhatsApp/Instagram bio — dibuka tanpa perlu login, menampilkan nama usaha, kota, deskripsi, alamat, jam
+          operasional, tombol WhatsApp, dan katalog alat (foto, kategori, harga per hari). Pengunjung juga bisa pilih
+          tanggal di halaman itu untuk lihat jumlah unit tersisa per alat pada tanggal tersebut.
         </p>
+        <Note>
+          <strong>Ini murni etalase informasi + pencarian ketersediaan, bukan toko online</strong> — tidak ada
+          keranjang, pemesanan, atau checkout di halaman publiknya. Calon penyewa yang tertarik tetap diarahkan chat
+          WhatsApp untuk transaksi, sama seperti alur manual yang sudah berjalan sekarang — bedanya sekarang mereka
+          bisa cek dulu sisa unitnya sebelum chat.
+        </Note>
+        <p>
+          Slug (bagian akhir link) otomatis terisi dari nama usaha saat pertama diaktifkan — bisa diedit manual,
+          asal masih unik dan cuma huruf kecil/angka/tanda hubung. Nomor WhatsApp publik di sini boleh beda dari
+          nomor di <Ui>Info Usaha</Ui> (bagian 6), kalau usahamu punya nomor CS terpisah.
+        </p>
+        <Note>Sama seperti Kelola Usaha, tab ini cuma terlihat dan bisa diakses oleh pemilik.</Note>
+      </Section>
+
+      <Section id="g-9" num="9" title="Toko Online" kicker="Belum jadi fitur — halaman ini buat lihat seberapa banyak pemilik usaha yang tertarik.">
+        <p>
+          Tab ini menjelaskan rencana <strong>toko online berbayar</strong> per usaha (mis.{' '}
+          <span className="font-mono text-xs">app.sewalog.com/nama-tokomu</span>) supaya pelanggan bisa lihat
+          ketersediaan dan transaksi <strong>sekaligus bayar online</strong> sendiri tanpa chat WhatsApp dulu.
+          Fiturnya <strong>belum dibangun</strong> — tab ini sengaja ditampilkan lebih dulu buat lihat seberapa
+          banyak pemilik usaha yang tertarik, lewat tombol <Ui>Tertarik? Kasih Tahu Kami</Ui> yang membuka WhatsApp.
+        </p>
+        <Note>
+          Beda dari <Ui>Etalase Online</Ui> (bagian 8) yang murni etalase informasi dan sudah bisa dipakai sekarang
+          — tab ini soal transaksi/pembayaran online sungguhan, yang butuh evaluasi lebih dulu (lisensi, kesiapan
+          pilot) sebelum dibangun.
+        </Note>
         <Note>Sama seperti Kelola Usaha, tab ini cuma terlihat dan bisa diakses oleh pemilik.</Note>
       </Section>
 
