@@ -56,8 +56,17 @@ function formatIDR(amount: number): string {
 // Static Site) — render HTML string on-demand di sini per request selalu
 // mencerminkan data ter-update, dan tetap memenuhi syarat OG-tanpa-JS
 // karena responsenya HTML mentah biasa, bukan hasil client-side render.
-router.get('/toko/:slug', async (req, res) => {
-  const slug = req.params.slug;
+// TOKO_PUBLIC_HOST = hostname custom domain (mis. "toko.sewalog.com") yang
+// dihubungkan ke Web Service backend ini di Render, KHUSUS buat Etalase
+// Online — supaya link yang dibagikan vendor ke pelanggannya berbentuk
+// "toko.sewalog.com/{slug}", bukan "api.sewalog.com/toko/{slug}" (subdomain
+// "api" salah kesan buat halaman yang justru dilihat pelanggan, bukan
+// dipanggil programatik). SATU Web Service Express yang sama tetap
+// menjawab kedua domain (bisa dua Custom Domain sekaligus di Render), jadi
+// dibedakan lewat host, bukan proses/deploy terpisah.
+const TOKO_PUBLIC_HOST = process.env.TOKO_PUBLIC_HOST;
+
+async function handleTokoRequest(req: import('express').Request, res: import('express').Response, slug: string) {
   const supabase = createAnonClient();
 
   // get_public_page() (migration 019) SECURITY DEFINER, sudah memfilter
@@ -72,6 +81,26 @@ router.get('/toko/:slug', async (req, res) => {
   }
 
   res.type('html').send(renderPage(data as PublicPageData, slug, req));
+}
+
+// Jalur dev/fallback — selalu aktif di host manapun (termasuk
+// api.sewalog.com kalau ada yang masih pakai link lama, dan localhost saat
+// dev karena TOKO_PUBLIC_HOST biasanya belum di-set di situ).
+router.get('/toko/:slug', async (req, res) => {
+  await handleTokoRequest(req, res, req.params.slug);
+});
+
+// Jalur publik utama produksi: root path di custom domain toko.sewalog.com
+// (mis. "toko.sewalog.com/jawa-timur-outdoor"). Digerbangi ketat oleh host
+// supaya TIDAK aktif di api.sewalog.com/domain lain — request root-path
+// satu-segmen macam "/favicon.ico" di host lain harus tetap 404 biasa, bukan
+// ketimpa jadi pencarian slug.
+router.get('/:slug', async (req, res, next) => {
+  if (!TOKO_PUBLIC_HOST || req.hostname !== TOKO_PUBLIC_HOST) {
+    next();
+    return;
+  }
+  await handleTokoRequest(req, res, req.params.slug);
 });
 
 // Pencarian ketersediaan per tanggal — JSON, dipanggil lewat fetch() dari
@@ -122,9 +151,25 @@ function renderNotFound(): string {
 </html>`;
 }
 
-function renderPage(page: PublicPageData, slug: string, req: import('express').Request): string {
+// Canonical/og:url SENGAJA selalu mengarah ke SATU bentuk URL (bukan ikut
+// persis bagaimana request ini datang) — kalau halaman yang sama bisa
+// diakses dari toko.sewalog.com/{slug} MAUPUN api.sewalog.com/toko/{slug}
+// (jalur dev/fallback, lihat komentar TOKO_PUBLIC_HOST di atas), canonical
+// yang ikut-ikutan berubah per request itu sendiri kontradiktif dengan
+// konsep "canonical". Kalau TOKO_PUBLIC_HOST sudah di-set (production),
+// selalu pakai bentuk toko.sewalog.com/{slug} apapun jalur yang benar-benar
+// dipakai pengunjung. Kalau belum (dev lokal, custom domain belum
+// disambungkan), fallback ke bentuk /toko/{slug} di host request saat ini.
+function resolvePageUrl(req: import('express').Request, slug: string): string {
+  if (TOKO_PUBLIC_HOST) {
+    return `https://${TOKO_PUBLIC_HOST}/${slug}`;
+  }
   const baseUrl = (process.env.PUBLIC_BASE_URL ?? `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
-  const pageUrl = `${baseUrl}/toko/${slug}`;
+  return `${baseUrl}/toko/${slug}`;
+}
+
+function renderPage(page: PublicPageData, slug: string, req: import('express').Request): string {
+  const pageUrl = resolvePageUrl(req, slug);
 
   const itemWithPhoto = page.items.find((item) => item.image_url);
   const ogImage = itemWithPhoto?.image_url ?? FALLBACK_OG_IMAGE;

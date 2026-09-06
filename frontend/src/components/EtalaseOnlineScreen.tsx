@@ -8,6 +8,15 @@ import { API_BASE_URL } from '../lib/api';
 
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
+// VITE_TOKO_PUBLIC_BASE_URL = domain publik Etalase Online kalau custom
+// domain toko.sewalog.com sudah disambungkan (lihat backend/.env.example,
+// TOKO_PUBLIC_HOST — dua env var ini HARUS konsisten, satu dipakai backend
+// buat routing+OG tags, satu dipakai di sini cuma buat menampilkan link
+// yang benar ke vendor). Kalau belum di-set (dev lokal), fallback ke
+// {API_BASE_URL}/toko — cocok dengan jalur /toko/:slug yang selalu aktif
+// di backend apapun konfigurasinya.
+const TOKO_BASE_URL = import.meta.env.VITE_TOKO_PUBLIC_BASE_URL ?? `${API_BASE_URL}/toko`;
+
 export function EtalaseOnlineScreen({
   businessId,
   businessName,
@@ -53,7 +62,7 @@ export function EtalaseOnlineScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, page]);
 
-  const publicUrl = page?.published && page.slug ? `${API_BASE_URL}/toko/${page.slug}` : null;
+  const publicUrl = page?.published && page.slug ? `${TOKO_BASE_URL}/${page.slug}` : null;
 
   async function handleCopy() {
     if (!publicUrl) return;
@@ -148,7 +157,7 @@ export function EtalaseOnlineScreen({
                 <Sparkles className="w-4 h-4" />
               </button>
             </div>
-            <span className="text-[11px] text-[#6E6853]">Link jadinya: {API_BASE_URL}/toko/{slugify(slug) || '...'}</span>
+            <span className="text-[11px] text-[#6E6853]">Link jadinya: {TOKO_BASE_URL}/{slugify(slug) || '...'}</span>
           </label>
 
           <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
