@@ -24,13 +24,26 @@ export function usedUnitsOn(bookingItems: BookingItemRow[], itemId: string, date
   return bookingItems
     .filter((bi) => {
       const booking = bi.bookings;
-      return (
-        bi.item_id === itemId &&
-        booking !== null &&
-        ACTIVE_STATUSES.has(booking.status) &&
-        booking.start_date <= dateStr &&
-        booking.end_date >= dateStr
-      );
+      if (!booking || bi.item_id !== itemId) return false;
+      if (!ACTIVE_STATUSES.has(booking.status)) return false;
+      if (booking.start_date > dateStr) return false;
+
+      // 'aktif' = barang sudah diambil fisik (langsung saat dibuat kalau
+      // start_date <= hari ini, atau lewat "Tandai Barang Diambil" untuk
+      // booking yang dipesan duluan) tapi BELUM ditandai kembali — blokir
+      // TANPA batas end_date sampai benar-benar diproses lewat Proses
+      // Pengembalian. Sebelumnya end_date jadi batas keras buat semua
+      // status, jadi begitu tanggal kalender lewat end_date, alat yang
+      // masih di tangan pelanggan telat (belum diproses) muncul balik
+      // "tersedia penuh" — bisa didobel-bookingkan padahal fisiknya belum
+      // kembali (insiden serupa dan sudah diperbaiki di Bilbo-Outdoors,
+      // 2026-09-02 — lihat memory bug-scenario-comparison-framework).
+      if (booking.status === 'aktif') return true;
+
+      // 'dipesan' (belum pernah diambil sama sekali) SENGAJA tetap dibatasi
+      // end_date — no-show yang tidak pernah diambil tidak boleh mengunci
+      // stok selamanya, karena barangnya fisik belum pernah keluar toko.
+      return booking.end_date >= dateStr;
     })
     .reduce((sum, bi) => sum + bi.quantity, 0);
 }
