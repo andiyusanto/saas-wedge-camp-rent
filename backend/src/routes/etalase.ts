@@ -236,13 +236,22 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
     new Set(page.items.map((item) => item.category).filter((c): c is string => Boolean(c))),
   ).sort((a, b) => a.localeCompare(b, 'id'));
 
+  // Panah geser kiri/kanan meniru ScrollableRow.tsx (frontend/src/
+  // components/ScrollableRow.tsx) — dua tombol chevron di kiri-kanan
+  // baris pill yang scroll-nya sendiri, dipakai juga buat baris tab
+  // navbar in-app. Di sini plain button + scrollBy() vanilla JS, bukan
+  // komponen React, tapi UX-nya sama persis.
   const categoryFilterHtml =
     categories.length > 1
-      ? `<div class="cat-filter" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;margin-bottom:4px;">
-    <button type="button" class="cat-pill active" data-cat="">Semua</button>
-    ${categories
-      .map((cat) => `<button type="button" class="cat-pill" data-cat="${escapeHtml(cat)}">${escapeHtml(cat)}</button>`)
-      .join('\n    ')}
+      ? `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+    <button type="button" id="cat-scroll-left" aria-label="Geser ke kiri" style="flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid #DBD5C1;background:#FBFAF4;color:#26302B;font-weight:700;cursor:pointer;">&lsaquo;</button>
+    <div id="cat-filter" class="cat-filter" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;">
+      <button type="button" class="cat-pill active" data-cat="">Semua</button>
+      ${categories
+        .map((cat) => `<button type="button" class="cat-pill" data-cat="${escapeHtml(cat)}">${escapeHtml(cat)}</button>`)
+        .join('\n      ')}
+    </div>
+    <button type="button" id="cat-scroll-right" aria-label="Geser ke kanan" style="flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid #DBD5C1;background:#FBFAF4;color:#26302B;font-weight:700;cursor:pointer;">&rsaquo;</button>
   </div>`
       : '';
 
@@ -293,7 +302,13 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
 <style>
   * { box-sizing: border-box; }
   body { margin: 0; background: #F1EEE2; color: #26302B; font-family: system-ui, -apple-system, sans-serif; }
+  /* Mobile-first: 640px cukup untuk HP (mayoritas kunjungan, lihat
+     CLAUDE.md bagian 4), tapi tanpa breakpoint ini kolomnya tetap
+     640px di layar tablet/desktop juga — jadi pulau sempit dengan
+     banyak ruang kosong di kanan-kiri, bukan "responsive" beneran. */
   .wrap { max-width: 640px; margin: 0 auto; padding: 20px 16px 40px; }
+  @media (min-width: 700px) { .wrap { max-width: 860px; } }
+  @media (min-width: 1100px) { .wrap { max-width: 1100px; } }
   .items { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-top: 16px; }
   .cat-filter::-webkit-scrollbar { display: none; }
   .cat-filter { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
@@ -313,6 +328,23 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
   #lightbox-close {
     position: absolute; top: 16px; right: 16px; width: 36px; height: 36px; border-radius: 999px;
     border: none; background: #FBFAF4; color: #26302B; font-size: 1.1rem; font-weight: 700; cursor: pointer;
+  }
+  /* Kontrol cek-ketersediaan — dua input tanggal native lebar-instrinsik-
+     nya sendiri-sendiri lumayan besar (format mm/dd/yyyy), jadi di HP
+     sempit (di bawah 420px) ditumpuk vertikal + tombol full-width,
+     bukan dipaksa muat sebaris (lihat komentar mobile-first di atas). */
+  .avail-controls { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 4px; }
+  .avail-field { display: flex; flex-direction: column; gap: 3px; font-size: 0.7rem; color: #6E6853; font-weight: 700; flex: 1 1 130px; min-width: 0; }
+  .avail-field input {
+    padding: 8px 10px; border-radius: 10px; border: 1px solid #DBD5C1; background: #fff;
+    color: #26302B; font: inherit; width: 100%;
+  }
+  .avail-sep { color: #6E6853; font-size: 0.8rem; padding-bottom: 9px; }
+  #avail-check { padding: 8px 14px; border-radius: 10px; border: none; background: #2B4739; color: #fff; font-weight: 700; font-size: 0.8rem; cursor: pointer; flex-shrink: 0; }
+  @media (max-width: 420px) {
+    .avail-controls { flex-direction: column; align-items: stretch; }
+    .avail-sep { display: none; }
+    #avail-check { width: 100%; }
   }
 </style>
 </head>
@@ -335,11 +367,17 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
   <section>
     <h2 style="font-size:1rem;margin:0 0 4px;color:#26302B;">Katalog Alat</h2>
     <p style="margin:0 0 10px;font-size:0.8rem;color:#6E6853;">Pilih tanggal ambil &amp; kembali untuk cek sisa unit tersedia per alat sepanjang periode itu (butuh JavaScript aktif) — atau langsung hubungi kami lewat WhatsApp.</p>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px;">
-      <input type="date" id="avail-start" aria-label="Tanggal ambil" style="padding:8px 10px;border-radius:10px;border:1px solid #DBD5C1;background:#fff;color:#26302B;font:inherit;" />
-      <span style="color:#6E6853;font-size:0.8rem;">s/d</span>
-      <input type="date" id="avail-end" aria-label="Tanggal kembali" style="padding:8px 10px;border-radius:10px;border:1px solid #DBD5C1;background:#fff;color:#26302B;font:inherit;" />
-      <button type="button" id="avail-check" style="padding:8px 14px;border-radius:10px;border:none;background:#2B4739;color:#fff;font-weight:700;font-size:0.8rem;cursor:pointer;">Cek Ketersediaan</button>
+    <div class="avail-controls">
+      <label class="avail-field">
+        <span>Tanggal ambil</span>
+        <input type="date" id="avail-start" />
+      </label>
+      <span class="avail-sep">s/d</span>
+      <label class="avail-field">
+        <span>Tanggal kembali</span>
+        <input type="date" id="avail-end" />
+      </label>
+      <button type="button" id="avail-check">Cek Ketersediaan</button>
     </div>
     <p id="avail-status" style="margin:4px 0 0;font-size:0.75rem;color:#6E6853;min-height:1em;"></p>
     ${categoryFilterHtml}
@@ -395,6 +433,20 @@ document.addEventListener('keydown', function (e) {
       });
     });
   });
+
+  // Panah geser kiri/kanan buat baris pill kategori — sama persis
+  // scrollBy() yang dipakai ScrollableRow.tsx di app (tab navbar).
+  var catFilter = document.getElementById('cat-filter');
+  var catScrollLeft = document.getElementById('cat-scroll-left');
+  var catScrollRight = document.getElementById('cat-scroll-right');
+  if (catFilter && catScrollLeft && catScrollRight) {
+    catScrollLeft.addEventListener('click', function () {
+      catFilter.scrollBy({ left: -150, behavior: 'smooth' });
+    });
+    catScrollRight.addEventListener('click', function () {
+      catFilter.scrollBy({ left: 150, behavior: 'smooth' });
+    });
+  }
 
   var slug = ${JSON.stringify(slug)};
   var startInput = document.getElementById('avail-start');
