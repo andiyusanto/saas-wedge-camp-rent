@@ -225,14 +225,35 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
   if (page.public_phone) jsonLd.telephone = page.public_phone;
   if (itemWithPhoto?.image_url) jsonLd.image = itemWithPhoto.image_url;
 
+  // Kategori distinct, diurutkan — dipakai buat filter pill di bawah
+  // (mirip CategoryFilterTabs Bilbo-Outdoors, lihat
+  // ~/Bilbo-Outdoors/src/components/client/CategoryFilterTabs.tsx — tapi
+  // TANPA cart/quantity-selector yang ada di layar itu, karena itu bagian
+  // storefront+checkout Bilbo yang eksplisit BUKAN yang dibangun di sini).
+  // Filter murni show/hide sisi klien, tidak fetch ulang — semua item
+  // sudah ada di HTML ini sejak awal.
+  const categories = Array.from(
+    new Set(page.items.map((item) => item.category).filter((c): c is string => Boolean(c))),
+  ).sort((a, b) => a.localeCompare(b, 'id'));
+
+  const categoryFilterHtml =
+    categories.length > 1
+      ? `<div class="cat-filter" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;margin-bottom:4px;">
+    <button type="button" class="cat-pill active" data-cat="">Semua</button>
+    ${categories
+      .map((cat) => `<button type="button" class="cat-pill" data-cat="${escapeHtml(cat)}">${escapeHtml(cat)}</button>`)
+      .join('\n    ')}
+  </div>`
+      : '';
+
   const itemsHtml = page.items.length
     ? page.items
         .map((item) => {
           const details = [item.variant, item.size, item.color].filter(Boolean).join(' · ');
-          return `<div style="background:#FBFAF4;border:1px solid #DBD5C1;border-radius:16px;overflow:hidden;">
+          return `<div class="item-card" data-cat="${escapeHtml(item.category ?? '')}" style="background:#FBFAF4;border:1px solid #DBD5C1;border-radius:16px;overflow:hidden;">
   ${
     item.image_url
-      ? `<img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name)}" style="width:100%;height:160px;object-fit:cover;display:block;" loading="lazy" />`
+      ? `<img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name)}" class="zoomable" style="width:100%;height:160px;object-fit:cover;display:block;" loading="lazy" onclick="openZoom(this)" />`
       : `<div style="width:100%;height:160px;background:#E6E1D2;"></div>`
   }
   <div style="padding:12px;">
@@ -274,6 +295,25 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
   body { margin: 0; background: #F1EEE2; color: #26302B; font-family: system-ui, -apple-system, sans-serif; }
   .wrap { max-width: 640px; margin: 0 auto; padding: 20px 16px 40px; }
   .items { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-top: 16px; }
+  .cat-filter::-webkit-scrollbar { display: none; }
+  .cat-filter { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .cat-pill {
+    flex-shrink: 0; padding: 6px 14px; border-radius: 999px; border: 1px solid #DBD5C1;
+    background: #FBFAF4; color: #6E6853; font-size: 0.75rem; font-weight: 700; cursor: pointer;
+    white-space: nowrap; font: inherit;
+  }
+  .cat-pill.active { background: #2B4739; border-color: #2B4739; color: #fff; }
+  .zoomable { cursor: zoom-in; transition: opacity 0.15s; }
+  .zoomable:hover, .zoomable:active { opacity: 0.85; }
+  #lightbox {
+    display: none; position: fixed; inset: 0; background: rgba(38,48,43,0.9); z-index: 50;
+    align-items: center; justify-content: center; padding: 20px;
+  }
+  #lightbox img { max-width: 100%; max-height: 85vh; object-fit: contain; border-radius: 8px; }
+  #lightbox-close {
+    position: absolute; top: 16px; right: 16px; width: 36px; height: 36px; border-radius: 999px;
+    border: none; background: #FBFAF4; color: #26302B; font-size: 1.1rem; font-weight: 700; cursor: pointer;
+  }
 </style>
 </head>
 <body>
@@ -302,6 +342,7 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
       <button type="button" id="avail-check" style="padding:8px 14px;border-radius:10px;border:none;background:#2B4739;color:#fff;font-weight:700;font-size:0.8rem;cursor:pointer;">Cek Ketersediaan</button>
     </div>
     <p id="avail-status" style="margin:4px 0 0;font-size:0.75rem;color:#6E6853;min-height:1em;"></p>
+    ${categoryFilterHtml}
     <div class="items">
       ${itemsHtml}
     </div>
@@ -312,8 +353,49 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
   </footer>
 </div>
 
+<div id="lightbox" onclick="closeZoom(event)">
+  <button type="button" id="lightbox-close" onclick="closeZoom(event)" aria-label="Tutup">&times;</button>
+  <img id="lightbox-img" src="" alt="" />
+</div>
+
 <script>
+// Global (BUKAN di dalam IIFE di bawah) karena dipanggil lewat atribut
+// onclick inline di HTML (openZoom(this)/closeZoom(event)) — attribute
+// handler cuma bisa menemukan identifier di scope global.
+function openZoom(imgEl) {
+  var lightbox = document.getElementById('lightbox');
+  var lightboxImg = document.getElementById('lightbox-img');
+  lightboxImg.src = imgEl.src;
+  lightboxImg.alt = imgEl.alt;
+  lightbox.style.display = 'flex';
+}
+function closeZoom(e) {
+  // Cuma tutup kalau klik di overlay/tombol close itu sendiri, bukan di
+  // gambar yang lagi di-zoom (klik gambar tidak boleh ikut menutup).
+  if (e.target.id !== 'lightbox' && e.target.id !== 'lightbox-close') return;
+  document.getElementById('lightbox').style.display = 'none';
+}
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') document.getElementById('lightbox').style.display = 'none';
+});
+
 (function () {
+  // Filter kategori — murni show/hide sisi klien, semua item sudah ada
+  // di HTML ini sejak awal (lihat komentar categoryFilterHtml di
+  // renderPage()), tidak fetch ulang apapun.
+  var catPills = document.querySelectorAll('.cat-pill');
+  var itemCards = document.querySelectorAll('.item-card');
+  catPills.forEach(function (pill) {
+    pill.addEventListener('click', function () {
+      catPills.forEach(function (p) { p.classList.remove('active'); });
+      pill.classList.add('active');
+      var cat = pill.getAttribute('data-cat');
+      itemCards.forEach(function (card) {
+        card.style.display = !cat || card.getAttribute('data-cat') === cat ? '' : 'none';
+      });
+    });
+  });
+
   var slug = ${JSON.stringify(slug)};
   var startInput = document.getElementById('avail-start');
   var endInput = document.getElementById('avail-end');
