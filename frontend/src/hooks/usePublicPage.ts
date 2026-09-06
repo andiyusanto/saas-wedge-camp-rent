@@ -89,5 +89,19 @@ export function usePublicPage(businessId: string | null) {
     return { error: null };
   }
 
-  return { page, regencies, loading, refresh, savePublicPage };
+  // Cek live sambil ketik (dipanggil debounced dari EtalaseOnlineScreen) —
+  // lewat RPC is_slug_available() (migration 022), SECURITY DEFINER, karena
+  // RLS public_pages cuma izinkan owner lihat baris miliknya sendiri: tanpa
+  // RPC ini, slug yang dipakai business LAIN akan salah kelihatan
+  // "tersedia" di sisi klien (baru ketahuan bentrok saat Simpan, lewat
+  // unique constraint di savePublicPage() di atas — itu tetap jadi
+  // penjaga utama, ini cuma feedback lebih awal).
+  async function checkSlugAvailable(slug: string): Promise<{ available: boolean | null; error: string | null }> {
+    if (!supabase || !businessId) return { available: null, error: 'Belum login' };
+    const { data, error } = await supabase.rpc('is_slug_available', { p_slug: slug, p_business_id: businessId });
+    if (error) return { available: null, error: error.message };
+    return { available: data as boolean, error: null };
+  }
+
+  return { page, regencies, loading, refresh, savePublicPage, checkSlugAvailable };
 }

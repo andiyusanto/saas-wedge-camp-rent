@@ -326,8 +326,10 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         </Note>
         <p>
           Slug (bagian akhir link) otomatis terisi dari nama usaha saat pertama diaktifkan — bisa diedit manual,
-          asal masih unik dan cuma huruf kecil/angka/tanda hubung. Nomor WhatsApp publik di sini boleh beda dari
-          nomor di <Ui>Info Usaha</Ui> (bagian 6), kalau usahamu punya nomor CS terpisah.
+          asal masih unik dan cuma huruf kecil/angka/tanda hubung. Kalau usaha lain sudah pakai slug yang sama
+          (mis. nama usaha yang mirip), langsung kelihatan sambil ketik ("Slug ini sudah dipakai usaha lain") —
+          tidak perlu tunggu sampai tekan Simpan. Nomor WhatsApp publik di sini boleh beda dari nomor di{' '}
+          <Ui>Info Usaha</Ui> (bagian 6), kalau usahamu punya nomor CS terpisah.
         </p>
         <Note>Sama seperti Kelola Usaha, tab ini cuma terlihat dan bisa diakses oleh pemilik.</Note>
       </Section>

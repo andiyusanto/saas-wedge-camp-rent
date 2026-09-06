@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Store, CheckCircle2, ExternalLink, Copy, Check, Sparkles } from 'lucide-react';
+import { Store, CheckCircle2, ExternalLink, Copy, Check, Sparkles, Loader2, XCircle } from 'lucide-react';
 import { usePublicPage } from '../hooks/usePublicPage';
 import type { PublicPageInput } from '../hooks/usePublicPage';
 import { slugify } from '../utils/formatters';
@@ -26,10 +26,13 @@ export function EtalaseOnlineScreen({
   businessName: string;
   businessPhone: string | null;
 }) {
-  const { page, regencies, loading, savePublicPage } = usePublicPage(businessId);
+  const { page, regencies, loading, savePublicPage, checkSlugAvailable } = usePublicPage(businessId);
 
   const [published, setPublished] = useState(false);
   const [slug, setSlug] = useState('');
+  const [slugStatus, setSlugStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
+  const slugDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const slugCheckSeq = useRef(0);
   const [description, setDescription] = useState('');
   const [address, setAddress] = useState('');
   const [regencyId, setRegencyId] = useState('');
@@ -59,10 +62,46 @@ export function EtalaseOnlineScreen({
       setSlug(slugify(businessName));
       setPublicPhone(businessPhone ?? '');
     }
+    setSlugStatus('idle');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, page]);
 
   const publicUrl = page?.published && page.slug ? `${TOKO_BASE_URL}/${page.slug}` : null;
+
+  // Debounced (300ms, sama seperti pola pencarian pelanggan di
+  // NewBookingModal.tsx) — bukan validasi utama (unique constraint di DB +
+  // savePublicPage() tetap penjaga sebenarnya, lihat komentar di
+  // usePublicPage.ts), cuma feedback lebih awal sebelum Simpan.
+  function queueSlugCheck(rawSlug: string) {
+    if (slugDebounceRef.current) clearTimeout(slugDebounceRef.current);
+
+    const candidate = slugify(rawSlug.trim());
+    // Slug kosong, atau sama persis dengan yang sudah tersimpan buat
+    // business ini sendiri — tidak perlu dicek, jelas "tersedia" ke
+    // dirinya sendiri.
+    if (!candidate || candidate === page?.slug) {
+      setSlugStatus('idle');
+      return;
+    }
+
+    setSlugStatus('checking');
+    const seq = ++slugCheckSeq.current;
+    slugDebounceRef.current = setTimeout(async () => {
+      const { available, error: checkError } = await checkSlugAvailable(candidate);
+      if (seq !== slugCheckSeq.current) return; // ada input lebih baru, abaikan hasil basi ini
+      if (checkError || available === null) {
+        setSlugStatus('idle');
+        return;
+      }
+      setSlugStatus(available ? 'available' : 'taken');
+    }, 300);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (slugDebounceRef.current) clearTimeout(slugDebounceRef.current);
+    };
+  }, []);
 
   async function handleCopy() {
     if (!publicUrl) return;
@@ -144,13 +183,20 @@ export function EtalaseOnlineScreen({
               <input
                 type="text"
                 value={slug}
-                onChange={(e) => setSlug(e.target.value)}
+                onChange={(e) => {
+                  setSlug(e.target.value);
+                  queueSlugCheck(e.target.value);
+                }}
                 placeholder="jawa-timur-outdoor"
                 className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] font-mono text-sm focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
               />
               <button
                 type="button"
-                onClick={() => setSlug(slugify(businessName))}
+                onClick={() => {
+                  const auto = slugify(businessName);
+                  setSlug(auto);
+                  queueSlugCheck(auto);
+                }}
                 title="Isi otomatis dari nama usaha"
                 className="shrink-0 px-2.5 rounded-lg bg-white border border-[#DBD5C1] text-[#2B4739] hover:bg-[#E8EFEA] transition"
               >
@@ -158,6 +204,21 @@ export function EtalaseOnlineScreen({
               </button>
             </div>
             <span className="text-[11px] text-[#6E6853]">Link jadinya: {TOKO_BASE_URL}/{slugify(slug) || '...'}</span>
+            {slugStatus === 'checking' && (
+              <span className="flex items-center gap-1 text-[11px] font-semibold text-[#6E6853]">
+                <Loader2 className="w-3 h-3 animate-spin" /> Mengecek ketersediaan slug...
+              </span>
+            )}
+            {slugStatus === 'available' && (
+              <span className="flex items-center gap-1 text-[11px] font-semibold text-[#2B4739]">
+                <Check className="w-3 h-3" /> Slug tersedia.
+              </span>
+            )}
+            {slugStatus === 'taken' && (
+              <span className="flex items-center gap-1 text-[11px] font-semibold text-[#A8412E]">
+                <XCircle className="w-3 h-3" /> Slug ini sudah dipakai usaha lain, coba yang lain.
+              </span>
+            )}
           </label>
 
           <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
