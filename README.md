@@ -212,6 +212,6 @@ Backend yang sama (satu Web Service, satu proses) tetap menjawab baik `api`-styl
 
 Lihat CLAUDE.md bagian 8 untuk daftar lengkap non-goals. Yang relevan secara teknis:
 - Tabel `businesses` sengaja tidak punya RLS policy `delete` (mencegah kehilangan histori booking) — kalau perlu hapus data uji coba, lakukan lewat SQL Editor langsung.
-- Tabel `booking_status_history` (audit trail) sengaja append-only, tidak ada policy `update`/`delete` sama sekali — termasuk untuk data uji coba/demo. `scripts/seed-demo.mjs` sengaja didesain menutup transaksi lama lewat endpoint asli (bukan hard-delete) karena batasan ini.
+- Tabel `booking_status_history` (audit trail) sengaja append-only, tidak ada policy `update`/`delete` sama sekali — termasuk untuk data uji coba/demo. `scripts/seed-demo.mjs` sengaja didesain menutup transaksi lama lewat endpoint asli (bukan hard-delete) karena batasan ini. Konsekuensinya: booking lama menumpuk terus di akun demo tiap kali di-reset (bukan hilang) — kalau Riwayat Transaksi akun demo terasa penuh sesak booking `Dibatalkan` lama, jalankan `scripts/cleanup-demo-data.sql` sekali lewat Supabase SQL Editor (satu-satunya jalur yang bisa bypass batasan append-only di atas, scoped ketat ke satu `business_id` demo — jangan pernah dipakai ke data vendor asli), lalu reset ulang.
 - Belum ada manifest/ikon PWA — logo master ada di `frontend/public/logo.svg`, tinggal diekspor kalau fitur ini mau diaktifkan.
 - Belum ada rekap laporan, multi-cabang, atau marketplace publik.
