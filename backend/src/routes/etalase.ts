@@ -356,7 +356,7 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
     ${page.regency_name ? `<p style="margin:4px 0 0;color:#6E6853;font-size:0.875rem;">${escapeHtml(page.regency_name)}</p>` : ''}
     ${page.description ? `<p style="margin:10px 0 0;color:#26302B;line-height:1.5;">${escapeHtml(page.description)}</p>` : ''}
     ${page.address ? `<p style="margin:10px 0 0;color:#6E6853;font-size:0.875rem;">📍 ${escapeHtml(page.address)}</p>` : ''}
-    ${page.operating_hours ? `<p style="margin:4px 0 0;color:#6E6853;font-size:0.875rem;">🕒 ${escapeHtml(page.operating_hours)}</p>` : ''}
+    ${page.operating_hours ? `<p style="margin:4px 0 0;color:#6E6853;font-size:0.875rem;white-space:pre-line;">🕒 ${escapeHtml(page.operating_hours)}</p>` : ''}
     ${
       waUrl
         ? `<a href="${escapeHtml(waUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:14px;background:#2B4739;color:#fff;font-weight:700;font-size:0.875rem;padding:10px 18px;border-radius:12px;text-decoration:none;">Hubungi via WhatsApp</a>`

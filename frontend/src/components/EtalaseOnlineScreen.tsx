@@ -238,33 +238,36 @@ export function EtalaseOnlineScreen({
             />
           </label>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
-              Kota
-              <select
-                value={regencyId}
-                onChange={(e) => setRegencyId(e.target.value)}
-                className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
-              >
-                <option value="">— Pilih kota —</option>
-                {regencies.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
-              Jam operasional
-              <input
-                type="text"
-                value={operatingHours}
-                onChange={(e) => setOperatingHours(e.target.value)}
-                placeholder="Setiap hari 08.00–17.00"
-                className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
-              />
-            </label>
-          </div>
+          <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
+            Kota
+            <select
+              value={regencyId}
+              onChange={(e) => setRegencyId(e.target.value)}
+              className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+            >
+              <option value="">— Pilih kota —</option>
+              {regencies.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
+            Jam operasional
+            <textarea
+              value={operatingHours}
+              onChange={(e) => setOperatingHours(e.target.value)}
+              rows={3}
+              placeholder={'SENIN: 12.00–22.00 WIB\nSELASA-SABTU: 09.00–22.00 WIB\nMINGGU: 12.00–22.00 WIB'}
+              className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739] font-mono text-xs"
+            />
+            <span className="text-[11px] text-[#6E6853]">
+              Bebas format — satu baris ringkas ("Setiap hari 08.00–17.00") atau dipecah per hari kalau jamnya
+              beda-beda, seperti contoh di atas. Baris baru ikut tampil apa adanya di halaman publik.
+            </span>
+          </label>
 
           <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
             Alamat

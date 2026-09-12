@@ -348,7 +348,7 @@ export async function resetDemoData(): Promise<DemoResetResult> {
     description: 'Rental alat camping & outdoor terlengkap di Malang — tenda, sleeping bag, kompor, hingga carrier. Siap sewa harian, alat terawat.',
     address: 'Jl. Coba Sewalog No. 1, Malang',
     regency_id: malangRegency?.id ?? null,
-    operating_hours: 'Setiap hari 08.00–20.00 WIB',
+    operating_hours: 'SENIN: 12.00–22.00 WIB\nSELASA-SABTU: 09.00–22.00 WIB\nMINGGU: 12.00–22.00 WIB',
     public_phone: '081234567890',
   };
   if (existingPublicPage.length === 0) {

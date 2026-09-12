@@ -315,7 +315,9 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           Nyalakan toggle <Ui>Aktifkan Etalase Online</Ui> untuk dapat link publik (mis.{' '}
           <span className="font-mono text-xs">toko.sewalog.com/nama-usahamu</span>) yang bisa dibagikan ke siapa saja
           lewat WhatsApp/Instagram bio — dibuka tanpa perlu login, menampilkan nama usaha, kota, deskripsi, alamat,
-          jam operasional, tombol WhatsApp, dan katalog alat (foto, kategori, harga per hari). Kalau katalognya
+          jam operasional (boleh satu baris ringkas, atau dipecah per hari kalau jamnya beda-beda — mis. "SENIN:
+          12.00–22.00" di baris pertama, "SELASA-SABTU: 09.00–22.00" di baris berikutnya), tombol WhatsApp, dan
+          katalog alat (foto, kategori, harga per hari). Kalau katalognya
           punya lebih dari satu kategori, muncul pill filter di atas daftar alat supaya pengunjung bisa lompat
           langsung ke kategori yang dicari; foto tiap alat juga bisa di-zoom (tekan foto, muncul ukuran penuh)
           buat lihat detail sebelum tanya lebih lanjut. Pengunjung juga bisa isi tanggal ambil &amp; kembali di
