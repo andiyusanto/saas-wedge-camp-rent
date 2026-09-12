@@ -7,6 +7,7 @@ export type Business = {
   name: string;
   owner_name: string | null;
   phone: string | null;
+  address: string | null;
   late_tolerance_hours: number;
 };
 
@@ -14,6 +15,7 @@ export type BusinessUpdateInput = {
   name: string;
   owner_name: string | null;
   phone: string | null;
+  address: string | null;
   late_tolerance_hours: number;
 };
 
@@ -36,7 +38,7 @@ export function useBusiness(session: Session | null) {
     // RLS (members_select_own_business) sudah membatasi ke baris milik user ini.
     const { data } = await supabase
       .from('businesses')
-      .select('id, name, owner_name, phone, late_tolerance_hours')
+      .select('id, name, owner_name, phone, address, late_tolerance_hours')
       .maybeSingle();
 
     setBusiness(data);
@@ -75,6 +77,7 @@ export function useBusiness(session: Session | null) {
         name: input.name,
         owner_name: input.owner_name,
         phone: input.phone,
+        address: input.address,
         late_tolerance_hours: input.late_tolerance_hours,
       })
       .eq('id', business.id);

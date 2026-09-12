@@ -13,6 +13,7 @@ export function BusinessInfoSection({
   const [name, setName] = useState(business.name);
   const [ownerName, setOwnerName] = useState(business.owner_name ?? '');
   const [phone, setPhone] = useState(business.phone ?? '');
+  const [address, setAddress] = useState(business.address ?? '');
   const [toleranceHours, setToleranceHours] = useState(String(business.late_tolerance_hours));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +25,7 @@ export function BusinessInfoSection({
     setName(business.name);
     setOwnerName(business.owner_name ?? '');
     setPhone(business.phone ?? '');
+    setAddress(business.address ?? '');
     setToleranceHours(String(business.late_tolerance_hours));
   }, [business]);
 
@@ -41,6 +43,7 @@ export function BusinessInfoSection({
       name: name.trim(),
       owner_name: ownerName.trim() || null,
       phone: phone.trim() || null,
+      address: address.trim() || null,
       late_tolerance_hours: Math.max(0, Number(toleranceHours) || 0),
     });
 
@@ -102,6 +105,19 @@ export function BusinessInfoSection({
             />
           </label>
         </div>
+        <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
+          Alamat usaha
+          <textarea
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            rows={2}
+            placeholder="Jl. Contoh No. 1, Malang"
+            className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+          />
+          <span className="text-[11px] text-[#6E6853]">
+            Ikut tercetak di struk WhatsApp dan Nota Sewa cetak/PDF kalau diisi.
+          </span>
+        </label>
         <p className="text-[11px] text-[#6E6853]">
           Toleransi telat: berapa jam setelah janji kembali sebelum transaksi dianggap terlambat dan mulai kena denda.
         </p>

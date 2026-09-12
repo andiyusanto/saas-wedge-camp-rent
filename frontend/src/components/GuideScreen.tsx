@@ -249,9 +249,12 @@ export function GuideScreen({ businessName }: { businessName: string }) {
 
       <Section id="g-6" num="6" title="Kelola Usaha" kicker="Info usaha dan kelola staf, digabung jadi satu tab karena sama-sama urusan admin sesekali, bukan dipakai harian.">
         <p>
-          Bagian <Ui>Info Usaha</Ui> di paling atas tab ini untuk ubah nama usaha, nama pemilik, no. telepon, dan
-          toleransi telat (lihat bagian 1). Di bawahnya ada bagian <Ui>Kelola Karyawan</Ui> untuk undang staf lewat
-          link, tanpa perlu bikin username/password dari sisi pemilik:
+          Bagian <Ui>Info Usaha</Ui> di paling atas tab ini untuk ubah nama usaha, nama pemilik, no. telepon, alamat
+          usaha, dan toleransi telat (lihat bagian 1). Alamat di sini ikut tercetak otomatis di struk WhatsApp dan
+          Nota Sewa cetak/PDF kalau diisi — beda dari alamat di tab <Ui>Etalase Online</Ui> (bagian 8) yang tampil
+          publik ke siapa saja, alamat di sini murni buat kebutuhan internal/struk. Di bawahnya ada bagian{' '}
+          <Ui>Kelola Karyawan</Ui> untuk undang staf lewat link, tanpa perlu bikin username/password dari sisi
+          pemilik:
         </p>
         <Steps
           items={[
@@ -330,8 +333,10 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           Slug (bagian akhir link) otomatis terisi dari nama usaha saat pertama diaktifkan — bisa diedit manual,
           asal masih unik dan cuma huruf kecil/angka/tanda hubung. Kalau usaha lain sudah pakai slug yang sama
           (mis. nama usaha yang mirip), langsung kelihatan sambil ketik ("Slug ini sudah dipakai usaha lain") —
-          tidak perlu tunggu sampai tekan Simpan. Nomor WhatsApp publik di sini boleh beda dari nomor di{' '}
-          <Ui>Info Usaha</Ui> (bagian 6), kalau usahamu punya nomor CS terpisah.
+          tidak perlu tunggu sampai tekan Simpan. Alamat dan nomor WhatsApp publik di sini otomatis terisi awal dari{' '}
+          <Ui>Info Usaha</Ui> (bagian 6) — tapi begitu disimpan, keduanya independen, boleh diubah beda dari Info
+          Usaha kapan saja (mis. usahamu punya nomor CS terpisah, atau alamat publik yang sengaja beda dari alamat
+          internal di struk).
         </p>
         <Note>Sama seperti Kelola Usaha, tab ini cuma terlihat dan bisa diakses oleh pemilik.</Note>
       </Section>

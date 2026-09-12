@@ -111,7 +111,12 @@ function App() {
           <CalendarScreen key={`cal-${refreshSignal}`} session={session} onSelectBookItem={openNewBooking} />
         )}
         {tab === 'tracking' && (
-          <TrackingScreen key={`trk-${refreshSignal}`} session={session} businessName={business.name} />
+          <TrackingScreen
+            key={`trk-${refreshSignal}`}
+            session={session}
+            businessName={business.name}
+            businessAddress={business.address}
+          />
         )}
         {tab === 'alat' && <ItemsScreen businessId={business.id} session={session} />}
         {tab === 'tim' && role === 'owner' && (
@@ -119,7 +124,12 @@ function App() {
         )}
         {tab === 'riwayat' && role === 'owner' && <HistoryScreen businessId={business.id} />}
         {tab === 'etalase-online' && role === 'owner' && (
-          <EtalaseOnlineScreen businessId={business.id} businessName={business.name} businessPhone={business.phone} />
+          <EtalaseOnlineScreen
+            businessId={business.id}
+            businessName={business.name}
+            businessPhone={business.phone}
+            businessAddress={business.address}
+          />
         )}
         {tab === 'toko-online' && role === 'owner' && <OnlineStoreScreen businessName={business.name} />}
         {tab === 'panduan' && <GuideScreen businessName={business.name} />}

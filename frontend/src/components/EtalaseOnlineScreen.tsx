@@ -21,10 +21,12 @@ export function EtalaseOnlineScreen({
   businessId,
   businessName,
   businessPhone,
+  businessAddress,
 }: {
   businessId: string;
   businessName: string;
   businessPhone: string | null;
+  businessAddress: string | null;
 }) {
   const { page, regencies, loading, savePublicPage, checkSlugAvailable } = usePublicPage(businessId);
 
@@ -45,21 +47,25 @@ export function EtalaseOnlineScreen({
 
   // Sinkron field dari data tersimpan begitu selesai dimuat — kalau belum
   // pernah disimpan sama sekali (page === null), pre-isi slug dari nama
-  // usaha dan nomor WA publik dari Info Usaha, supaya vendor tidak mulai
-  // dari form kosong sama sekali (lihat poin 2 prompt: "minta vendor isi
-  // field yang belum ada kalau kosong").
+  // usaha, dan alamat/nomor WA publik dari Info Usaha, supaya vendor tidak
+  // mulai dari form kosong sama sekali (lihat poin 2 prompt: "minta vendor
+  // isi field yang belum ada kalau kosong"). Sama seperti nomor WA publik:
+  // ini cuma DEFAULT awal, sekali disimpan (bahkan sama persis nilainya)
+  // field ini jadi independen dari Info Usaha — ubah Info Usaha sesudahnya
+  // TIDAK ikut mengubah Etalase Online punya sendiri.
   useEffect(() => {
     if (loading) return;
     if (page) {
       setPublished(page.published);
       setSlug(page.slug ?? slugify(businessName));
       setDescription(page.description ?? '');
-      setAddress(page.address ?? '');
+      setAddress(page.address ?? businessAddress ?? '');
       setRegencyId(page.regency_id ?? '');
       setOperatingHours(page.operating_hours ?? '');
       setPublicPhone(page.public_phone ?? businessPhone ?? '');
     } else {
       setSlug(slugify(businessName));
+      setAddress(businessAddress ?? '');
       setPublicPhone(businessPhone ?? '');
     }
     setSlugStatus('idle');
@@ -268,6 +274,9 @@ export function EtalaseOnlineScreen({
               onChange={(e) => setAddress(e.target.value)}
               className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
             />
+            <span className="text-[11px] text-[#6E6853]">
+              Default terisi dari Info Usaha, tapi boleh diubah beda — dilihat siapa saja lewat halaman publik.
+            </span>
           </label>
 
           <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">

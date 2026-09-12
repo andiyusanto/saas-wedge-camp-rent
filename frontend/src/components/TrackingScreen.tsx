@@ -39,7 +39,15 @@ import {
 
 type StatusFilter = 'all' | 'overdue' | 'active' | 'pending_pickup';
 
-export function TrackingScreen({ session, businessName }: { session: Session; businessName: string }) {
+export function TrackingScreen({
+  session,
+  businessName,
+  businessAddress,
+}: {
+  session: Session;
+  businessName: string;
+  businessAddress: string | null;
+}) {
   const { bookings, toleranceHours, loading, error, refresh, cancelBooking, pickupBooking } = useTrackings(session);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -81,12 +89,12 @@ export function TrackingScreen({ session, businessName }: { session: Session; bu
 
   function handleShareWA(b: TrackingBooking) {
     if (!b.customer?.phone) return;
-    const text = generateWhatsAppReceipt(buildReceiptData(b, businessName));
+    const text = generateWhatsAppReceipt(buildReceiptData(b, businessName, businessAddress));
     window.open(getWhatsAppShareUrl(b.customer.phone, text), '_blank');
   }
 
   function handlePrintInvoice(b: TrackingBooking) {
-    setInvoiceData(buildReceiptData(b, businessName));
+    setInvoiceData(buildReceiptData(b, businessName, businessAddress));
   }
 
   return (

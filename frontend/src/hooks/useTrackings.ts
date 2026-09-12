@@ -28,7 +28,11 @@ type TrackingsResponse = { bookings: TrackingBooking[]; tolerance_hours: number 
 
 // Dipakai bareng oleh struk WA dan Nota Sewa (cetak/PDF) — satu sumber
 // pemetaan booking -> data struk, supaya keduanya konsisten.
-export function buildReceiptData(b: TrackingBooking, businessName: string): ReceiptData {
+export function buildReceiptData(
+  b: TrackingBooking,
+  businessName: string,
+  businessAddress?: string | null,
+): ReceiptData {
   const activeDeposit = b.deposits.find((d) => d.status === 'ditahan') ?? b.deposits[0];
   return {
     bookingNumber: b.booking_number ?? '-',
@@ -45,6 +49,7 @@ export function buildReceiptData(b: TrackingBooking, businessName: string): Rece
     status: b.is_pending_pickup ? 'dipesan' : 'aktif',
     fines: b.penalties,
     businessName,
+    businessAddress,
   };
 }
 

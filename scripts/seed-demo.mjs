@@ -148,6 +148,7 @@ async function main() {
         name: BUSINESS_NAME,
         owner_name: 'Pemilik Demo',
         phone: '081234567890',
+        address: 'Jl. Coba Sewalog No. 1, Malang',
       }),
     });
     await rest('business_members', ownerToken, {
