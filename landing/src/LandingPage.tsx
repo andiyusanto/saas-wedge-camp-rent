@@ -1,6 +1,17 @@
 import { useEffect } from 'react';
 import type { ComponentType, ReactNode } from 'react';
-import { Calendar, CalendarX, FileWarning, Plus, ShieldAlert, AlertOctagon, Search, Package, PlayCircle } from 'lucide-react';
+import {
+  Calendar,
+  CalendarX,
+  FileWarning,
+  Plus,
+  ShieldAlert,
+  AlertOctagon,
+  Search,
+  Package,
+  PlayCircle,
+  ExternalLink,
+} from 'lucide-react';
 import { waLink, WHATSAPP_DISPLAY } from './lib/whatsapp';
 
 const MSG_UMUM = 'Halo, saya pemilik rental alat kamping. Mau tanya-tanya soal Sewalog.';
@@ -38,10 +49,35 @@ const FAQ_ITEMS: { question: string; answer: string }[] = [
 
 const APP_URL = import.meta.env.VITE_APP_URL || 'http://localhost:5173';
 
+// Slug demo tetap (scripts/seed-demo.mjs) yang sengaja dipakai buat verifikasi
+// /toko/{slug} tetap hidup — aman dipakai sebagai contoh publik di landing page.
+const ETALASE_DEMO_URL = 'https://toko.sewalog.com/demo-coba-sewalog';
+
+const INSTAGRAM_URL = 'https://www.instagram.com/sewalogdotcom/';
+
 function WaIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
       <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5.06-1.36A10 10 0 1 0 12 2Zm0 1.8a8.2 8.2 0 0 1 6.94 12.56l-.24.4.83 3.02-3.1-.81-.39.23A8.2 8.2 0 1 1 12 3.8Zm-3.53 4a.86.86 0 0 0-.62.29c-.21.23-.82.8-.82 1.94 0 1.15.84 2.26.96 2.42.12.15 1.63 2.58 4.03 3.55 2 .8 2.4.65 2.84.6.44-.04 1.4-.57 1.6-1.12.2-.55.2-1.02.14-1.12-.06-.1-.22-.16-.46-.28-.24-.12-1.4-.7-1.62-.77-.22-.08-.37-.12-.53.12-.16.24-.6.77-.74.93-.14.16-.27.18-.5.06-.24-.12-1-.37-1.9-1.18-.7-.63-1.18-1.4-1.31-1.64-.14-.24-.01-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.53-1.32-.74-1.8-.19-.47-.4-.4-.53-.41Z" />
+    </svg>
+  );
+}
+
+function InstagramIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
     </svg>
   );
 }
@@ -176,6 +212,35 @@ function TrackingMock() {
         <li>Denda keterlambatan: Rp25.000</li>
         <li>Denda kerusakan: Rp50.000 (ritsleting)</li>
       </ul>
+    </div>
+  );
+}
+
+const ETALASE_ITEMS = [
+  { name: 'Tenda Dome 4P', price: '60.000' },
+  { name: 'Sleeping Bag', price: '15.000' },
+  { name: 'Kompor Portable', price: '20.000' },
+  { name: 'Carrier 60L', price: '35.000' },
+];
+
+function EtalaseMock() {
+  return (
+    <div className="bg-[#F1EEE2] rounded-xl border border-[#DBD5C1] p-3.5">
+      <div className="flex items-center justify-between mb-2.5">
+        <span className="text-[10px] font-bold uppercase tracking-wide text-[#A65C2A]">Etalase Online</span>
+        <span className="text-[9px] text-[#6E6853] truncate">toko.sewalog.com/...</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {ETALASE_ITEMS.map((item) => (
+          <div key={item.name} className="bg-white rounded-lg border border-[#DBD5C1] p-2">
+            <div className="w-full aspect-square rounded-md bg-[#F1EEE2] flex items-center justify-center mb-1.5">
+              <Package className="w-5 h-5 text-[#6E6853]" />
+            </div>
+            <div className="text-[10px] font-bold text-[#26302B] truncate">{item.name}</div>
+            <div className="text-[10px] text-[#A65C2A] font-bold">Rp{item.price}/hari</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -372,6 +437,34 @@ export function LandingPage() {
         </section>
 
         <section className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+          <div className="reveal bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] shadow-xs p-6 sm:p-8 lg:flex lg:items-center lg:gap-8">
+            <div className="lg:flex-1">
+              <span className="inline-block text-[11px] font-bold uppercase tracking-wide text-[#A65C2A] bg-[#F9EFE7] border border-[#A65C2A]/30 rounded-full px-3 py-1 mb-3">
+                Bonus, Bukan Fitur Terpisah
+              </span>
+              <h2 className="text-2xl font-bold text-[#26302B] mb-3">Etalase Online Buat Pelanggan Kamu</h2>
+              <p className="text-sm text-[#6E6853] mb-4 max-w-md">
+                Selain buat kelola internal, Sewalog otomatis buatkan halaman katalog online yang bisa kamu bagikan
+                ke pelanggan — foto alat, filter kategori, sampai cek ketersediaan langsung tanpa perlu WhatsApp
+                dulu. Nggak perlu bikin website sendiri.
+              </p>
+              <a
+                href={ETALASE_DEMO_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 bg-[#2B4739] hover:bg-[#1E3429] active:scale-95 transition text-white font-semibold px-5 py-2.5 rounded-xl shadow-xs"
+              >
+                Lihat Contoh Live
+                <ExternalLink className="w-4 h-4" />
+              </a>
+            </div>
+            <div className="mt-6 lg:mt-0 lg:flex-1 lg:max-w-xs">
+              <EtalaseMock />
+            </div>
+          </div>
+        </section>
+
+        <section className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
           <h2 className="reveal text-2xl font-bold text-[#26302B] mb-5">Cara Mulai</h2>
           <ol className="reveal space-y-5">
             {[
@@ -465,9 +558,20 @@ export function LandingPage() {
           <a href={waLink(MSG_UMUM)} target="_blank" rel="noreferrer" className="text-[#F1EEE2] font-semibold hover:underline">
             WhatsApp: {WHATSAPP_DISPLAY}
           </a>
-          <a href="/blog/" className="text-[#DBD5C1] hover:text-[#F1EEE2] hover:underline">
-            Panduan &amp; Tips Rental Alat Kamping
-          </a>
+          <div className="flex items-center gap-4">
+            <a href="/blog/" className="text-[#DBD5C1] hover:text-[#F1EEE2] hover:underline">
+              Panduan &amp; Tips Rental Alat Kamping
+            </a>
+            <a
+              href={INSTAGRAM_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-[#DBD5C1] hover:text-[#F1EEE2] hover:underline"
+            >
+              <InstagramIcon className="w-3.5 h-3.5" />
+              @sewalogdotcom
+            </a>
+          </div>
         </div>
       </footer>
     </div>
