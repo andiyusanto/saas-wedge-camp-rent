@@ -1,4 +1,5 @@
 import { Globe, MessageCircle } from 'lucide-react';
+import { getWhatsAppShareUrl } from '../utils/formatters';
 
 // Fake-door sengaja — belum ada fitur di baliknya. Tujuannya cuma satu:
 // lihat apakah vendor pilot penasaran/tertarik ke tab ini sendiri, sinyal
@@ -7,11 +8,15 @@ import { Globe, MessageCircle } from 'lucide-react';
 // konfirmasi kebutuhan nyata dari vendor pilot dulu). Copy sengaja "sedang
 // dievaluasi", bukan "segera hadir" — supaya tidak menjanjikan sesuatu yang
 // belum pasti dibangun ke pengguna yang non-technical.
-const INTEREST_WHATSAPP_NUMBER = '62xxxxxxxxxx';
+//
+// Nomor dari VITE_SUPPORT_WHATSAPP_NUMBER (lihat frontend/.env.example) —
+// boleh format lokal (08xx) atau internasional (62xx), getWhatsAppShareUrl()
+// menormalkan keduanya.
+const SUPPORT_WHATSAPP_NUMBER = import.meta.env.VITE_SUPPORT_WHATSAPP_NUMBER ?? '62xxxxxxxxxx';
 
 export function OnlineStoreScreen({ businessName }: { businessName: string }) {
   const message = `Halo Sewalog, saya dari usaha "${businessName}" tertarik dengan fitur Toko Online (link toko sendiri buat pelanggan transaksi online). Boleh cerita lebih lanjut?`;
-  const interestUrl = `https://wa.me/${INTEREST_WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+  const interestUrl = getWhatsAppShareUrl(SUPPORT_WHATSAPP_NUMBER, message);
 
   return (
     <div className="max-w-lg mx-auto text-center py-10 space-y-4">

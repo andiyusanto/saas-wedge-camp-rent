@@ -153,6 +153,7 @@ Environment variables (harus diisi **sebelum** build pertama, karena Vite meng-i
 - `VITE_SUPABASE_PUBLISHABLE_KEY` = publishable key project Supabase
 - `VITE_API_BASE_URL` = URL backend dari langkah 2 (contoh: `https://sewalog-backend.onrender.com`)
 - `VITE_TOKO_PUBLIC_BASE_URL` = *(opsional, isi belakangan — lihat langkah 8)* `https://toko.sewalog.com` — cuma dipakai buat menampilkan link yang benar ke vendor di tab Etalase Online, HARUS konsisten dengan `TOKO_PUBLIC_HOST` di backend
+- `VITE_SUPPORT_WHATSAPP_NUMBER` = nomor WhatsApp support Sewalog (boleh format lokal `08xx` atau internasional `62xx`) — dipakai tombol "Kirim Masukan" (Panduan) dan "Tertarik? Kasih Tahu Kami" (Toko Online fake-door). Nomor yang sama juga wajib diisi di service landing (langkah 4).
 
 Setelah deploy sukses, catat URL frontend-nya, contoh: `https://sewalog-frontend.onrender.com`.
 
@@ -166,12 +167,11 @@ Di Render Dashboard → **New → Static Site** → hubungkan repo yang sama lag
 | Build Command | `npm install --include=dev && npm run build --workspace landing` |
 | Publish Directory | `landing/dist` |
 
-Environment variable (opsional, harus diisi **sebelum** build karena Vite meng-inline nilainya saat build):
-- `VITE_APP_URL` = URL frontend dari langkah 3 (contoh: `https://sewalog-frontend.onrender.com`) — dipakai tombol "Buka Demo" di bagian akun demo. Kalau dikosongkan, fallback ke `http://localhost:5173` (cuma benar untuk dev lokal).
+Environment variable (harus diisi **sebelum** build karena Vite meng-inline nilainya saat build):
+- `VITE_APP_URL` = *(opsional)* URL frontend dari langkah 3 (contoh: `https://sewalog-frontend.onrender.com`) — dipakai tombol "Buka Demo" di bagian akun demo. Kalau dikosongkan, fallback ke `http://localhost:5173` (cuma benar untuk dev lokal).
+- `VITE_SUPPORT_WHATSAPP_NUMBER` = nomor WhatsApp support Sewalog (boleh format lokal `08xx` atau internasional `62xx`) — dipakai CTA utama landing page dan teks "WhatsApp: ..." di footer. **Nomor yang sama juga wajib diisi di env var dengan nama sama di service frontend** (langkah 3) — dipakai tombol "Kirim Masukan" (Panduan) dan "Tertarik? Kasih Tahu Kami" (Toko Online fake-door).
 
 Selain itu `landing/` murni statis, tanpa Supabase atau panggilan ke backend sama sekali (CTA utamanya link `wa.me`).
-
-> Ingat ganti nomor placeholder di `landing/src/lib/whatsapp.ts` (`62xxxxxxxxxx`) ke nomor WhatsApp asli sebelum atau langsung setelah deploy pertama — kalau lupa, tombol CTA akan mengarah ke nomor yang salah.
 
 Setelah deploy sukses, catat URL landing-nya, contoh: `https://sewalog.onrender.com`. Ini yang cocok dibagikan sebagai link utama ke calon vendor (lewat DM/kunjungan) — URL frontend dari langkah 3 di atas tetap tersedia terpisah untuk vendor yang sudah punya akun.
 

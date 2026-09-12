@@ -1,15 +1,14 @@
 import type { ReactNode } from 'react';
 import { BookOpen, MessageCircle } from 'lucide-react';
+import { getWhatsAppShareUrl } from '../utils/formatters';
 
 // Panduan pemakaian in-app, mengikuti alur fitur nyata di Sewalog. Jaga tetap
 // sinkron kalau alur di tab lain berubah (label tombol, urutan langkah, dsb).
 
-// TODO: ganti dengan nomor WhatsApp asli Sewalog sebelum production deploy
-// (sama seperti landing/src/lib/whatsapp.ts). SENGAJA tidak lewat
-// getWhatsAppShareUrl() di formatters.ts — fungsi itu strip semua karakter
-// non-digit (dirancang buat nomor HP pelanggan asli), yang diam-diam
-// menghapus placeholder "xxxxxxxxxx" ini jadi cuma "62".
-const SEWALOG_SUPPORT_WHATSAPP = '62xxxxxxxxxx';
+// Nomor dari VITE_SUPPORT_WHATSAPP_NUMBER (lihat frontend/.env.example) —
+// sama dengan nomor di OnlineStoreScreen.tsx dan landing/src/lib/whatsapp.ts,
+// satu nomor support Sewalog yang sama dipakai di tiga tempat.
+const SEWALOG_SUPPORT_WHATSAPP = import.meta.env.VITE_SUPPORT_WHATSAPP_NUMBER ?? '62xxxxxxxxxx';
 
 function Ui({ children }: { children: ReactNode }) {
   return (
@@ -107,7 +106,7 @@ const TOC: { id: string; num: string; title: string }[] = [
 
 export function GuideScreen({ businessName }: { businessName: string }) {
   const feedbackMessage = `Halo Sewalog, saya dari usaha "${businessName}" mau kasih masukan/keluhan soal aplikasi:\n\n`;
-  const feedbackUrl = `https://wa.me/${SEWALOG_SUPPORT_WHATSAPP}?text=${encodeURIComponent(feedbackMessage)}`;
+  const feedbackUrl = getWhatsAppShareUrl(SEWALOG_SUPPORT_WHATSAPP, feedbackMessage);
 
   return (
     <div className="space-y-4">
