@@ -134,9 +134,12 @@ export function HistoryScreen({ businessId }: { businessId: string }) {
     .map((g) => ({ ...g, items: g.items.sort((a, b) => b.totalQuantity - a.totalQuantity) }))
     .sort((a, b) => b.totalQuantity - a.totalQuantity);
 
-  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  // Nama variabel "expanded" (bukan "collapsed") supaya default state
+  // (Set kosong) berarti "semua tertutup" — dibuka sekali per kategori
+  // pas pertama kali halaman ini dibuka, bukan otomatis semua terbuka.
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   function toggleCategory(category: string) {
-    setCollapsedCategories((prev) => {
+    setExpandedCategories((prev) => {
       const next = new Set(prev);
       if (next.has(category)) next.delete(category);
       else next.add(category);
@@ -255,7 +258,7 @@ export function HistoryScreen({ businessId }: { businessId: string }) {
           </h3>
           <div className="space-y-2">
             {categoryGroups.map((group, gi) => {
-              const isCollapsed = collapsedCategories.has(group.category);
+              const isCollapsed = !expandedCategories.has(group.category);
               return (
                 <div key={group.category} className="rounded-xl border border-[#DBD5C1] overflow-hidden">
                   <button
