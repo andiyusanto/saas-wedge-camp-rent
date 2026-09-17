@@ -319,6 +319,12 @@ function BookingCard({
               <span className="text-[#6E6853]">Janji Kembali:</span>
               <strong className={`font-bold ${b.is_overdue ? 'text-[#A8412E]' : 'text-[#26302B]'}`}>{formatDateIndo(b.end_date)}</strong>
             </div>
+            {b.picked_up_at && (
+              <div className="flex justify-between text-[11px]">
+                <span className="text-[#6E6853]">Diambil:</span>
+                <strong className="text-[#26302B]">{formatDateTimeIndo(b.picked_up_at)}</strong>
+              </div>
+            )}
           </div>
         </div>
 

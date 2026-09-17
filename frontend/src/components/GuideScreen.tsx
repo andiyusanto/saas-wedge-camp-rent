@@ -240,6 +240,12 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           Denda keterlambatan dan denda kerusakan/kehilangan sengaja ditampilkan sebagai dua angka terpisah, tidak
           digabung — supaya pemilik bisa langsung tahu penyebabnya tanpa membuka rincian lebih dulu.
         </Note>
+        <Note>
+          Batas waktu pengembalian dihitung dari jam <Ui>Tandai Barang Diambil</Ui> ditekan (jam pengambilan barang
+          sungguhan, muncul sebagai baris "Diambil: ..." di kartu transaksi) — bukan dari jam transaksi pertama kali
+          dicatat. Untuk booking yang dipesan duluan lalu diambil beberapa hari kemudian, ini memastikan toleransi
+          telat dihitung dari jam ambil yang benar, bukan jam pesan.
+        </Note>
         <p>
           Transaksi bisa <Ui>Dibatalkan</Ui> kapan saja sebelum selesai — jaminan yang ditahan otomatis dilepas begitu
           dibatalkan.

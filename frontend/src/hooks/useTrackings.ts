@@ -10,6 +10,7 @@ export type TrackingBooking = {
   customer_photo_url: string | null;
   start_date: string;
   end_date: string;
+  picked_up_at: string | null;
   due_at: string;
   is_pending_pickup: boolean;
   is_overdue: boolean;

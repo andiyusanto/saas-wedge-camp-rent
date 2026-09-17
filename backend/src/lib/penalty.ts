@@ -5,18 +5,29 @@ const BLOCK_RATE = 0.5;
 
 // Rumus disepakati: toleransi per-vendor (businesses.late_tolerance_hours),
 // lewat itu tiap kelipatan 12 jam kena tambahan 50% harga sewa harian.
-// due_at = tanggal end_date, jamnya ikut jam booking dibuat (jam ambil barang) —
-// lihat migrations/003_bookings_return_time_and_tolerance.sql.
+// due_at = tanggal end_date, jamnya ikut jam pengambilan barang sungguhan —
+// lihat migrations/003_bookings_return_time_and_tolerance.sql &
+// migrations/027_booking_picked_up_at.sql.
+//
+// pickedUpAt (bookings.picked_up_at) dipakai kalau ada — itu jam SUNGGUHAN
+// barang diambil fisik, disetel di POST /bookings (kalau langsung 'aktif'
+// saat dibuat) atau POST /bookings/:id/pickup (booking yang dipesan duluan,
+// diambil belakangan). createdAt (jam booking DICATAT staff) cuma fallback
+// untuk baris lama dari sebelum migration 027 ada (picked_up_at null) — buat
+// booking yang dipesan duluan lalu diambil berhari-hari kemudian, createdAt
+// bisa selisih jauh dari jam ambil sungguhan, itu justru celah yang ditutup
+// migration 027 (jangan dijadikan sumber utama lagi kalau picked_up_at ada).
 //
 // Semua ekstraksi jam sengaja lewat offset WIB tetap (bukan getHours() lokal
 // server) — server bisa di-deploy di timezone apa saja, tapi jam ambil barang
 // harus dibaca sebagai jam WIB (lihat insiden serupa di lib/dates.ts).
-export function computeDueAt(endDate: string, createdAt: string): Date {
-  const createdWibMs = new Date(createdAt).getTime() + WIB_OFFSET_MS;
-  const createdWib = new Date(createdWibMs);
-  const hours = createdWib.getUTCHours();
-  const minutes = createdWib.getUTCMinutes();
-  const seconds = createdWib.getUTCSeconds();
+export function computeDueAt(endDate: string, createdAt: string, pickedUpAt: string | null = null): Date {
+  const anchor = pickedUpAt ?? createdAt;
+  const anchorWibMs = new Date(anchor).getTime() + WIB_OFFSET_MS;
+  const anchorWib = new Date(anchorWibMs);
+  const hours = anchorWib.getUTCHours();
+  const minutes = anchorWib.getUTCMinutes();
+  const seconds = anchorWib.getUTCSeconds();
 
   const [y, m, d] = endDate.split('-').map(Number);
   const dueAtUtcMs = Date.UTC(y, m - 1, d, hours, minutes, seconds) - WIB_OFFSET_MS;

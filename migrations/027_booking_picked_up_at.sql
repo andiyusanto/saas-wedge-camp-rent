@@ -1,0 +1,25 @@
+-- ============================================================
+-- Migration 027 — Jam pengambilan sungguhan (picked_up_at)
+-- ============================================================
+-- due_at (deadline denda telat, lib/penalty.ts computeDueAt) sebelumnya
+-- selalu dihitung dari jam bookings.created_at (jam transaksi DICATAT
+-- staff), bukan jam barang SUNGGUH-SUNGGUH diambil fisik. Untuk booking
+-- yang langsung 'aktif' saat dibuat (walk-in, staff ngetik sambil
+-- pelanggan menunggu) dua jam itu praktis sama — tapi untuk booking yang
+-- dipesan duluan lalu diambil BELAKANGAN lewat "Tandai Barang Diambil"
+-- (POST /bookings/:id/pickup), created_at bisa selisih berhari-hari dari
+-- momen pengambilan sungguhan, dan endpoint pickup itu SAMA SEKALI tidak
+-- menyimpan jam pengambilan nyatanya — cuma pindah status.
+--
+-- Sisi pengembalian sudah benar sejak awal (actual_return_at, migration
+-- 003, timestamptz asli yang disetel di detik /return dipanggil) — ini
+-- menutup celah yang sama di sisi pengambilan, referensi persis pola
+-- pickedUpAt milik Bilbo-Outdoors (dipakai buat alasan yang sama:
+-- menjangkarkan deadline denda ke momen ambil yang sungguhan).
+--
+-- Nullable, TIDAK di-backfill — baris lama (dibuat sebelum migration ini)
+-- tetap null selamanya, lib/penalty.ts jatuh balik ke created_at untuk
+-- baris itu (fallback yang sama seperti Bilbo perlakukan order lama tanpa
+-- pickedUpAt).
+alter table bookings
+  add column if not exists picked_up_at timestamptz;

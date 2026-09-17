@@ -145,6 +145,13 @@ router.post('/bookings', async (req, res) => {
   // Tanggal ambil di masa depan -> 'dipesan' (reservasi, belum diambil fisik).
   const status = start_date <= todayInWIB() ? 'aktif' : 'dipesan';
   const bookingNumber = await generateBookingNumber(supabase, businessId);
+  // 'aktif' di sini berarti diambil LANGSUNG saat dicatat (walk-in, staff
+  // ngetik sambil pelanggan menunggu) — created_at praktis = jam ambil
+  // sungguhan, tapi disimpan eksplisit di kolom sendiri (bukan cuma
+  // diasumsikan dari created_at) supaya computeDueAt() (lib/penalty.ts,
+  // migration 027) punya satu sumber jam ambil yang konsisten untuk kedua
+  // jalur (langsung di sini, atau belakangan lewat POST .../pickup).
+  const pickedUpAt = status === 'aktif' ? new Date().toISOString() : null;
 
   const { data: bookingRow, error: bookingError } = await supabase
     .from('bookings')
@@ -156,6 +163,7 @@ router.post('/bookings', async (req, res) => {
       start_date,
       end_date,
       status,
+      picked_up_at: pickedUpAt,
       total_price: Number(total_price) || 0,
       dp_paid: Number(dp_paid) || 0,
     })
@@ -238,7 +246,15 @@ router.post('/bookings/:id/pickup', async (req, res) => {
     return;
   }
 
-  const { error: updateError } = await supabase.from('bookings').update({ status: 'aktif' }).eq('id', id);
+  // Jam pengambilan sungguhan (migration 027) — sebelumnya endpoint ini
+  // cuma pindah status, tidak pernah menyimpan momen ambil fisik yang
+  // nyata, jadi computeDueAt() (lib/penalty.ts) terpaksa jatuh balik ke
+  // created_at (jam booking DICATAT, bisa berhari-hari sebelum pengambilan
+  // sungguhan untuk booking yang dipesan duluan) — celah yang ditutup di sini.
+  const { error: updateError } = await supabase
+    .from('bookings')
+    .update({ status: 'aktif', picked_up_at: new Date().toISOString() })
+    .eq('id', id);
 
   if (updateError) {
     res.status(400).json({ error: updateError.message });

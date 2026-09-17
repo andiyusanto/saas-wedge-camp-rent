@@ -29,7 +29,7 @@ router.get('/trackings', async (req, res) => {
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select(
-      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, customer_photo_url, customers(name, phone, address), booking_items(quantity, price_at_booking, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description), booking_status_history(status, changed_by_name, created_at)',
+      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_url, customers(name, phone, address), booking_items(quantity, price_at_booking, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description), booking_status_history(status, changed_by_name, created_at)',
     )
     .in('status', ['dipesan', 'aktif'])
     .order('end_date');
@@ -49,7 +49,7 @@ router.get('/trackings', async (req, res) => {
 
     // 'dipesan' belum diambil fisik — belum relevan hitung telat.
     const isPendingPickup = b.status === 'dipesan';
-    const dueAt = computeDueAt(b.end_date, b.created_at);
+    const dueAt = computeDueAt(b.end_date, b.created_at, b.picked_up_at);
     const hLate = isPendingPickup ? 0 : Math.max(0, hoursLate(dueAt, now));
     const suggestedLateFee = isPendingPickup ? 0 : computeLateFee(hLate, business.late_tolerance_hours, dailyRate);
 
@@ -60,6 +60,7 @@ router.get('/trackings', async (req, res) => {
       customer_photo_url: b.customer_photo_url,
       start_date: b.start_date,
       end_date: b.end_date,
+      picked_up_at: b.picked_up_at,
       due_at: dueAt.toISOString(),
       is_pending_pickup: isPendingPickup,
       is_overdue: !isPendingPickup && hLate > business.late_tolerance_hours,
@@ -99,7 +100,7 @@ router.post('/bookings/:id/return', async (req, res) => {
 
   const { data: booking, error: bookingError } = await supabase
     .from('bookings')
-    .select('id, end_date, created_at, status')
+    .select('id, end_date, created_at, picked_up_at, status')
     .eq('id', id)
     .maybeSingle();
 
@@ -119,7 +120,7 @@ router.post('/bookings/:id/return', async (req, res) => {
     .maybeSingle();
 
   const now = new Date();
-  const dueAt = computeDueAt(booking.end_date, booking.created_at);
+  const dueAt = computeDueAt(booking.end_date, booking.created_at, booking.picked_up_at);
   const hLate = Math.max(0, hoursLate(dueAt, now));
   const isLate = hLate > (business?.late_tolerance_hours ?? 6);
 
