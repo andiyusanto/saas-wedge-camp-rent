@@ -303,7 +303,9 @@ async function main() {
       price_per_day: 35000,
       discount_min_days: 5,
       discounted_price_per_day: 25000,
-      readiness_hours: 0,
+      // Contoh kedua jeda persiapan (selain Tenda Dome) — carrier butuh dicek
+      // jahitan/kebersihan lebih menyeluruh (48 jam = 2 hari kalender).
+      readiness_hours: 48,
       description: 'Tas carrier 60 liter, cocok untuk pendakian 2-4 hari.',
       condition_note: null,
       image_url: `${R2_BASE}/eb953a9a-5339-4962-8338-c7616e5d2edc.jpg`,
