@@ -241,6 +241,12 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           digabung — supaya pemilik bisa langsung tahu penyebabnya tanpa membuka rincian lebih dulu.
         </Note>
         <Note>
+          Untuk transaksi dengan lebih dari satu alat, denda kerusakan/kehilangan bisa ditautkan ke alat spesifik
+          mana yang kena (muncul sebagai pilihan dropdown di <Ui>Tambah Denda</Ui> dan di layar <Ui>Kembalikan</Ui>)
+          — nama alatnya lalu ikut tampil di rincian denda, struk WA, dan Nota Sewa. Untuk transaksi satu alat,
+          penautan ini otomatis, tidak perlu dipilih manual.
+        </Note>
+        <Note>
           Batas waktu pengembalian dihitung dari jam <Ui>Tandai Barang Diambil</Ui> ditekan (jam pengambilan barang
           sungguhan, muncul sebagai baris "Diambil: ..." di kartu transaksi) — bukan dari jam transaksi pertama kali
           dicatat. Untuk booking yang dipesan duluan lalu diambil beberapa hari kemudian, ini memastikan toleransi

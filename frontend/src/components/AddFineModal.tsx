@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { X, PlusCircle } from 'lucide-react';
@@ -24,15 +24,28 @@ export function AddFineModal({
   const [type, setType] = useState<FineType>('kerusakan');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
+  const [itemId, setItemId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (booking) {
+      setItemId(booking.items.length === 1 ? booking.items[0].item_id : '');
+    }
+  }, [booking?.id]);
+
   if (!isOpen || !booking) return null;
+
+  const needsItemChoice = booking.items.length > 1;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!description.trim() || Number(amount) <= 0) {
       setError('Isi keterangan denda dan nominal rupiah > 0');
+      return;
+    }
+    if (needsItemChoice && !itemId) {
+      setError('Pilih alat yang terkena denda');
       return;
     }
 
@@ -42,7 +55,12 @@ export function AddFineModal({
     try {
       await apiFetch(session, `/api/bookings/${booking!.id}/penalties`, {
         method: 'POST',
-        body: JSON.stringify({ type, amount: Number(amount), description: description.trim() }),
+        body: JSON.stringify({
+          type,
+          amount: Number(amount),
+          description: description.trim(),
+          item_id: itemId || null,
+        }),
       });
     } catch (err) {
       setSubmitting(false);
@@ -102,6 +120,25 @@ export function AddFineModal({
               </button>
             </div>
           </div>
+
+          {needsItemChoice && (
+            <div>
+              <label className="block font-semibold text-[#26302B] mb-1">Alat yang Terkena Denda *</label>
+              <select
+                required
+                value={itemId}
+                onChange={(e) => setItemId(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+              >
+                <option value="">Pilih alat...</option>
+                {booking.items.map((i) => (
+                  <option key={i.item_id} value={i.item_id}>
+                    {i.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="block font-semibold text-[#26302B] mb-1">Keterangan Denda / Alasan *</label>

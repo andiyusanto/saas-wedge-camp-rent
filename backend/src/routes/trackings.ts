@@ -5,7 +5,20 @@ import { logBookingStatus } from '../lib/audit.js';
 
 const router = Router();
 
-type BookingItemJoin = { quantity: number; price_at_booking: number; items: { name: string } | null };
+type BookingItemJoin = {
+  item_id: string;
+  quantity: number;
+  price_at_booking: number;
+  items: { name: string } | null;
+};
+type PenaltyJoin = {
+  id: string;
+  type: string;
+  amount: number;
+  description: string | null;
+  item_id: string | null;
+  items: { name: string } | null;
+};
 type StatusHistoryJoin = { status: string; changed_by_name: string; created_at: string };
 
 router.get('/trackings', async (req, res) => {
@@ -29,7 +42,7 @@ router.get('/trackings', async (req, res) => {
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select(
-      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_url, customers(name, phone, address), booking_items(quantity, price_at_booking, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description), booking_status_history(status, changed_by_name, created_at)',
+      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_url, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_status_history(status, changed_by_name, created_at)',
     )
     .in('status', ['dipesan', 'aktif'])
     .order('end_date');
@@ -68,12 +81,20 @@ router.get('/trackings', async (req, res) => {
       daily_rate: dailyRate,
       suggested_late_fee: suggestedLateFee,
       items: ((b.booking_items ?? []) as unknown as BookingItemJoin[]).map((bi) => ({
+        item_id: bi.item_id,
         name: bi.items?.name ?? '',
         quantity: bi.quantity,
         price_per_day: bi.price_at_booking,
       })),
       deposits: b.deposits ?? [],
-      penalties: b.penalties ?? [],
+      penalties: ((b.penalties ?? []) as unknown as PenaltyJoin[]).map((p) => ({
+        id: p.id,
+        type: p.type,
+        amount: p.amount,
+        description: p.description,
+        item_id: p.item_id,
+        item_name: p.items?.name ?? null,
+      })),
       history: ((b.booking_status_history ?? []) as unknown as StatusHistoryJoin[])
         .slice()
         .sort((x, y) => x.created_at.localeCompare(y.created_at)),
@@ -85,7 +106,12 @@ router.get('/trackings', async (req, res) => {
   res.json({ tolerance_hours: business.late_tolerance_hours, bookings: result });
 });
 
-type ExtraPenaltyInput = { type: 'kerusakan' | 'kehilangan'; amount: number; description?: string };
+type ExtraPenaltyInput = {
+  type: 'kerusakan' | 'kehilangan';
+  amount: number;
+  description?: string;
+  item_id?: string | null;
+};
 
 router.post('/bookings/:id/return', async (req, res) => {
   if (!req.headers.authorization) {
@@ -100,7 +126,7 @@ router.post('/bookings/:id/return', async (req, res) => {
 
   const { data: booking, error: bookingError } = await supabase
     .from('bookings')
-    .select('id, end_date, created_at, picked_up_at, status')
+    .select('id, end_date, created_at, picked_up_at, status, booking_items(item_id)')
     .eq('id', id)
     .maybeSingle();
 
@@ -112,6 +138,17 @@ router.post('/bookings/:id/return', async (req, res) => {
   if (booking.status !== 'aktif') {
     res.status(400).json({ error: 'Transaksi sudah diproses sebelumnya' });
     return;
+  }
+
+  const bookingItemIds = new Set(
+    ((booking.booking_items ?? []) as unknown as { item_id: string }[]).map((bi) => bi.item_id),
+  );
+
+  for (const p of (extra_penalties as ExtraPenaltyInput[] | undefined) ?? []) {
+    if (p.item_id && !bookingItemIds.has(p.item_id)) {
+      res.status(400).json({ error: 'Alat yang dipilih tidak ada di transaksi ini' });
+      return;
+    }
   }
 
   const { data: business } = await supabase
@@ -134,7 +171,13 @@ router.post('/bookings/:id/return', async (req, res) => {
     return;
   }
 
-  const penaltyRows: { booking_id: string; type: string; amount: number; description: string | null }[] = [];
+  const penaltyRows: {
+    booking_id: string;
+    type: string;
+    amount: number;
+    description: string | null;
+    item_id: string | null;
+  }[] = [];
 
   if (Number(late_fee_amount) > 0) {
     penaltyRows.push({
@@ -142,6 +185,7 @@ router.post('/bookings/:id/return', async (req, res) => {
       type: 'keterlambatan',
       amount: Number(late_fee_amount),
       description: `Telat ${hLate.toFixed(1)} jam dari batas waktu`,
+      item_id: null,
     });
   }
 
@@ -152,6 +196,7 @@ router.post('/bookings/:id/return', async (req, res) => {
         type: p.type,
         amount: Number(p.amount) || 0,
         description: p.description ?? null,
+        item_id: p.item_id || null,
       });
     }
   }
@@ -254,7 +299,7 @@ router.post('/bookings/:id/penalties', async (req, res) => {
   }
 
   const { id } = req.params;
-  const { type, amount, description } = req.body ?? {};
+  const { type, amount, description, item_id } = req.body ?? {};
 
   if (!['kerusakan', 'kehilangan', 'keterlambatan'].includes(type) || !(Number(amount) > 0)) {
     res.status(400).json({ error: 'Jenis atau nominal denda tidak valid' });
@@ -263,11 +308,26 @@ router.post('/bookings/:id/penalties', async (req, res) => {
 
   const supabase = createRequestClient(req);
 
+  if (item_id) {
+    const { data: bookingItem } = await supabase
+      .from('booking_items')
+      .select('item_id')
+      .eq('booking_id', id)
+      .eq('item_id', item_id)
+      .maybeSingle();
+
+    if (!bookingItem) {
+      res.status(400).json({ error: 'Alat yang dipilih tidak ada di transaksi ini' });
+      return;
+    }
+  }
+
   const { error } = await supabase.from('penalties').insert({
     booking_id: id,
     type,
     amount: Number(amount),
     description: description || null,
+    item_id: item_id || null,
   });
 
   if (error) {

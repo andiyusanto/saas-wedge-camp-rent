@@ -392,7 +392,10 @@ function BookingCard({
                 {otherFines.map((f) => (
                   <div key={f.id} className="p-1.5 rounded-lg bg-[#F9EFE7] border border-[#A65C2A]/30 text-[10px]">
                     <div className="flex justify-between font-bold text-[#A65C2A]">
-                      <span>[{fineLabel(f.type)}]</span>
+                      <span>
+                        [{fineLabel(f.type)}]
+                        {f.item_name && <span className="font-normal"> ({f.item_name})</span>}
+                      </span>
                       <span>{formatIDR(f.amount)}</span>
                     </div>
                     {f.description && <p className="text-[#26302B]">{f.description}</p>}

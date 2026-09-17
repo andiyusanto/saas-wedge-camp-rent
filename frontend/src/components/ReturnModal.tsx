@@ -29,8 +29,10 @@ export function ReturnModal({
   const [lateFee, setLateFee] = useState('0');
   const [damageAmount, setDamageAmount] = useState('');
   const [damageDesc, setDamageDesc] = useState('');
+  const [damageItemId, setDamageItemId] = useState('');
   const [lossAmount, setLossAmount] = useState('');
   const [lossDesc, setLossDesc] = useState('');
+  const [lossItemId, setLossItemId] = useState('');
   const [returnDeposit, setReturnDeposit] = useState(true);
   const [autoOpenWA, setAutoOpenWA] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -43,8 +45,10 @@ export function ReturnModal({
     setLateFee(String(Math.round(booking.suggested_late_fee)));
     setDamageAmount('');
     setDamageDesc('');
+    setDamageItemId(booking.items.length === 1 ? booking.items[0].item_id : '');
     setLossAmount('');
     setLossDesc('');
+    setLossItemId(booking.items.length === 1 ? booking.items[0].item_id : '');
     setReturnDeposit(booking.deposits.some((d) => d.status === 'ditahan'));
     setError(null);
     setInitialisedFor(booking.id);
@@ -52,18 +56,41 @@ export function ReturnModal({
 
   const hasDeposit = booking.deposits.some((d) => d.status === 'ditahan');
   const activeDeposit = booking.deposits.find((d) => d.status === 'ditahan');
+  const needsItemChoice = booking.items.length > 1;
+  const itemNameById = (id: string) => booking.items.find((i) => i.item_id === id)?.name ?? null;
 
   async function handleConfirm() {
     if (!booking) return;
+
+    if (Number(damageAmount) > 0 && needsItemChoice && !damageItemId) {
+      setError('Pilih alat yang rusak');
+      return;
+    }
+    if (Number(lossAmount) > 0 && needsItemChoice && !lossItemId) {
+      setError('Pilih alat yang hilang');
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
-    const extraPenalties = [];
+    const extraPenalties: { type: string; amount: number; description: string | null; item_id: string | null }[] =
+      [];
     if (Number(damageAmount) > 0) {
-      extraPenalties.push({ type: 'kerusakan', amount: Number(damageAmount), description: damageDesc || null });
+      extraPenalties.push({
+        type: 'kerusakan',
+        amount: Number(damageAmount),
+        description: damageDesc || null,
+        item_id: damageItemId || null,
+      });
     }
     if (Number(lossAmount) > 0) {
-      extraPenalties.push({ type: 'kehilangan', amount: Number(lossAmount), description: lossDesc || null });
+      extraPenalties.push({
+        type: 'kehilangan',
+        amount: Number(lossAmount),
+        description: lossDesc || null,
+        item_id: lossItemId || null,
+      });
     }
 
     let body: { status: string };
@@ -86,8 +113,10 @@ export function ReturnModal({
     if (autoOpenWA && booking.customer?.phone) {
       const allFines = [
         ...booking.penalties,
-        ...(Number(lateFee) > 0 ? [{ type: 'keterlambatan', amount: Number(lateFee), description: null }] : []),
-        ...extraPenalties,
+        ...(Number(lateFee) > 0
+          ? [{ type: 'keterlambatan', amount: Number(lateFee), description: null, item_name: null }]
+          : []),
+        ...extraPenalties.map((p) => ({ ...p, item_name: p.item_id ? itemNameById(p.item_id) : null })),
       ];
       const receiptText = generateWhatsAppReceipt({
         bookingNumber: booking.booking_number ?? '-',
@@ -188,6 +217,23 @@ export function ReturnModal({
                   className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B]"
                 />
               </div>
+              {needsItemChoice && (
+                <div className="sm:col-span-2">
+                  <label className="block font-semibold text-[#26302B] mb-1">Alat yang Rusak</label>
+                  <select
+                    value={damageItemId}
+                    onChange={(e) => setDamageItemId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B]"
+                  >
+                    <option value="">Pilih alat...</option>
+                    {booking.items.map((i) => (
+                      <option key={i.item_id} value={i.item_id}>
+                        {i.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="block font-semibold text-[#26302B] mb-1">Denda Kehilangan (Rp)</label>
                 <input
@@ -208,6 +254,23 @@ export function ReturnModal({
                   className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B]"
                 />
               </div>
+              {needsItemChoice && (
+                <div className="sm:col-span-2">
+                  <label className="block font-semibold text-[#26302B] mb-1">Alat yang Hilang</label>
+                  <select
+                    value={lossItemId}
+                    onChange={(e) => setLossItemId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B]"
+                  >
+                    <option value="">Pilih alat...</option>
+                    {booking.items.map((i) => (
+                      <option key={i.item_id} value={i.item_id}>
+                        {i.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           </div>
 

@@ -100,7 +100,12 @@ export function fineLabel(type: string): string {
 }
 
 export type ReceiptItem = { name: string; quantity: number; price_per_day: number };
-export type ReceiptFine = { type: string; amount: number; description?: string | null };
+export type ReceiptFine = {
+  type: string;
+  amount: number;
+  description?: string | null;
+  item_name?: string | null;
+};
 
 export type ReceiptData = {
   bookingNumber: string;
@@ -145,7 +150,12 @@ export function generateWhatsAppReceipt(data: ReceiptData): string {
   if (data.fines.length > 0) {
     finesText =
       `\n\n*RINCIAN DENDA:*\n` +
-      data.fines.map((f) => `• [${fineLabel(f.type)}] ${f.description ?? ''}: ${formatIDR(f.amount)}`).join('\n');
+      data.fines
+        .map(
+          (f) =>
+            `• [${fineLabel(f.type)}${f.item_name ? ` - ${f.item_name}` : ''}] ${f.description ?? ''}: ${formatIDR(f.amount)}`,
+        )
+        .join('\n');
   }
 
   return `*NOTA SEWA - ${data.businessName.toUpperCase()}*

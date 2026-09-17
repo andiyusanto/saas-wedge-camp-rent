@@ -123,6 +123,7 @@ export function InvoiceModal({
                 <div key={i} className="flex justify-between">
                   <span>
                     {fineLabel(f.type)}
+                    {f.item_name ? ` (${f.item_name})` : ''}
                     {f.description ? ` — ${f.description}` : ''}
                   </span>
                   <span>{formatIDR(f.amount)}</span>
