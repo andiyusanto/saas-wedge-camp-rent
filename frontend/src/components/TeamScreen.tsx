@@ -24,6 +24,7 @@ export function TeamScreen({
   onSaveBusiness: (input: BusinessUpdateInput) => Promise<{ error: string | null }>;
 }) {
   const { members, invites, loading, error, createInvite, revokeInvite, removeMember } = useTeam(session, businessId);
+  const ownerEmail = members.find((m) => m.role === 'owner')?.email ?? null;
   const [role, setRole] = useState<'owner' | 'karyawan'>('karyawan');
   const [creating, setCreating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -54,7 +55,7 @@ export function TeamScreen({
 
   return (
     <div className="space-y-6">
-      <BusinessInfoSection business={business} onSave={onSaveBusiness} />
+      <BusinessInfoSection business={business} ownerEmail={ownerEmail} onSave={onSaveBusiness} />
 
       <div className="bg-[#FBFAF4] p-4 sm:p-5 rounded-2xl border border-[#DBD5C1] shadow-xs space-y-3">
         <h2 className="text-lg font-bold text-[#26302B] flex items-center gap-2">
