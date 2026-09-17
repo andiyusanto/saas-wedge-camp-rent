@@ -41,7 +41,7 @@ const EMPTY_FORM: ItemInput = {
   price_per_day: 25000,
   discount_min_days: 5,
   discounted_price_per_day: null,
-  readiness_days: 0,
+  readiness_hours: 0,
   image_url: '',
   description: '',
   condition_note: '',
@@ -225,17 +225,20 @@ function ItemFormModal({
           </div>
 
           <div>
-            <label className="block font-semibold text-[#26302B] mb-1">Jeda persiapan (hari)</label>
+            <label className="block font-semibold text-[#26302B] mb-1">Jeda persiapan (jam)</label>
             <input
               type="number"
               min={0}
-              value={form.readiness_days}
-              onChange={(e) => set('readiness_days', Math.max(0, Number(e.target.value)))}
+              step={1}
+              value={form.readiness_hours}
+              onChange={(e) => set('readiness_hours', Math.max(0, Number(e.target.value)))}
               className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B]"
             />
             <p className="text-[11px] text-[#6E6853] mt-1">
-              Berapa hari alat ini butuh diangin-anginkan/dicek sebelum siap disewa lagi setelah kembali. 0 = langsung
-              bisa disewa lagi hari itu juga.
+              Berapa jam alat ini butuh dibersihkan/dicek sebelum siap disewa lagi setelah kembali (mis. lampu/kompor
+              cukup beberapa jam, tenda bisa perlu waktu lebih lama). 0 = langsung bisa disewa lagi hari itu juga.
+              Dibulatkan ke atas per hari kalender saat dipakai (kurang dari 24 jam tetap memblokir hari itu penuh,
+              bukan cuma sebagian).
             </p>
           </div>
 
@@ -404,9 +407,9 @@ function ItemCard({ item, emailByUserId, onEdit, onDeactivate, onReactivate }: {
             Setelah {item.discount_min_days} hari: <strong className="text-[#2B4739]">{formatIDR(item.discounted_price_per_day)}</strong>/hari
           </p>
         )}
-        {item.readiness_days > 0 && (
+        {item.readiness_hours > 0 && (
           <p className="text-[11px] text-[#6E6853] mt-2">
-            Jeda persiapan: <strong className="text-[#26302B]">{item.readiness_days} hari</strong> setelah kembali
+            Jeda persiapan: <strong className="text-[#26302B]">{item.readiness_hours} jam</strong> setelah kembali
           </p>
         )}
         {item.condition_note && <p className="text-[11px] text-[#6E6853] mt-2 italic">{item.condition_note}</p>}
@@ -581,7 +584,7 @@ export function ItemsScreen({ businessId, session }: { businessId: string; sessi
                   price_per_day: modalItem.price_per_day,
                   discount_min_days: modalItem.discount_min_days,
                   discounted_price_per_day: modalItem.discounted_price_per_day,
-                  readiness_days: modalItem.readiness_days,
+                  readiness_hours: modalItem.readiness_hours,
                   image_url: modalItem.image_url,
                   description: modalItem.description,
                   condition_note: modalItem.condition_note,

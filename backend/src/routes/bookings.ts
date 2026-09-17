@@ -69,7 +69,7 @@ router.post('/bookings', async (req, res) => {
 
   const { data: itemRows, error: itemsError } = await supabase
     .from('items')
-    .select('id, name, total_units, price_per_day, readiness_days')
+    .select('id, name, total_units, price_per_day, readiness_hours')
     .in('id', requestedItems.map((i) => i.item_id));
 
   if (itemsError) {
@@ -95,7 +95,7 @@ router.post('/bookings', async (req, res) => {
     }
 
     for (const day of days) {
-      const used = usedUnitsOn(existingBookingItems, requested.item_id, day, itemRow.readiness_days);
+      const used = usedUnitsOn(existingBookingItems, requested.item_id, day, itemRow.readiness_hours);
       if (used + requested.quantity > itemRow.total_units) {
         res.status(409).json({
           error: `Alat "${itemRow.name}" tidak cukup pada ${day} (sisa ${itemRow.total_units - used}, diminta ${requested.quantity})`,

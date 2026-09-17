@@ -10,6 +10,14 @@ export function todayInWIB(): string {
   return new Date(Date.now() + WIB_OFFSET_MS).toISOString().slice(0, 10);
 }
 
+// Tanggal kalender WIB dari sebuah instant asli (mis. bookings.actual_return_at)
+// — dipakai buat menjangkarkan jeda persiapan (readiness_hours, migration 028)
+// ke hari SUNGGUHAN barang kembali, bukan hari terjadwal (end_date). Sama pola
+// dengan todayInWIB() di atas, cuma instant-nya dari parameter bukan Date.now().
+export function toWibDateStr(isoInstant: string): string {
+  return new Date(new Date(isoInstant).getTime() + WIB_OFFSET_MS).toISOString().slice(0, 10);
+}
+
 export function addDays(dateStr: string, amount: number): string {
   const [y, m, d] = dateStr.split('-').map(Number);
   const ms = Date.UTC(y, m - 1, d) + amount * 86_400_000;

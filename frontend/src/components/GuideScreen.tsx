@@ -188,7 +188,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
             { label: 'Foto', desc: 'Unggah langsung dari galeri/kamera — foto otomatis dikompres sebelum diunggah, tidak perlu tempel URL manual.' },
             {
               label: 'Jeda persiapan',
-              desc: 'Opsional, dalam hari — berapa hari alat ini butuh diangin-anginkan/dicek sebelum siap disewa lagi setelah kembali. 0 (default) berarti langsung bisa disewa lagi hari itu juga. Alat dengan jeda persiapan tidak akan muncul tersedia sampai jedanya lewat, baik di Kalender, saat Catat Transaksi, maupun di halaman publik Etalase Online.',
+              desc: 'Opsional, dalam JAM — berapa jam alat ini butuh dibersihkan/dicek sebelum siap disewa lagi setelah kembali (mis. lampu/kompor cukup beberapa jam, tenda bisa perlu lebih lama). 0 (default) berarti langsung bisa disewa lagi hari itu juga. Alat dengan jeda persiapan tidak akan muncul tersedia sampai jedanya lewat, baik di Kalender, saat Catat Transaksi, maupun di halaman publik Etalase Online — dihitung per hari kalender (kurang dari 24 jam tetap memblokir hari kembalinya penuh, bukan cuma sebagian jam itu saja).',
             },
           ]}
         />

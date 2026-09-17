@@ -22,7 +22,7 @@ router.get('/availability', async (req, res) => {
 
   const { data: items, error: itemsError } = await supabase
     .from('items')
-    .select('id, code, name, category, image_url, total_units, price_per_day, readiness_days')
+    .select('id, code, name, category, image_url, total_units, price_per_day, readiness_hours')
     .is('deactivated_at', null)
     .order('name');
 
@@ -41,7 +41,7 @@ router.get('/availability', async (req, res) => {
 
   const result = (items ?? []).map((item) => {
     const remaining = dateList.map(
-      (dateStr) => item.total_units - usedUnitsOn(bookingItems, item.id, dateStr, item.readiness_days),
+      (dateStr) => item.total_units - usedUnitsOn(bookingItems, item.id, dateStr, item.readiness_hours),
     );
 
     return {
