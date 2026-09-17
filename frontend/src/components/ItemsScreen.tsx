@@ -41,6 +41,7 @@ const EMPTY_FORM: ItemInput = {
   price_per_day: 25000,
   discount_min_days: 5,
   discounted_price_per_day: null,
+  readiness_days: 0,
   image_url: '',
   description: '',
   condition_note: '',
@@ -223,6 +224,21 @@ function ItemFormModal({
             </div>
           </div>
 
+          <div>
+            <label className="block font-semibold text-[#26302B] mb-1">Jeda persiapan (hari)</label>
+            <input
+              type="number"
+              min={0}
+              value={form.readiness_days}
+              onChange={(e) => set('readiness_days', Math.max(0, Number(e.target.value)))}
+              className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B]"
+            />
+            <p className="text-[11px] text-[#6E6853] mt-1">
+              Berapa hari alat ini butuh diangin-anginkan/dicek sebelum siap disewa lagi setelah kembali. 0 = langsung
+              bisa disewa lagi hari itu juga.
+            </p>
+          </div>
+
           <div className="p-3 rounded-xl bg-[#F1EEE2] border border-[#DBD5C1] space-y-2">
             <p className="font-semibold text-[#26302B]">Harga setelah sewa lama (opsional)</p>
             <p className="text-[11px] text-[#6E6853]">
@@ -386,6 +402,11 @@ function ItemCard({ item, emailByUserId, onEdit, onDeactivate, onReactivate }: {
         {item.discounted_price_per_day != null && (
           <p className="text-[11px] text-[#6E6853] mt-2">
             Setelah {item.discount_min_days} hari: <strong className="text-[#2B4739]">{formatIDR(item.discounted_price_per_day)}</strong>/hari
+          </p>
+        )}
+        {item.readiness_days > 0 && (
+          <p className="text-[11px] text-[#6E6853] mt-2">
+            Jeda persiapan: <strong className="text-[#26302B]">{item.readiness_days} hari</strong> setelah kembali
           </p>
         )}
         {item.condition_note && <p className="text-[11px] text-[#6E6853] mt-2 italic">{item.condition_note}</p>}
@@ -560,6 +581,7 @@ export function ItemsScreen({ businessId, session }: { businessId: string; sessi
                   price_per_day: modalItem.price_per_day,
                   discount_min_days: modalItem.discount_min_days,
                   discounted_price_per_day: modalItem.discounted_price_per_day,
+                  readiness_days: modalItem.readiness_days,
                   image_url: modalItem.image_url,
                   description: modalItem.description,
                   condition_note: modalItem.condition_note,

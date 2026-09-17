@@ -186,6 +186,10 @@ export function GuideScreen({ businessName }: { businessName: string }) {
               desc: 'Opsional — isi "berlaku setelah (hari)" dan "harga setelah diskon" kalau sewa lama dapat harga lebih murah per hari mulai hari tertentu. Kosongkan salah satunya kalau tidak ada diskon.',
             },
             { label: 'Foto', desc: 'Unggah langsung dari galeri/kamera — foto otomatis dikompres sebelum diunggah, tidak perlu tempel URL manual.' },
+            {
+              label: 'Jeda persiapan',
+              desc: 'Opsional, dalam hari — berapa hari alat ini butuh diangin-anginkan/dicek sebelum siap disewa lagi setelah kembali. 0 (default) berarti langsung bisa disewa lagi hari itu juga. Alat dengan jeda persiapan tidak akan muncul tersedia sampai jedanya lewat, baik di Kalender, saat Catat Transaksi, maupun di halaman publik Etalase Online.',
+            },
           ]}
         />
         <p>

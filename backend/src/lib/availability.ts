@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { addDays } from './dates.js';
 
 // Dipindah ke sini (dari routes/availability.ts) supaya bisa dipakai ulang
 // oleh routes/etalase.ts (pencarian ketersediaan publik di Etalase Online)
@@ -34,13 +35,29 @@ export async function fetchActiveBookingItems(supabase: SupabaseClient): Promise
   return (data ?? []) as unknown as BookingItemRow[];
 }
 
-export function usedUnitsOn(bookingItems: BookingItemRow[], itemId: string, dateStr: string): number {
+// readinessDays = jeda persiapan per-alat (items.readiness_days, migration
+// 026) — waktu yang dibutuhkan sebelum alat yang baru kembali siap disewa
+// lagi (mis. tenda perlu diangin-anginkan/dicek dulu). Diterapkan SIMETRIS
+// di kedua sisi jendela booking: mundur sebelum start_date DAN maju setelah
+// end_date — bukan cuma maju saja. Referensi: Bilbo-Outdoors sempat cuma
+// menerapkan sepihak (maju saja), yang menyisakan celah di sisi mundur
+// (booking baru masih bisa berakhir terlalu dekat SEBELUM booking lain yang
+// sudah dijadwalkan mulai) sampai diperbaiki 2026-09-13 — diterapkan simetris
+// dari awal di sini supaya tidak mengulang celah yang sama.
+export function usedUnitsOn(
+  bookingItems: BookingItemRow[],
+  itemId: string,
+  dateStr: string,
+  readinessDays = 0,
+): number {
   return bookingItems
     .filter((bi) => {
       const booking = bi.bookings;
       if (!booking || bi.item_id !== itemId) return false;
       if (!ACTIVE_STATUSES.has(booking.status)) return false;
-      if (booking.start_date > dateStr) return false;
+
+      const effectiveStart = readinessDays > 0 ? addDays(booking.start_date, -readinessDays) : booking.start_date;
+      if (effectiveStart > dateStr) return false;
 
       // 'aktif' = barang sudah diambil fisik (langsung saat dibuat kalau
       // start_date <= hari ini, atau lewat "Tandai Barang Diambil" untuk
@@ -55,9 +72,11 @@ export function usedUnitsOn(bookingItems: BookingItemRow[], itemId: string, date
       if (booking.status === 'aktif') return true;
 
       // 'dipesan' (belum pernah diambil sama sekali) SENGAJA tetap dibatasi
-      // end_date — no-show yang tidak pernah diambil tidak boleh mengunci
-      // stok selamanya, karena barangnya fisik belum pernah keluar toko.
-      return booking.end_date >= dateStr;
+      // end_date (+ readinessDays) — no-show yang tidak pernah diambil tidak
+      // boleh mengunci stok selamanya, karena barangnya fisik belum pernah
+      // keluar toko.
+      const effectiveEnd = readinessDays > 0 ? addDays(booking.end_date, readinessDays) : booking.end_date;
+      return effectiveEnd >= dateStr;
     })
     .reduce((sum, bi) => sum + bi.quantity, 0);
 }

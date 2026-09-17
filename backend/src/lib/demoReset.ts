@@ -116,6 +116,7 @@ type ItemDef = {
   price_per_day: number;
   discount_min_days: number;
   discounted_price_per_day: number | null;
+  readiness_days: number;
   description: string | null;
   condition_note: string | null;
   image_url: string | null;
@@ -143,6 +144,9 @@ const ITEM_DEFS: ItemDef[] = [
     price_per_day: 60000,
     discount_min_days: 5,
     discounted_price_per_day: 45000,
+    // Contoh jeda persiapan (migration 026) — tenda butuh diangin-anginkan
+    // 1 hari sebelum disewa lagi, supaya fitur ini kelihatan aktif di demo.
+    readiness_days: 1,
     description: 'Tenda dome kapasitas 4 orang, cocok untuk keluarga/kelompok kecil.',
     condition_note: 'Kondisi baik, sudah dicek waterproof.',
     image_url: `${R2_BASE}/06373295-e87c-48a1-8608-370aea0feceb.jpg`,
@@ -158,6 +162,7 @@ const ITEM_DEFS: ItemDef[] = [
     price_per_day: 15000,
     discount_min_days: 3,
     discounted_price_per_day: 10000,
+    readiness_days: 0,
     description: 'Sleeping bag ukuran dewasa, tahan suhu dingin dataran tinggi.',
     condition_note: null,
     image_url: `${R2_BASE}/e392549d-1895-4e68-a4b4-eae8d496a6f3.jpg`,
@@ -173,6 +178,7 @@ const ITEM_DEFS: ItemDef[] = [
     price_per_day: 20000,
     discount_min_days: 5,
     discounted_price_per_day: null,
+    readiness_days: 0,
     description: 'Kompor portable lengkap dengan tabung gas kecil.',
     condition_note: null,
     image_url: `${R2_BASE}/34d26f85-c0b4-4b53-810a-5d7c8d43165a.jpg`,
@@ -188,6 +194,7 @@ const ITEM_DEFS: ItemDef[] = [
     price_per_day: 10000,
     discount_min_days: 5,
     discounted_price_per_day: null,
+    readiness_days: 0,
     description: null,
     condition_note: null,
     image_url: `${R2_BASE}/20f6d80c-8489-4f12-b1ba-f430615b013d.jpg`,
@@ -203,6 +210,7 @@ const ITEM_DEFS: ItemDef[] = [
     price_per_day: 35000,
     discount_min_days: 5,
     discounted_price_per_day: 25000,
+    readiness_days: 0,
     description: 'Tas carrier 60 liter, cocok untuk pendakian 2-4 hari.',
     condition_note: null,
     image_url: `${R2_BASE}/eb953a9a-5339-4962-8338-c7616e5d2edc.jpg`,
@@ -218,6 +226,7 @@ const ITEM_DEFS: ItemDef[] = [
     price_per_day: 8000,
     discount_min_days: 5,
     discounted_price_per_day: null,
+    readiness_days: 0,
     description: null,
     condition_note: null,
     image_url: `${R2_BASE}/61a5169f-d1ec-4e7f-8ecd-ac872d7d0445.jpg`,
