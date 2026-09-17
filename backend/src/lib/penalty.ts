@@ -28,12 +28,27 @@ export function hoursLate(dueAt: Date, returnAt: Date): number {
   return diffMs / (60 * 60 * 1000);
 }
 
+// Toleransi SENGAJA digeser jadi bagian dari deadline efektif (dikurangkan
+// dari hoursLateValue dulu SEBELUM dibagi jadi blok 12-jam), bukan cuma
+// gerbang ya/tidak "sudah lewat toleransi?" yang lalu balik hitung dari
+// hoursLateValue mentah begitu terlewati. Cara lama itu bikin manfaat
+// toleransi lenyap tepat di detik dia terlampaui — mis. toleransi 11 jam,
+// telat 13 jam (cuma 2 jam lewat toleransi): hoursLateValue mentah (13) lewat
+// BLOCK_HOURS (12) jadi 2 blok (1 hari penuh), padahal yang adil cuma 1 blok
+// (setengah hari) karena baru 2 jam yang benar-benar "telat" di luar masa
+// toleransi. Insiden serupa persis ditemukan & diperbaiki di Bilbo-Outdoors
+// (referensi produk sejenis, owner sama), commit c4b61e0, 2026-08-19 — "the
+// tolerance was only used to decide whether hoursLate counted as zero days
+// late... the tolerance's benefit evaporated entirely the moment it was
+// exceeded". Sewalog kena bug yang sama persis, diperbaiki di sini dengan
+// pola yang sama: toleransi menggeser garis mulai hitung, bukan gerbang biner.
 export function computeLateFee(
   hoursLateValue: number,
   toleranceHours: number,
   dailyRate: number,
 ): number {
-  if (hoursLateValue <= toleranceHours) return 0;
-  const blocks = Math.ceil(hoursLateValue / BLOCK_HOURS);
+  const effectiveLateHours = hoursLateValue - toleranceHours;
+  if (effectiveLateHours <= 0) return 0;
+  const blocks = Math.ceil(effectiveLateHours / BLOCK_HOURS);
   return blocks * BLOCK_RATE * dailyRate;
 }
