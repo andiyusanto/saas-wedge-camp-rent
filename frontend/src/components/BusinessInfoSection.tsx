@@ -13,6 +13,7 @@ export function BusinessInfoSection({
   const [name, setName] = useState(business.name);
   const [ownerName, setOwnerName] = useState(business.owner_name ?? '');
   const [phone, setPhone] = useState(business.phone ?? '');
+  const [email, setEmail] = useState(business.email ?? '');
   const [address, setAddress] = useState(business.address ?? '');
   const [toleranceHours, setToleranceHours] = useState(String(business.late_tolerance_hours));
   const [submitting, setSubmitting] = useState(false);
@@ -25,6 +26,7 @@ export function BusinessInfoSection({
     setName(business.name);
     setOwnerName(business.owner_name ?? '');
     setPhone(business.phone ?? '');
+    setEmail(business.email ?? '');
     setAddress(business.address ?? '');
     setToleranceHours(String(business.late_tolerance_hours));
   }, [business]);
@@ -43,6 +45,7 @@ export function BusinessInfoSection({
       name: name.trim(),
       owner_name: ownerName.trim() || null,
       phone: phone.trim() || null,
+      email: email.trim() || null,
       address: address.trim() || null,
       late_tolerance_hours: Math.max(0, Number(toleranceHours) || 0),
     });
@@ -90,6 +93,15 @@ export function BusinessInfoSection({
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
+              className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
+            Email
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
             />
           </label>
