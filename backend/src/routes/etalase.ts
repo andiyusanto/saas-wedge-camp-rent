@@ -343,6 +343,13 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
   #avail-check { padding: 8px 14px; border-radius: 10px; border: none; background: #2B4739; color: #fff; font-weight: 700; font-size: 0.8rem; cursor: pointer; flex-shrink: 0; }
   @media (max-width: 420px) {
     .avail-controls { flex-direction: column; align-items: stretch; }
+    /* flex-basis 130px di .avail-field (atas) dimaksudkan sebagai
+       lebar minimum buat layout sebaris — begitu flex-direction jadi
+       column di sini, basis yang sama itu jadi dianggap TINGGI minimum
+       tiap field (sumbu utama berubah ikut flex-direction), jadi tiap
+       kotak tanggal melar ~130px dengan ruang kosong besar di bawahnya
+       kalau tidak di-reset ke auto. */
+    .avail-field { flex: 0 0 auto; }
     .avail-sep { display: none; }
     #avail-check { width: 100%; }
   }
