@@ -1,21 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { Search, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Package } from 'lucide-react';
 import { useAvailability } from '../hooks/useAvailability';
 import { formatIDR, todayStr } from '../utils/formatters';
 import { ScrollableRow } from './ScrollableRow';
-
-const CATEGORIES = [
-  'Semua',
-  'Tenda',
-  'Carrier & Bag',
-  'Sleeping Gear',
-  'Cooking Set',
-  'Penerangan',
-  'Matras & Layalas',
-  'Aksesoris Outdoor',
-  'Lainnya',
-];
 
 function shortDate(dateStr: string) {
   const [, m, d] = dateStr.split('-').map(Number);
@@ -36,6 +24,13 @@ export function CalendarScreen({
   const [searchQuery, setSearchQuery] = useState('');
 
   const { data, loading, error } = useAvailability(session, numDays, baseDate);
+
+  // Diturunkan live dari katalog sendiri (sama seperti ItemsScreen.tsx) —
+  // tiap vendor punya kategori sendiri, bukan daftar tetap satu untuk semua.
+  const categories = useMemo(() => {
+    const values = new Set((data?.items ?? []).map((i) => i.category).filter((v): v is string => !!v));
+    return ['Semua', ...[...values].sort((a, b) => a.localeCompare(b))];
+  }, [data?.items]);
 
   function shiftDates(days: number) {
     const d = new Date(`${baseDate}T00:00:00`);
@@ -116,7 +111,7 @@ export function CalendarScreen({
 
         <div className="pt-1">
           <ScrollableRow>
-            {CATEGORIES.map((cat) => (
+            {categories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}

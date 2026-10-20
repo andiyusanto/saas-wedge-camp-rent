@@ -13,27 +13,20 @@ import { SelectOrAddField } from './SelectOrAddField';
 import { ConfirmModal } from './ConfirmModal';
 
 // Diturunkan live dari katalog sendiri, bukan tabel enum/lookup terpisah —
-// sama seperti pola setara di Bilbo-Outdoors.
-function getDistinctValues(items: Item[], field: 'variant' | 'size' | 'color'): string[] {
+// sama seperti pola setara di Bilbo-Outdoors. Kategori sengaja ikut pola
+// ini juga sejak sebelumnya daftar tetap (CATEGORIES) yang sama untuk
+// semua vendor — tiap jenis rental (kamping, sepeda, alat event, dsb)
+// bisa punya kategori yang beda sama sekali, jadi daftar kategori juga
+// diturunkan per-business dari katalog sendiri, bukan hardcode.
+function getDistinctValues(items: Item[], field: 'category' | 'variant' | 'size' | 'color'): string[] {
   const values = new Set(items.map((i) => i[field]).filter((v): v is string => !!v));
   return [...values].sort((a, b) => a.localeCompare(b));
 }
 
-const CATEGORIES = [
-  'Tenda',
-  'Carrier & Bag',
-  'Sleeping Gear',
-  'Cooking Set',
-  'Penerangan',
-  'Matras & Layalas',
-  'Aksesoris Outdoor',
-  'Lainnya',
-];
-
 const EMPTY_FORM: ItemInput = {
   code: '',
   name: '',
-  category: 'Tenda',
+  category: '',
   variant: '',
   size: '',
   color: '',
@@ -51,6 +44,7 @@ function ItemFormModal({
   initial,
   businessId,
   session,
+  categoryOptions,
   variantOptions,
   sizeOptions,
   colorOptions,
@@ -60,6 +54,7 @@ function ItemFormModal({
   initial: ItemInput;
   businessId: string;
   session: Session;
+  categoryOptions: string[];
   variantOptions: string[];
   sizeOptions: string[];
   colorOptions: string[];
@@ -144,20 +139,14 @@ function ItemFormModal({
                 className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B]"
               />
             </div>
-            <div>
-              <label className="block font-semibold text-[#26302B] mb-1">Kategori</label>
-              <select
-                value={form.category ?? ''}
-                onChange={(e) => set('category', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B]"
-              >
-                {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <SelectOrAddField
+              label="Kategori"
+              value={form.category ?? ''}
+              options={categoryOptions}
+              onChange={(v) => set('category', v)}
+              addButtonLabel="Tambah Kategori Baru"
+              newInputPlaceholder="Contoh: Tenda"
+            />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -465,6 +454,7 @@ export function ItemsScreen({ businessId, session }: { businessId: string; sessi
     [members],
   );
 
+  const categoryOptions = useMemo(() => getDistinctValues(items, 'category'), [items]);
   const variantOptions = useMemo(() => getDistinctValues(items, 'variant'), [items]);
   const sizeOptions = useMemo(() => getDistinctValues(items, 'size'), [items]);
   const colorOptions = useMemo(() => getDistinctValues(items, 'color'), [items]);
@@ -514,7 +504,7 @@ export function ItemsScreen({ businessId, session }: { businessId: string; sessi
             />
           </div>
           <ScrollableRow className="sm:w-auto">
-            {['Semua', ...CATEGORIES].map((cat) => (
+            {['Semua', ...categoryOptions].map((cat) => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
@@ -592,6 +582,7 @@ export function ItemsScreen({ businessId, session }: { businessId: string; sessi
           }
           businessId={businessId}
           session={session}
+          categoryOptions={categoryOptions}
           variantOptions={variantOptions}
           sizeOptions={sizeOptions}
           colorOptions={colorOptions}
