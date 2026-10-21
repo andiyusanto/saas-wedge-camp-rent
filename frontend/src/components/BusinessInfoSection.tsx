@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Store, CheckCircle2 } from 'lucide-react';
 import type { Business, BusinessUpdateInput } from '../hooks/useBusiness';
-import type { Regency } from '../hooks/usePublicPage';
-import { supabase } from '../lib/supabaseClient';
+import { useRegencies } from '../hooks/useRegencies';
+import { RegencySelect } from './RegencySelect';
 
 export function BusinessInfoSection({
   business,
@@ -19,7 +19,7 @@ export function BusinessInfoSection({
   const [phone, setPhone] = useState(business.phone ?? '');
   const [address, setAddress] = useState(business.address ?? '');
   const [regencyId, setRegencyId] = useState(business.regency_id ?? '');
-  const [regencies, setRegencies] = useState<Regency[]>([]);
+  const { provinces, regencies } = useRegencies();
   const [toleranceHours, setToleranceHours] = useState(String(business.late_tolerance_hours));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,17 +35,6 @@ export function BusinessInfoSection({
     setRegencyId(business.regency_id ?? '');
     setToleranceHours(String(business.late_tolerance_hours));
   }, [business]);
-
-  // Publik (RLS "public_read_regencies"), cuma 3 baris Malang Raya — sama
-  // seperti dropdown Kota di Etalase Online (usePublicPage.ts).
-  useEffect(() => {
-    if (!supabase) return;
-    supabase
-      .from('regencies')
-      .select('id, name, type')
-      .order('name')
-      .then(({ data }) => setRegencies(data ?? []));
-  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -112,21 +101,7 @@ export function BusinessInfoSection({
               className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
             />
           </label>
-          <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
-            Kota
-            <select
-              value={regencyId}
-              onChange={(e) => setRegencyId(e.target.value)}
-              className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
-            >
-              <option value="">— Pilih kota —</option>
-              {regencies.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <RegencySelect provinces={provinces} regencies={regencies} value={regencyId} onChange={setRegencyId} />
           <div className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
             Email pemilik (akun login)
             <p className="px-3 py-2 rounded-lg bg-[#F1EEE2] border border-[#DBD5C1] text-[#26302B]">

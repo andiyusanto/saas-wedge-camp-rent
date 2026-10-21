@@ -3,6 +3,8 @@ import type { FormEvent } from 'react';
 import { Store, CheckCircle2, ExternalLink, Copy, Check, Sparkles, Loader2, XCircle } from 'lucide-react';
 import { usePublicPage } from '../hooks/usePublicPage';
 import type { PublicPageInput } from '../hooks/usePublicPage';
+import { useRegencies } from '../hooks/useRegencies';
+import { RegencySelect } from './RegencySelect';
 import { slugify } from '../utils/formatters';
 import { API_BASE_URL } from '../lib/api';
 
@@ -28,7 +30,8 @@ export function EtalaseOnlineScreen({
   businessPhone: string | null;
   businessAddress: string | null;
 }) {
-  const { page, regencies, loading, savePublicPage, checkSlugAvailable } = usePublicPage(businessId);
+  const { page, loading, savePublicPage, checkSlugAvailable } = usePublicPage(businessId);
+  const { provinces, regencies } = useRegencies();
 
   const [published, setPublished] = useState(false);
   const [slug, setSlug] = useState('');
@@ -238,21 +241,7 @@ export function EtalaseOnlineScreen({
             />
           </label>
 
-          <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
-            Kota
-            <select
-              value={regencyId}
-              onChange={(e) => setRegencyId(e.target.value)}
-              className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
-            >
-              <option value="">— Pilih kota —</option>
-              {regencies.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <RegencySelect provinces={provinces} regencies={regencies} value={regencyId} onChange={setRegencyId} />
 
           <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
             Jam operasional

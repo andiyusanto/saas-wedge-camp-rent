@@ -1,12 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
-export type Regency = {
-  id: string;
-  name: string;
-  type: string;
-};
-
 export type PublicPage = {
   business_id: string;
   published: boolean;
@@ -34,7 +28,6 @@ export type PublicPageInput = {
 // ada sejak awal.
 export function usePublicPage(businessId: string | null) {
   const [page, setPage] = useState<PublicPage | null>(null);
-  const [regencies, setRegencies] = useState<Regency[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
@@ -45,19 +38,13 @@ export function usePublicPage(businessId: string | null) {
     }
 
     setLoading(true);
-    const [pageResult, regenciesResult] = await Promise.all([
-      supabase
-        .from('public_pages')
-        .select('business_id, published, slug, description, address, regency_id, operating_hours, public_phone')
-        .eq('business_id', businessId)
-        .maybeSingle(),
-      // Publik (RLS "public_read_regencies", skema-final.sql), cuma 3 baris
-      // Malang Raya — lihat CLAUDE.md bagian 3 & 7.
-      supabase.from('regencies').select('id, name, type').order('name'),
-    ]);
+    const { data } = await supabase
+      .from('public_pages')
+      .select('business_id, published, slug, description, address, regency_id, operating_hours, public_phone')
+      .eq('business_id', businessId)
+      .maybeSingle();
 
-    setPage(pageResult.data ?? null);
-    setRegencies(regenciesResult.data ?? []);
+    setPage(data ?? null);
     setLoading(false);
   }, [businessId]);
 
@@ -103,5 +90,5 @@ export function usePublicPage(businessId: string | null) {
     return { available: data as boolean, error: null };
   }
 
-  return { page, regencies, loading, refresh, savePublicPage, checkSlugAvailable };
+  return { page, loading, refresh, savePublicPage, checkSlugAvailable };
 }

@@ -25,7 +25,7 @@ Urutan fase:
 ## 3. Target pengguna & scope wilayah
 
 - Pemilik/staf UKM rental alat kamping — bukan technical user, butuh UI yang sangat sederhana dan minim friksi.
-- Wilayah tervalidasi: **Malang Raya** saja untuk saat ini (Kota Malang, Kabupaten Malang, Kota Batu). Jangan asumsikan kebutuhan kota lain.
+- Wilayah tervalidasi: **Malang Raya** saja untuk saat ini (Kota Malang, Kabupaten Malang, Kota Batu) — ini soal fokus GTM/validasi kebutuhan FITUR (kunjungan langsung, prioritas onboarding, dsb), bukan pembatasan teknis siapa yang boleh pakai app. Jangan asumsikan kebutuhan fitur dari kota lain tanpa validasi nyata — tapi ini terpisah dari data referensi wilayah (field "Kota" di profil usaha), yang sejak migration 033 sudah mencakup seluruh Indonesia (lihat bagian 7), dipicu sinyal inbound nyata dari vendor di luar Malang Raya.
 - Vendor prioritas untuk validasi/pilot: Jawa Timur Outdoor, Kubu Barat Camp Rental (Gelombang 1 — dikunjungi langsung), Merbabu Outdoor Malang, Wildtrack Adventure (Gelombang 2 — via DM dulu).
 
 ## 4. Tech stack
@@ -117,7 +117,9 @@ Skema lengkap dan RLS policy final ada di `skema-final.sql` (bawa ke folder migr
 
 - **Multi-tenant dari awal** — setiap vendor adalah satu baris `businesses`, semua tabel operasional di-scope via `business_id`, diisolasi lewat Postgres RLS berbasis `auth.uid() = businesses.owner_id`.
 - **`business_profiles` dan `marketplace_consents` dipisah dari `businesses`** — cuma terisi kalau vendor eksplisit opt-in ke marketplace nanti. `marketplace_consents` bersifat append-only (riwayat persetujuan, bukan satu status yang ditimpa) — jangan buat policy `update`/`delete` untuk tabel ini.
-- **Tabel wilayah (`provinces`, `regencies`) sengaja di-scope kecil** — cuma berisi Malang Raya untuk saat ini. Jangan bangun tabel wilayah nasional lengkap di tahap ini.
+- **Tabel wilayah (`provinces`, `regencies`) mencakup seluruh Indonesia** (38 provinsi, 514 kota/kabupaten — migration 033, Oktober 2026). Diperluas dari scope awal "cuma Malang Raya" setelah ada sinyal inbound nyata: vendor rental di luar Malang Raya DM lewat Instagram nanya soal app ini, dan field "Kota" yang dikunci ke 3 baris Malang Raya secara literal menghalangi vendor non-Malang Raya mengisi profil usahanya sendiri. Sumber data: cahyadsn/wilayah (lihat memory `reference-national-wilayah-data-sources`), sesuai Kepmendagri terbaru — idempotent terhadap 3 baris Malang Raya yang sudah ada sejak awal (nama persis sama, tidak terduplikasi lewat `on conflict`). **Level kecamatan BELUM diimpor** — belum ada fitur yang memakainya, tunda sampai ada kebutuhan nyata (konsisten dengan bagian 10). Dengan 514 pilihan kota/kabupaten, dropdown Kota di Info Usaha & Etalase Online jadi dua tingkat (Provinsi → Kota/Kabupaten, `RegencySelect.tsx` + `useRegencies.ts`) supaya tetap gampang dicari di HP, bukan satu `<select>` datar diurut nama.
+
+  **Catatan konsistensi yang PENTING diingat**: ini cuma memperluas data referensi wilayah (field "Kota" di profil usaha) — BUKAN validasi bahwa app ini sudah siap dipakai vendor di luar WIB. Logika WIB-hardcoded (bagian 4) masih mengasumsikan semua vendor ada di WIB; vendor yang pilih kota di zona WITA/WIT tetap akan dapat perhitungan status booking/due-date denda telat berdasarkan WIB (bisa selisih 1-2 jam). Ini bukan regresi baru dari perubahan ini (app memang belum pernah punya setting timezone per-vendor) — cuma lebih mungkin kejadian sekarang karena siapa saja secara teknis bisa daftar dari kota manapun. Jangan anggap soal ini sudah selesai hanya karena dropdown Kota-nya sudah nasional.
 - **Tidak ada tabel `availability`** — dihitung dari agregasi `booking_items` + `bookings.status`, lihat query di bagian bawah `skema-final.sql`.
 
 ## 8. Non-goals (sengaja belum dikerjakan)
@@ -126,8 +128,7 @@ Skema lengkap dan RLS policy final ada di `skema-final.sql` (bawa ke folder migr
 - Native mobile app (Android/iOS)
 - Offline-first / PWA caching agresif
 - Manajemen multi-cabang / multi-karyawan per vendor
-- Tabel wilayah di luar Malang Raya
-- Level kecamatan di data wilayah
+- Level kecamatan di data wilayah — belum ada fitur yang butuh presisi sampai level itu (cuma field "Kota"/kabupaten-kota yang ada sekarang, lihat bagian 7), tunda sampai ada kebutuhan nyata, bukan ditambah "supaya lengkap" semata.
 - **Toko online berbayar per-vendor + payment gateway/checkout** (`app.sewalog.com/[nama-toko]` dengan transaksi/pembayaran online sungguhan, bukan cuma etalase info) — dievaluasi Agustus 2026, **ditunda bukan ditolak**. Alasan & syarat lengkap sebelum dibangun ada di `research/online-checkout-payment-roadmap-2026-08.md` (ringkas: nol bukti kebutuhan nyata dari vendor pilot, integrasi pembayaran Bilbo-Outdoors sendiri — kasus lebih sederhana — belum stabil untuk pelanggan asli, dan pertanyaan lisensi PJP dari Bank Indonesia belum terjawab, butuh opini hukum tertulis sebelum lanjut). Ada tab **Toko Online** (owner-only) di UI sebagai fake-door — cuma penjelasan rencana + tombol "Tertarik? Kasih Tahu Kami" ke WhatsApp, bukan fitur sungguhan — dipakai buat lihat sinyal minat vendor pilot secara murah sebelum commit ke pembangunan aslinya (syarat #2 di roadmap). **Catatan: halaman info/katalog publik per-vendor TANPA pembayaran sudah dibangun terpisah sebagai fitur "Etalase Online" (lihat bagian 6)** — non-goal di baris ini murni soal transaksi/pembayaran online sungguhan, bukan soal ada-tidaknya halaman publik itu sendiri.
 
 ## Pembayaran & Legal
