@@ -25,8 +25,10 @@ Urutan fase:
 ## 3. Target pengguna & scope wilayah
 
 - Pemilik/staf UKM rental alat kamping — bukan technical user, butuh UI yang sangat sederhana dan minim friksi.
-- Wilayah tervalidasi: **Malang Raya** saja untuk saat ini (Kota Malang, Kabupaten Malang, Kota Batu) — ini soal fokus GTM/validasi kebutuhan FITUR (kunjungan langsung, prioritas onboarding, dsb), bukan pembatasan teknis siapa yang boleh pakai app. Jangan asumsikan kebutuhan fitur dari kota lain tanpa validasi nyata — tapi ini terpisah dari data referensi wilayah (field "Kota" di profil usaha), yang sejak migration 033 sudah mencakup seluruh Indonesia (lihat bagian 7), dipicu sinyal inbound nyata dari vendor di luar Malang Raya.
-- Vendor prioritas untuk validasi/pilot: Jawa Timur Outdoor, Kubu Barat Camp Rental (Gelombang 1 — dikunjungi langsung), Merbabu Outdoor Malang, Wildtrack Adventure (Gelombang 2 — via DM dulu).
+- Cakupan pengguna: **seluruh Indonesia** — bukan lagi dibatasi ke Malang Raya (rencana lengkap di `knowladge/marketing-plan-2026-q4.md` bagian 2). Data referensi wilayah (field "Kota" di profil usaha) sudah mencakup seluruh Indonesia sejak migration 033 (lihat bagian 7).
+- **Malang Raya tetap kelompok validasi/pilot PERTAMA** — vendor prioritas: Jawa Timur Outdoor, Kubu Barat Camp Rental (Gelombang 1 — dikunjungi langsung, peluang aktivasinya paling tinggi), Merbabu Outdoor Malang, Wildtrack Adventure (Gelombang 2 — via DM dulu).
+- **Vendor di luar Malang Raya** diajak dan di-onboard **jarak jauh** (chat/DM, video call) — bukan kunjungan fisik.
+- **Harga: gratis sampai 31 Desember 2026.** Harga setelahnya belum ditentukan — rencananya diumumkan sebelum tanggal itu. Jangan janjikan angka harga ke vendor sebelum benar-benar diputuskan.
 
 ## 4. Tech stack
 
