@@ -49,6 +49,19 @@ function todayPlus(days) {
   return addDays(todayInWIB(), days);
 }
 
+// Sabtu terdekat SETELAH hari ini (kalau hari ini sendiri Sabtu, maju ke
+// Sabtu minggu depan) — sama persis dengan nextWeekend() di
+// backend/src/lib/demoReset.ts, jaga tetap sinkron kalau salah satu diubah.
+function nextWeekend() {
+  const today = todayInWIB();
+  const [y, m, d] = today.split('-').map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0=Minggu..6=Sabtu
+  let toSaturday = (6 - dow + 7) % 7;
+  if (toSaturday === 0) toSaturday = 7;
+  const saturday = addDays(today, toSaturday);
+  return { saturday, sunday: addDays(saturday, 1) };
+}
+
 function computeItemRentalPrice(pricePerDay, discountMinDays, discountedPricePerDay, days) {
   if (!discountedPricePerDay || days <= discountMinDays) return pricePerDay * days;
   const extraDays = days - discountMinDays;
@@ -117,6 +130,18 @@ async function api(path, token, init = {}) {
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`API ${init.method ?? 'GET'} ${path} -> ${res.status} ${JSON.stringify(json)}`);
   return json;
+}
+
+// Sisa unit TERKECIL di antara startDate..startDate+days-1, lewat endpoint
+// GET /api/availability yang sudah ada — sama persis dengan remainingUnits()
+// di backend/src/lib/demoReset.ts, jaga tetap sinkron. SENGAJA bukan
+// reimplementasi usedUnitsOn() sendiri di sini, supaya "penuh" yang dicatat
+// selalu sepakat dengan validasi kapasitas POST /bookings yang sungguhan.
+async function remainingUnits(itemCode, startDate, days, token) {
+  const resp = await api(`/api/availability?start_date=${startDate}&days=${days}`, token);
+  const item = resp.items.find((i) => i.code === itemCode);
+  if (!item) throw new Error(`remainingUnits: item ${itemCode} tidak ditemukan di /api/availability`);
+  return Math.min(...item.remaining);
 }
 
 async function main() {
@@ -513,6 +538,25 @@ async function main() {
     }),
   });
   console.log('  + Booking "telat" (sudah ditutup, denda keterlambatan + kehilangan): Siti Rahma');
+
+  // Satu alat PENUH di akhir pekan terdekat — lihat komentar yang sama di
+  // backend/src/lib/demoReset.ts untuk alasan lengkapnya (dihitung lewat
+  // remainingUnits(), bukan angka hardcode, karena TND-01 sudah dipakai
+  // booking lain di atas dan jumlahnya tergantung hari script dijalankan).
+  const { saturday, sunday } = nextWeekend();
+  const tndRemaining = await remainingUnits('TND-01', saturday, 2, ownerToken);
+  if (tndRemaining > 0) {
+    await createBooking({
+      customer: { name: 'Yoga Pratama', phone: '081234000006' },
+      start_date: saturday,
+      end_date: sunday,
+      deposit: { type: 'ktp' },
+      entries: [['TND-01', tndRemaining]],
+    });
+    console.log(`  + Booking "dipesan" (PENUH, ${tndRemaining} unit): Yoga Pratama, Tenda Dome ${saturday}..${sunday}`);
+  } else {
+    console.log(`  (TND-01 sudah penuh di ${saturday}..${sunday} tanpa booking tambahan, dilewati)`);
+  }
 
   console.log('\n== Selesai ==');
   console.log('Business demo :', BUSINESS_NAME, `(${businessId})`);
