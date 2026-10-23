@@ -28,12 +28,12 @@ const FAQ_ITEMS: { question: string; answer: string }[] = [
   {
     question: 'Siapa yang cocok pakai Sewalog?',
     answer:
-      'Sewalog cocok untuk pemilik atau staf usaha rental alat kamping dan outdoor, khususnya yang berlokasi di Malang Raya saat ini. Sewalog dirancang untuk dipakai sambil melayani pelanggan langsung di depan rak alat, bukan buat kerjaan kantor di depan laptop.',
+      'Sewalog cocok untuk pemilik atau staf usaha rental alat kamping dan outdoor di seluruh Indonesia. Sewalog dirancang untuk dipakai sambil melayani pelanggan langsung di depan rak alat, bukan buat kerjaan kantor di depan laptop.',
   },
   {
     question: 'Apakah Sewalog berbayar?',
     answer:
-      'Untuk saat ini Sewalog gratis, karena masih tahap uji coba bersama vendor pilot di Malang Raya. Belum ada skema harga final yang ditentukan.',
+      'Sewalog gratis sampai 31 Desember 2026. Harga setelah masa uji coba belum ditentukan, dan akan kami umumkan sebelum promo berakhir. Tidak ada tagihan otomatis, jadi kamu bebas memutuskan mau lanjut atau tidak.',
   },
   {
     question: 'Bagaimana cara mulai pakai Sewalog?',
@@ -554,7 +554,7 @@ export function LandingPage() {
             <img src="/logo.svg" alt="" className="w-5 h-5" />
             Sewalog
           </div>
-          <p>Tools operasional rental alat kamping &amp; outdoor · Malang Raya</p>
+          <p>Tools operasional rental alat kamping &amp; outdoor · Seluruh Indonesia</p>
           <a href={waLink(MSG_UMUM)} target="_blank" rel="noreferrer" className="text-[#F1EEE2] font-semibold hover:underline">
             WhatsApp: {WHATSAPP_DISPLAY}
           </a>
