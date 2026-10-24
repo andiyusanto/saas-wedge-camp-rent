@@ -176,6 +176,16 @@ export function ReturnModal({
                   <AlertTriangle className="w-4 h-4" /> TERLAMBAT {booking.hours_late} JAM
                 </p>
                 <p className="text-[11px] text-[#26302B] mt-1">Saran denda otomatis (bisa diubah):</p>
+                {booking.late_fee_breakdown.length > 0 && (
+                  <ul className="text-[11px] text-[#26302B] mt-1 space-y-0.5">
+                    {booking.late_fee_breakdown.map((x) => (
+                      <li key={x.item_id}>
+                        {x.name}: ~Rp{x.per_day_rate.toLocaleString('id-ID')}/hari × {booking.late_days_equivalent} hari
+                        telat = Rp{x.fee.toLocaleString('id-ID')}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             ) : (
               <div className="p-3 rounded-lg bg-[#E8EFEA] border border-[#2B4739]/30 text-[#2B4739] font-bold">

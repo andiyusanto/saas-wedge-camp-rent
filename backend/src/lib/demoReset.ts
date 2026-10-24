@@ -9,6 +9,7 @@
 // bisa disalahgunakan untuk menyentuh data vendor asli.
 
 import { todayInWIB, addDays } from './dates.js';
+import { computeItemRentalPrice, type ItemDayRates } from './pricing.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const ANON_KEY = process.env.SUPABASE_PUBLISHABLE_KEY!;
@@ -45,45 +46,6 @@ function nextWeekend(): { saturday: string; sunday: string } {
   if (toSaturday === 0) toSaturday = 7;
   const saturday = addDays(today, toSaturday);
   return { saturday, sunday: addDays(saturday, 1) };
-}
-
-// Sama persis dengan computeItemRentalPrice() di
-// frontend/src/utils/formatters.ts (migration 034) — beda runtime
-// (backend TS vs bundel frontend), jaga tetap sinkron kalau salah satu
-// diubah. Lihat komentar lengkap di migration 034 untuk alasan semantik
-// per-hari (bukan kumulatif ala Bilbo).
-type ItemRates = {
-  price_per_day: number;
-  day2_rate: number;
-  day3_rate: number;
-  day4_rate: number;
-  day5_rate: number;
-  extra_day_rate: number;
-};
-
-function dailyRateForDay(rates: ItemRates, day: number): number {
-  switch (day) {
-    case 1:
-      return rates.price_per_day;
-    case 2:
-      return rates.day2_rate;
-    case 3:
-      return rates.day3_rate;
-    case 4:
-      return rates.day4_rate;
-    case 5:
-      return rates.day5_rate;
-    default:
-      return rates.extra_day_rate;
-  }
-}
-
-function computeItemRentalPrice(rates: ItemRates, days: number): number {
-  if (days <= 0) return 0;
-  let total = 0;
-  for (let day = 1; day <= Math.min(days, 5); day++) total += dailyRateForDay(rates, day);
-  if (days > 5) total += (days - 5) * rates.extra_day_rate;
-  return total;
 }
 
 // Sama persis dengan rentalDays() di frontend/src/utils/formatters.ts.
@@ -422,7 +384,7 @@ export async function resetDemoData(): Promise<DemoResetResult> {
   );
   const existingByCode = Object.fromEntries(existingItems.map((i) => [i.code, i.id]));
 
-  const items: Record<string, { id: string } & ItemRates> = {};
+  const items: Record<string, { id: string } & ItemDayRates> = {};
   for (const def of ITEM_DEFS) {
     const existingId = existingByCode[def.code];
     if (existingId) {

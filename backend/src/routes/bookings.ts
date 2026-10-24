@@ -10,6 +10,13 @@ const router = Router();
 // computeItemRentalPrice(), sama pola trust-the-client seperti total_price
 // di bawah — backend tidak pernah validasi/hitung ulang harga sendiri)
 // dan disimpan apa adanya sebagai snapshot booking_items.subtotal.
+//
+// day2_rate_at_booking..extra_day_rate_at_booking SEBALIKNYA tidak pernah
+// diterima dari klien — selalu diisi di bawah dari itemRow (tabel items
+// SAAT INI), pola yang sama seperti price_at_booking. Dipakai nanti oleh
+// denda keterlambatan bertingkat (lib/penalty.ts computeTieredLateFee,
+// dipanggil dari routes/trackings.ts), yang TIDAK BOLEH baca harga
+// katalog yang mungkin sudah vendor edit setelah transaksi ini dibuat.
 type BookingItemInput = { item_id: string; quantity: number; subtotal?: number };
 
 async function generateBookingNumber(
@@ -73,7 +80,7 @@ router.post('/bookings', async (req, res) => {
 
   const { data: itemRows, error: itemsError } = await supabase
     .from('items')
-    .select('id, name, total_units, price_per_day, readiness_hours')
+    .select('id, name, total_units, price_per_day, readiness_hours, day2_rate, day3_rate, day4_rate, day5_rate, extra_day_rate')
     .in('id', requestedItems.map((i) => i.item_id));
 
   if (itemsError) {
@@ -188,6 +195,15 @@ router.post('/bookings', async (req, res) => {
       quantity: i.quantity,
       price_at_booking: itemRow.price_per_day,
       subtotal: typeof i.subtotal === 'number' ? i.subtotal : null,
+      // Snapshot tarif bertingkat (migration 034) — SERVER-SIDE dari
+      // tabel items saat ini, BUKAN dari input klien (beda dari subtotal
+      // di atas) supaya denda telat nanti (lib/penalty.ts) tidak pernah
+      // membaca harga katalog yang sudah berubah. Lihat komentar migrasi.
+      day2_rate_at_booking: itemRow.day2_rate,
+      day3_rate_at_booking: itemRow.day3_rate,
+      day4_rate_at_booking: itemRow.day4_rate,
+      day5_rate_at_booking: itemRow.day5_rate,
+      extra_day_rate_at_booking: itemRow.extra_day_rate,
     };
   });
 

@@ -74,6 +74,25 @@ alter table items
 alter table booking_items
   add column if not exists subtotal numeric;
 
+-- Snapshot TARIF BERTINGKAT per booking_item SAAT transaksi dibuat (sama
+-- prinsip "beku" seperti price_at_booking & subtotal di atas) — dibutuhkan
+-- supaya denda keterlambatan bisa pakai rumus marginal ala Bilbo-Outdoors
+-- TANPA membaca harga katalog SAAT INI (yang mungkin sudah diedit vendor
+-- sejak transaksi ini dibuat). Diisi SERVER-SIDE dari tabel items saat
+-- POST /bookings (backend/src/routes/bookings.ts), BUKAN dari input
+-- klien — beda dari booking_items.subtotal di atas yang sengaja trust-the-
+-- client; snapshot tarif ini levelnya sama dengan price_at_booking
+-- (sudah lebih dulu server-side, lihat itemRow.price_per_day). Nullable,
+-- TIDAK di-backfill — baris lama (sebelum migrasi ini) tetap null, kode
+-- pemakai (lib/penalty.ts computeTieredLateFee) fallback ke computeLateFee
+-- (rumus flat lama, pakai price_at_booking) kalau day2_rate_at_booking null.
+alter table booking_items
+  add column if not exists day2_rate_at_booking numeric,
+  add column if not exists day3_rate_at_booking numeric,
+  add column if not exists day4_rate_at_booking numeric,
+  add column if not exists day5_rate_at_booking numeric,
+  add column if not exists extra_day_rate_at_booking numeric;
+
 -- get_public_page() (migration 019/020): ikut tampilkan tarif per
 -- tingkat supaya Etalase Online bisa kasih tahu "mulai Rp X/hari untuk
 -- sewa panjang" kalau alatnya memang punya tarif lebih murah. CREATE OR

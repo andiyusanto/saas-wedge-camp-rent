@@ -68,10 +68,11 @@ export function rentalDays(start: string, end: string): number {
 // tarif hari 1..min(N,5) + maks(0,N-5) x extraDayRate. Alat flat (semua
 // tingkat sama dengan price_per_day) otomatis jadi N x harga flat.
 //
-// Sengaja TIDAK dipakai untuk denda keterlambatan (lihat
-// backend/src/lib/penalty.ts — dailyRate di sana berasal dari
-// price_at_booking, snapshot tarif hari-1 saja, tidak pernah tahu soal
-// tingkat ini).
+// Salinannya di backend (backend/src/lib/pricing.ts) JUGA dipakai untuk
+// denda keterlambatan bertingkat (backend/src/lib/penalty.ts
+// computeTieredLateFee) — booking_items.*_at_booking (migration 034)
+// menyimpan snapshot tarif ini per baris, diisi server-side saat
+// transaksi dibuat (bukan dari sini/frontend).
 export type ItemDayRates = {
   price_per_day: number;
   day2_rate: number;

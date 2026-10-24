@@ -1,4 +1,5 @@
 import { WIB_OFFSET_MS } from './dates.js';
+import { computeItemRentalPrice, type ItemDayRates } from './pricing.js';
 
 const BLOCK_HOURS = 12;
 const BLOCK_RATE = 0.5;
@@ -53,13 +54,77 @@ export function hoursLate(dueAt: Date, returnAt: Date): number {
 // late... the tolerance's benefit evaporated entirely the moment it was
 // exceeded". Sewalog kena bug yang sama persis, diperbaiki di sini dengan
 // pola yang sama: toleransi menggeser garis mulai hitung, bukan gerbang biner.
+// Jumlah blok 12-jam yang sudah lewat toleransi — dipakai BAIK oleh
+// computeLateFee() (tarif flat/legacy) MAUPUN computeTieredLateFee() di
+// bawah (tarif bertingkat, migration 034+). Diekstrak supaya dua rumus
+// itu selalu sepakat soal "berapa hari/blok yang terlambat", cuma beda
+// di TARIF per bloknya — lihat komentar migration 034 soal alasan
+// pemisahan ini.
+function computeLateBlocks(hoursLateValue: number, toleranceHours: number): number {
+  const effectiveLateHours = hoursLateValue - toleranceHours;
+  if (effectiveLateHours <= 0) return 0;
+  return Math.ceil(effectiveLateHours / BLOCK_HOURS);
+}
+
 export function computeLateFee(
   hoursLateValue: number,
   toleranceHours: number,
   dailyRate: number,
 ): number {
-  const effectiveLateHours = hoursLateValue - toleranceHours;
-  if (effectiveLateHours <= 0) return 0;
-  const blocks = Math.ceil(effectiveLateHours / BLOCK_HOURS);
+  const blocks = computeLateBlocks(hoursLateValue, toleranceHours);
   return blocks * BLOCK_RATE * dailyRate;
+}
+
+// Denda keterlambatan bertingkat (migration 034) — rumus marginal ala
+// Bilbo-Outdoors (server.ts calculate-late: harga(durasi+telat) -
+// harga(durasi)) DIGABUNG dengan mekanisme blok 12-jam/50% Sewalog yang
+// sudah ada (TIDAK diubah: cara menghitung jumlah blok tetap lewat
+// computeLateBlocks() di atas, sama persis seperti computeLateFee()).
+//
+// Setiap blok = 12 jam = SETENGAH hari telat, pada 50% tarif. 2 blok =
+// 1 hari telat penuh (100% tarif hari itu). Jadi:
+//   fullLateDays = floor(blocks / 2)   -- jumlah hari telat PENUH
+//   hasHalfBlock = blocks % 2 === 1    -- sisa setengah hari (kalau ganjil)
+//
+// Tarif hari ke-(rentDuration+k) = marginal dari computeItemRentalPrice:
+// harga(rentDuration+k) - harga(rentDuration+k-1). Fee untuk fullLateDays
+// hari penuh = harga(rentDuration+fullLateDays) - harga(rentDuration)
+// (teleskopik, jumlah semua marginal di antaranya). Kalau ada sisa
+// setengah blok, tambah 50% dari marginal hari BERIKUTNYA (hari ke
+// fullLateDays+1) — pola "50% tarif hari itu" yang sama seperti blok
+// biasa, cuma tarifnya sekarang tarif-hari-itu (bisa beda per hari),
+// bukan dailyRate flat.
+//
+// Diverifikasi: untuk item FLAT (semua tingkat = price_per_day), rumus
+// ini menghasilkan angka IDENTIK dengan computeLateFee() lama (lihat
+// catatan verifikasi di riwayat kerja) — backward-compatible by
+// construction, bukan cuma diasumsikan.
+export function computeTieredLateFee(
+  hoursLateValue: number,
+  toleranceHours: number,
+  rentDuration: number,
+  rates: ItemDayRates,
+): number {
+  const blocks = computeLateBlocks(hoursLateValue, toleranceHours);
+  if (blocks <= 0) return 0;
+  const fullLateDays = Math.floor(blocks / 2);
+  const hasHalfBlock = blocks % 2 === 1;
+
+  let fee = computeItemRentalPrice(rates, rentDuration + fullLateDays) - computeItemRentalPrice(rates, rentDuration);
+  if (hasHalfBlock) {
+    const nextDayMarginal =
+      computeItemRentalPrice(rates, rentDuration + fullLateDays + 1) -
+      computeItemRentalPrice(rates, rentDuration + fullLateDays);
+    fee += BLOCK_RATE * nextDayMarginal;
+  }
+  return fee;
+}
+
+// Untuk tampilan rincian (dialog pengembalian/nota) — jumlah "hari
+// telat" dalam satuan yang sama dengan computeTieredLateFee() di atas
+// (0.5 per blok ganjil), supaya tarif efektif per-hari yang ditampilkan
+// (fee / lateDaysEquivalent) konsisten dengan fee yang sungguhan dipakai.
+export function lateDaysEquivalent(hoursLateValue: number, toleranceHours: number): number {
+  const blocks = computeLateBlocks(hoursLateValue, toleranceHours);
+  return blocks * BLOCK_RATE;
 }

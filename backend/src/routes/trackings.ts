@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { createRequestClient } from '../lib/supabaseClient.js';
-import { computeDueAt, hoursLate, computeLateFee } from '../lib/penalty.js';
+import { computeDueAt, hoursLate, computeLateFee, computeTieredLateFee, lateDaysEquivalent } from '../lib/penalty.js';
+import { dateRange } from '../lib/dates.js';
 import { logBookingStatus } from '../lib/audit.js';
 
 const router = Router();
@@ -10,8 +11,40 @@ type BookingItemJoin = {
   quantity: number;
   price_at_booking: number;
   subtotal: number | null;
+  day2_rate_at_booking: number | null;
+  day3_rate_at_booking: number | null;
+  day4_rate_at_booking: number | null;
+  day5_rate_at_booking: number | null;
+  extra_day_rate_at_booking: number | null;
   items: { name: string } | null;
 };
+
+// Denda keterlambatan per item booking_items ini — rumus bertingkat
+// (computeTieredLateFee, migration 034+) kalau snapshot tarifnya ada,
+// atau rumus flat lama (computeLateFee, pakai price_at_booking) untuk
+// baris booking_items dari SEBELUM migration 034 (snapshot null, belum
+// ada cara tahu tarif bertingkat waktu transaksi itu dibuat). rentDuration
+// = jumlah hari sewa ASLI booking ini (bukan jumlah hari telat) — basis
+// "harga(durasi+telat) - harga(durasi)" di rumus marginal.
+function itemLateFee(
+  bi: BookingItemJoin,
+  hLate: number,
+  toleranceHours: number,
+  rentDuration: number,
+): number {
+  if (bi.day2_rate_at_booking == null) {
+    return bi.quantity * computeLateFee(hLate, toleranceHours, bi.price_at_booking);
+  }
+  const rates = {
+    price_per_day: bi.price_at_booking,
+    day2_rate: bi.day2_rate_at_booking,
+    day3_rate: bi.day3_rate_at_booking!,
+    day4_rate: bi.day4_rate_at_booking!,
+    day5_rate: bi.day5_rate_at_booking!,
+    extra_day_rate: bi.extra_day_rate_at_booking!,
+  };
+  return bi.quantity * computeTieredLateFee(hLate, toleranceHours, rentDuration, rates);
+}
 type PenaltyJoin = {
   id: string;
   type: string;
@@ -43,7 +76,7 @@ router.get('/trackings', async (req, res) => {
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select(
-      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_url, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_status_history(status, changed_by_name, created_at)',
+      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_url, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_status_history(status, changed_by_name, created_at)',
     )
     .in('status', ['dipesan', 'aktif'])
     .order('end_date');
@@ -56,16 +89,39 @@ router.get('/trackings', async (req, res) => {
   const now = new Date();
 
   const result = (bookings ?? []).map((b) => {
-    const dailyRate = ((b.booking_items ?? []) as unknown as BookingItemJoin[]).reduce(
-      (sum, bi) => sum + bi.quantity * bi.price_at_booking,
-      0,
-    );
+    const bookingItems = (b.booking_items ?? []) as unknown as BookingItemJoin[];
+    const dailyRate = bookingItems.reduce((sum, bi) => sum + bi.quantity * bi.price_at_booking, 0);
+    const rentDuration = dateRange(b.start_date, b.end_date).length;
 
     // 'dipesan' belum diambil fisik — belum relevan hitung telat.
     const isPendingPickup = b.status === 'dipesan';
     const dueAt = computeDueAt(b.end_date, b.created_at, b.picked_up_at);
     const hLate = isPendingPickup ? 0 : Math.max(0, hoursLate(dueAt, now));
-    const suggestedLateFee = isPendingPickup ? 0 : computeLateFee(hLate, business.late_tolerance_hours, dailyRate);
+
+    // Per item: tiered (snapshot ada) atau flat lama (snapshot null),
+    // lihat itemLateFee() di atas. Dijumlah jadi satu saran denda, tapi
+    // rinciannya (late_fee_breakdown) dikirim juga ke frontend supaya
+    // dialog pengembalian bisa tampilkan tarif efektif per alat, bukan
+    // cuma satu angka gabungan.
+    const lateDaysDisplay = isPendingPickup ? 0 : lateDaysEquivalent(hLate, business.late_tolerance_hours);
+    const lateFeeBreakdown = isPendingPickup
+      ? []
+      : bookingItems
+          .map((bi) => ({
+            item_id: bi.item_id,
+            name: bi.items?.name ?? '',
+            fee: itemLateFee(bi, hLate, business.late_tolerance_hours, rentDuration),
+          }))
+          .filter((x) => x.fee > 0)
+          .map((x) => ({
+            ...x,
+            // Tarif efektif per hari telat, cuma buat tampilan (seperti
+            // dailyRateBreakdown Bilbo) — fee sungguhan sudah final di
+            // atas, ini cuma fee/lateDaysDisplay dibalik supaya vendor
+            // paham angkanya dari mana, bukan sumber hitungan baru.
+            per_day_rate: lateDaysDisplay > 0 ? Math.round(x.fee / lateDaysDisplay) : 0,
+          }));
+    const suggestedLateFee = isPendingPickup ? 0 : lateFeeBreakdown.reduce((sum, x) => sum + x.fee, 0);
 
     return {
       id: b.id,
@@ -81,6 +137,8 @@ router.get('/trackings', async (req, res) => {
       hours_late: Math.round(hLate * 10) / 10,
       daily_rate: dailyRate,
       suggested_late_fee: suggestedLateFee,
+      late_days_equivalent: lateDaysDisplay,
+      late_fee_breakdown: lateFeeBreakdown,
       items: ((b.booking_items ?? []) as unknown as BookingItemJoin[]).map((bi) => ({
         item_id: bi.item_id,
         name: bi.items?.name ?? '',

@@ -17,6 +17,8 @@ export type TrackingBooking = {
   hours_late: number;
   daily_rate: number;
   suggested_late_fee: number;
+  late_days_equivalent: number;
+  late_fee_breakdown: { item_id: string; name: string; fee: number; per_day_rate: number }[];
   items: { item_id: string; name: string; quantity: number; price_per_day: number; subtotal: number | null }[];
   deposits: { id: string; type: string; amount: number | null; note: string | null; status: string }[];
   penalties: {
