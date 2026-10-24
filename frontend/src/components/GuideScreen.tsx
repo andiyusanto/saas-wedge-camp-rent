@@ -131,6 +131,12 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         </div>
       </div>
 
+      <Note>
+        Tips: Sewalog bisa ditambahkan ke layar utama HP supaya dibuka seperti aplikasi (bukan lewat browser setiap
+        kali) — di Chrome Android lewat menu <Ui>⋮</Ui> → <Ui>Tambahkan ke layar utama</Ui>, atau di Safari iPhone
+        lewat tombol <Ui>Bagikan</Ui> → <Ui>Tambah ke Layar Utama</Ui>.
+      </Note>
+
       <Section id="g-1" num="1" title="Masuk & Setup Usaha" kicker="Langkah pertama saat pertama kali membuka Sewalog.">
         <p>
           Daftar dengan email &amp; password lewat tombol <Ui>Belum punya akun? Daftar</Ui> di halaman login, atau masuk
@@ -150,7 +156,8 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         <Note>
           Kalau kamu membuka Sewalog lewat link undangan dari usaha lain (lihat bagian 6), kamu akan diarahkan ke
           layar <Ui>Undangan Bergabung</Ui> alih-alih Setup Usaha — pilih <Ui>Gabung Sekarang</Ui> untuk masuk ke usaha
-          yang mengundang, atau <Ui>Lewati</Ui> kalau memang mau bikin usaha sendiri.
+          yang mengundang, atau <Ui>Lewati</Ui> kalau memang mau bikin usaha sendiri. Satu akun hanya bisa terhubung
+          ke satu usaha — kalau akunmu sudah terhubung ke usaha lain, pakai email lain untuk menerima undangan ini.
         </Note>
         <Note>
           Data usaha (nama, nama pemilik, no. telepon, dan toleransi telat sebelum kena denda) bisa diubah kapan saja
@@ -241,6 +248,14 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           digabung — supaya pemilik bisa langsung tahu penyebabnya tanpa membuka rincian lebih dulu.
         </Note>
         <Note>
+          Tarif denda keterlambatan mengikuti harga per hari alatnya (bagian 3), bukan cuma tarif hari pertama —
+          kalau alatmu punya harga per hari yang lebih murah untuk sewa lama, telat dihitung pakai tarif hari
+          berikutnya sesuai pola itu. Contoh: sewa 2 hari lalu telat 1 hari, dendanya pakai tarif hari ke-3 alat itu,
+          bukan tarif hari ke-1. Alat dengan harga tetap tidak berubah perhitungannya. Dihitung per alat (rinciannya
+          tampil di layar <Ui>Kembalikan</Ui>), tetap menghormati toleransi telat usaha (bagian 1) sebelum mulai
+          dihitung, dan nominalnya tetap bisa diubah manual sebelum disimpan.
+        </Note>
+        <Note>
           Untuk transaksi dengan lebih dari satu alat, denda kerusakan/kehilangan bisa ditautkan ke alat spesifik
           mana yang kena (muncul sebagai pilihan dropdown di <Ui>Tambah Denda</Ui> dan di layar <Ui>Kembalikan</Ui>)
           — nama alatnya lalu ikut tampil di rincian denda, struk WA, dan Nota Sewa. Untuk transaksi satu alat,
@@ -279,6 +294,10 @@ export function GuideScreen({ businessName }: { businessName: string }) {
             <>Karyawan membuka link tersebut, daftar/masuk dengan akunnya sendiri, lalu menekan <Ui>Gabung Sekarang</Ui> — otomatis masuk ke usaha yang sama, tanpa isi form Setup Usaha lagi.</>,
           ]}
         />
+        <Note>
+          Satu akun hanya bisa terhubung ke satu usaha. Kalau karyawan yang diundang sudah terhubung ke usaha lain,
+          dia perlu pakai email lain untuk menerima undangan ini.
+        </Note>
         <Note>
           Peran <Ui>Karyawan</Ui> di sini murni label atribusi (siapa yang mencatat transaksi/perubahan) untuk semua
           fitur operasional — karyawan bisa memakai Kalender, Catat Transaksi, Transaksi Aktif, dan Katalog &amp;
@@ -379,7 +398,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         <ul className="list-disc pl-5 space-y-1.5 text-xs text-[#26302B]">
           <li><strong>Mobile-first</strong> — semua alur inti (kalender, catat transaksi, transaksi aktif) didesain dipakai sambil berdiri di depan rak alat, bukan di depan laptop.</li>
           <li><strong>Data selalu real-time</strong> — Sewalog sengaja tidak menyimpan data offline/cache agresif, supaya stok yang tampil tidak pernah basi dan menyebabkan double-booking.</li>
-          <li><strong>Isolasi data per usaha</strong> — setiap usaha hanya bisa melihat data miliknya sendiri, termasuk kalau kamu tergabung di lebih dari satu usaha lewat undangan.</li>
+          <li><strong>Isolasi data per usaha</strong> — setiap usaha hanya bisa melihat data miliknya sendiri. Satu akun cuma bisa terhubung ke satu usaha (lihat bagian 1 &amp; 6).</li>
           <li><strong>Wilayah tervalidasi saat ini</strong>: Malang Raya (Kota Malang, Kabupaten Malang, Kota Batu).</li>
         </ul>
       </Section>
