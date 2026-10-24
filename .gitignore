@@ -6,3 +6,6 @@ dist/
 *.local
 .DS_Store
 sewalog_new_template/
+# Konten media sosial, rencana marketing & riset (lokal, tidak di-commit)
+knowladge/
+research/

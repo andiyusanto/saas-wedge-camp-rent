@@ -41,6 +41,16 @@ const FAQ_ITEMS: { question: string; answer: string }[] = [
       'Cara mulai pakai Sewalog adalah dengan menghubungi kami lewat WhatsApp. Ceritakan cara sewa alat di tempat kamu, nanti kami bantu setup akun dan masukkan data alat — tanpa kontrak, tanpa kartu kredit.',
   },
   {
+    question: 'Apakah harus download aplikasi?',
+    answer:
+      'Tidak. Sewalog dibuka langsung dari browser HP lewat link, dan bisa ditambahkan ke layar utama supaya dibuka seperti aplikasi.',
+  },
+  {
+    question: 'Bisa untuk harga sewa yang beda tiap hari?',
+    answer:
+      'Bisa. Tarif bisa diatur per hari sampai hari ke-5 plus tarif untuk hari ke-6 dan seterusnya (contoh: hari 1 Rp30.000, hari 2 Rp20.000, hari 3 dst Rp10.000 — sewa 4 hari jadi Rp70.000), total dihitung otomatis saat mencatat transaksi, dan denda keterlambatan ikut memakai tarif hari berikutnya. Alat dengan harga tetap cukup diisi satu harga.',
+  },
+  {
     question: 'Apakah data alat dan transaksi aman?',
     answer:
       'Data alat dan transaksi disimpan dengan sistem yang memisahkan data tiap usaha secara terpisah (multi-tenant dengan Row Level Security), jadi satu usaha tidak bisa mengakses data usaha lain meski memakai aplikasi yang sama.',
@@ -432,6 +442,8 @@ export function LandingPage() {
                 preview={<TransactionMock />}
               >
                 Isi form singkat sambil pelanggan menunggu — alat, tanggal, sampai total harga otomatis kehitung.
+                Termasuk harga bertingkat: hari pertama bisa beda tarif dari hari berikutnya, tetap terhitung
+                otomatis.
               </FeatureCard>
               <FeatureCard
                 icon={ShieldAlert}
