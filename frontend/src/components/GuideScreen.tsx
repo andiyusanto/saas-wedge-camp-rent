@@ -182,8 +182,8 @@ export function GuideScreen({ businessName }: { businessName: string }) {
             { label: 'Total Stok', desc: 'Jumlah unit yang dimiliki.' },
             { label: 'Harga/hari', desc: 'Tarif harian normal.' },
             {
-              label: 'Harga bertingkat',
-              desc: 'Opsional — isi "berlaku setelah (hari)" dan "harga setelah diskon" kalau sewa lama dapat harga lebih murah per hari mulai hari tertentu. Kosongkan salah satunya kalau tidak ada diskon.',
+              label: 'Harga per hari',
+              desc: 'Opsional, lewat "Atur harga per hari" — isi tarif hari ke-2 sampai ke-5 dan hari ke-6 dst kalau sewa lama dapat harga lebih murah per hari. Tingkat yang dikosongkan otomatis ikut tarif tingkat sebelumnya, jadi alat dengan harga tetap cukup isi "Sewa /Hari" saja.',
             },
             { label: 'Foto', desc: 'Unggah langsung dari galeri/kamera — foto otomatis dikompres sebelum diunggah, tidak perlu tempel URL manual.' },
             {
@@ -205,7 +205,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
             <>Ketik nama penyewa — kalau pernah sewa sebelumnya, daftar saran pelanggan lama muncul otomatis (dicari dari nama, HP, atau alamat, jadi bisa ketik salah satu yang paling diingat). Tiap saran menampilkan HP dan alamat sekaligus supaya mudah dibedakan kalau ada nama yang sama. Pilih salah satu untuk mengisi HP/Alamat sekaligus, atau lanjut ketik biasa untuk pelanggan baru.</>,
             <>Isi nomor WhatsApp penyewa (kalau belum otomatis terisi). Opsional: tekan <Ui>Foto Wajah / Setengah Badan</Ui> untuk ambil foto singkat penyewa dari kamera.</>,
             <>Cari alat lewat kotak pencarian (nama, varian, ukuran, atau warna) kalau katalog sudah banyak, lalu centang satu atau lebih alat — bisa multi-item dalam satu transaksi. Varian/ukuran/warna alat (kalau diisi) ditampilkan di bawah nama alat supaya tidak salah pilih antar varian yang mirip.</>,
-            <>Pilih tanggal ambil &amp; kembali. Total harga terhitung otomatis, termasuk harga bertingkat kalau alatnya punya diskon sewa lama (lihat bagian 3).</>,
+            <>Pilih tanggal ambil &amp; kembali. Total harga terhitung otomatis, termasuk harga per hari kalau alatnya punya tarif lebih murah untuk sewa lama (lihat bagian 3).</>,
             <>Pilih jenis jaminan (KTP/SIM/STNK/Paspor/Uang/Lainnya), lalu tekan <Ui>Simpan &amp; Terbitkan Nota</Ui>.</>,
           ]}
         />

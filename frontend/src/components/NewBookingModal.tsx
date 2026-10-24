@@ -4,6 +4,7 @@ import type { Session } from '@supabase/supabase-js';
 import { X, Calendar, Plus, CheckCircle2, User, ShieldCheck, History, Upload, Search } from 'lucide-react';
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import { useItems } from '../hooks/useItems';
+import type { Item } from '../hooks/useItems';
 import type { Business } from '../hooks/useBusiness';
 import { apiFetch } from '../lib/api';
 import { useCustomerSearch, fetchCustomerHistorySummary } from '../hooks/useCustomerSearch';
@@ -21,6 +22,22 @@ import {
 } from '../utils/formatters';
 
 type DepositType = '' | 'ktp' | 'sim' | 'stnk' | 'paspor' | 'uang' | 'lainnya';
+
+// Harga sewa N hari untuk satu unit alat (migration 034, harga bertingkat
+// per-hari) — satu tempat supaya tidak diulang di tiap pemakaian.
+function itemRentalPrice(item: Item, days: number): number {
+  return computeItemRentalPrice(
+    {
+      price_per_day: item.price_per_day,
+      day2_rate: item.day2_rate,
+      day3_rate: item.day3_rate,
+      day4_rate: item.day4_rate,
+      day5_rate: item.day5_rate,
+      extra_day_rate: item.extra_day_rate,
+    },
+    days,
+  );
+}
 
 export function NewBookingModal({
   isOpen,
@@ -114,7 +131,7 @@ export function NewBookingModal({
   const totalPrice = selectedEntries.reduce((sum, [itemId, qty]) => {
     const item = items.find((i) => i.id === itemId);
     if (!item) return sum;
-    return sum + qty * computeItemRentalPrice(item.price_per_day, item.discount_min_days, item.discounted_price_per_day, days);
+    return sum + qty * itemRentalPrice(item, days);
   }, 0);
 
   const remainingPayment = Math.max(0, totalPrice - (Number(dpPaid) || 0));
@@ -179,7 +196,14 @@ export function NewBookingModal({
     e.preventDefault();
     setError(null);
 
-    const selectedItems = selectedEntries.map(([item_id, quantity]) => ({ item_id, quantity }));
+    // subtotal (migration 034) dihitung sekali di sini dari tarif katalog
+    // SAAT INI dan disimpan sebagai snapshot booking_items.subtotal —
+    // bukan dihitung ulang dari katalog lagi nanti saat struk/Nota
+    // ditampilkan, supaya tidak berubah kalau harga alat diedit belakangan.
+    const selectedItems = selectedEntries.map(([item_id, quantity]) => {
+      const item = items.find((i) => i.id === item_id);
+      return { item_id, quantity, subtotal: item ? quantity * itemRentalPrice(item, days) : undefined };
+    });
     if (selectedItems.length === 0) {
       setError('Pilih minimal satu alat.');
       return;
@@ -220,9 +244,13 @@ export function NewBookingModal({
         const receiptItems = selectedEntries
           .map(([itemId, qty]) => {
             const item = items.find((i) => i.id === itemId);
-            return item ? { name: item.name, quantity: qty, price_per_day: item.price_per_day } : null;
+            return item
+              ? { name: item.name, quantity: qty, price_per_day: item.price_per_day, subtotal: qty * itemRentalPrice(item, days) }
+              : null;
           })
-          .filter((i): i is { name: string; quantity: number; price_per_day: number } => i !== null);
+          .filter(
+            (i): i is { name: string; quantity: number; price_per_day: number; subtotal: number } => i !== null,
+          );
 
         const receiptText = generateWhatsAppReceipt({
           bookingNumber: body.booking_number,
@@ -441,7 +469,7 @@ export function NewBookingModal({
                 {filteredItems.map((item) => {
                   const qty = quantities[item.id] ?? 0;
                   const checked = qty > 0;
-                  const subtotal = qty * computeItemRentalPrice(item.price_per_day, item.discount_min_days, item.discounted_price_per_day, days);
+                  const subtotal = qty * itemRentalPrice(item, days);
 
                   return (
                     <div key={item.id} className="flex items-center justify-between p-2.5 rounded-lg bg-white border border-[#DBD5C1]">

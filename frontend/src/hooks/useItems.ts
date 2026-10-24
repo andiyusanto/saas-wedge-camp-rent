@@ -11,8 +11,11 @@ export type Item = {
   color: string | null;
   total_units: number;
   price_per_day: number;
-  discount_min_days: number;
-  discounted_price_per_day: number | null;
+  day2_rate: number;
+  day3_rate: number;
+  day4_rate: number;
+  day5_rate: number;
+  extra_day_rate: number;
   readiness_hours: number;
   image_url: string | null;
   description: string | null;
@@ -34,8 +37,11 @@ export type ItemInput = {
   color: string | null;
   total_units: number;
   price_per_day: number;
-  discount_min_days: number;
-  discounted_price_per_day: number | null;
+  day2_rate: number;
+  day3_rate: number;
+  day4_rate: number;
+  day5_rate: number;
+  extra_day_rate: number;
   readiness_hours: number;
   image_url: string | null;
   description: string | null;
@@ -43,7 +49,7 @@ export type ItemInput = {
 };
 
 const SELECT_FIELDS =
-  'id, code, name, category, variant, size, color, total_units, price_per_day, discount_min_days, discounted_price_per_day, readiness_hours, image_url, description, condition_note, deactivated_at, created_at, created_by, updated_at, updated_by, deactivated_by';
+  'id, code, name, category, variant, size, color, total_units, price_per_day, day2_rate, day3_rate, day4_rate, day5_rate, extra_day_rate, readiness_hours, image_url, description, condition_note, deactivated_at, created_at, created_by, updated_at, updated_by, deactivated_by';
 
 export function useItems(businessId: string | undefined) {
   const [allItems, setAllItems] = useState<Item[]>([]);

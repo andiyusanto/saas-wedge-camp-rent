@@ -9,6 +9,7 @@ type BookingItemJoin = {
   item_id: string;
   quantity: number;
   price_at_booking: number;
+  subtotal: number | null;
   items: { name: string } | null;
 };
 type PenaltyJoin = {
@@ -42,7 +43,7 @@ router.get('/trackings', async (req, res) => {
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select(
-      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_url, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_status_history(status, changed_by_name, created_at)',
+      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_url, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_status_history(status, changed_by_name, created_at)',
     )
     .in('status', ['dipesan', 'aktif'])
     .order('end_date');
@@ -85,6 +86,7 @@ router.get('/trackings', async (req, res) => {
         name: bi.items?.name ?? '',
         quantity: bi.quantity,
         price_per_day: bi.price_at_booking,
+        subtotal: bi.subtotal,
       })),
       deposits: b.deposits ?? [],
       penalties: ((b.penalties ?? []) as unknown as PenaltyJoin[]).map((p) => ({

@@ -6,7 +6,11 @@ import { logBookingStatus } from '../lib/audit.js';
 
 const router = Router();
 
-type BookingItemInput = { item_id: string; quantity: number };
+// subtotal (migration 034) dikirim sudah terhitung dari frontend (lewat
+// computeItemRentalPrice(), sama pola trust-the-client seperti total_price
+// di bawah — backend tidak pernah validasi/hitung ulang harga sendiri)
+// dan disimpan apa adanya sebagai snapshot booking_items.subtotal.
+type BookingItemInput = { item_id: string; quantity: number; subtotal?: number };
 
 async function generateBookingNumber(
   supabase: ReturnType<typeof createRequestClient>,
@@ -183,6 +187,7 @@ router.post('/bookings', async (req, res) => {
       item_id: i.item_id,
       quantity: i.quantity,
       price_at_booking: itemRow.price_per_day,
+      subtotal: typeof i.subtotal === 'number' ? i.subtotal : null,
     };
   });
 

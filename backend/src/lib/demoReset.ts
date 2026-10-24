@@ -47,15 +47,43 @@ function nextWeekend(): { saturday: string; sunday: string } {
   return { saturday, sunday: addDays(saturday, 1) };
 }
 
-function computeItemRentalPrice(
-  pricePerDay: number,
-  discountMinDays: number,
-  discountedPricePerDay: number | null,
-  days: number,
-): number {
-  if (!discountedPricePerDay || days <= discountMinDays) return pricePerDay * days;
-  const extraDays = days - discountMinDays;
-  return pricePerDay * discountMinDays + discountedPricePerDay * extraDays;
+// Sama persis dengan computeItemRentalPrice() di
+// frontend/src/utils/formatters.ts (migration 034) — beda runtime
+// (backend TS vs bundel frontend), jaga tetap sinkron kalau salah satu
+// diubah. Lihat komentar lengkap di migration 034 untuk alasan semantik
+// per-hari (bukan kumulatif ala Bilbo).
+type ItemRates = {
+  price_per_day: number;
+  day2_rate: number;
+  day3_rate: number;
+  day4_rate: number;
+  day5_rate: number;
+  extra_day_rate: number;
+};
+
+function dailyRateForDay(rates: ItemRates, day: number): number {
+  switch (day) {
+    case 1:
+      return rates.price_per_day;
+    case 2:
+      return rates.day2_rate;
+    case 3:
+      return rates.day3_rate;
+    case 4:
+      return rates.day4_rate;
+    case 5:
+      return rates.day5_rate;
+    default:
+      return rates.extra_day_rate;
+  }
+}
+
+function computeItemRentalPrice(rates: ItemRates, days: number): number {
+  if (days <= 0) return 0;
+  let total = 0;
+  for (let day = 1; day <= Math.min(days, 5); day++) total += dailyRateForDay(rates, day);
+  if (days > 5) total += (days - 5) * rates.extra_day_rate;
+  return total;
 }
 
 // Sama persis dengan rentalDays() di frontend/src/utils/formatters.ts.
@@ -147,8 +175,11 @@ type ItemDef = {
   color: string | null;
   total_units: number;
   price_per_day: number;
-  discount_min_days: number;
-  discounted_price_per_day: number | null;
+  day2_rate: number;
+  day3_rate: number;
+  day4_rate: number;
+  day5_rate: number;
+  extra_day_rate: number;
   readiness_hours: number;
   description: string | null;
   condition_note: string | null;
@@ -174,9 +205,17 @@ const ITEM_DEFS: ItemDef[] = [
     size: null,
     color: 'Hijau Army',
     total_units: 8,
-    price_per_day: 60000,
-    discount_min_days: 5,
-    discounted_price_per_day: 45000,
+    // Contoh harga bertingkat per-hari (migration 034) — pola nyata dari
+    // vendor pilot: hari 1 Rp30rb, hari 2 Rp20rb, hari 3 dst Rp10rb/hari
+    // (4 hari = 30+20+10+10 = 70rb, 7 hari = 30+20+10+10+10+10+10 = 100rb).
+    // Satu-satunya alat demo yang sengaja diubah pola harganya — alat lain
+    // tetap dibackfill setara perilaku lamanya (lihat migration 034).
+    price_per_day: 30000,
+    day2_rate: 20000,
+    day3_rate: 10000,
+    day4_rate: 10000,
+    day5_rate: 10000,
+    extra_day_rate: 10000,
     // Contoh jeda persiapan (migration 028, satuan jam) — tenda butuh 24 jam
     // diangin-anginkan sebelum disewa lagi, supaya fitur ini kelihatan aktif
     // di demo. Alat lain (headlamp, kompor) sengaja tetap 0 — item-item itu
@@ -194,9 +233,14 @@ const ITEM_DEFS: ItemDef[] = [
     size: 'Dewasa',
     color: 'Merah',
     total_units: 15,
+    // Setara perilaku lama (diskon setelah 3 hari jadi 10rb/hari): hari
+    // 1-3 ikut harga normal, hari 4 dst ikut tarif diskon.
     price_per_day: 15000,
-    discount_min_days: 3,
-    discounted_price_per_day: 10000,
+    day2_rate: 15000,
+    day3_rate: 15000,
+    day4_rate: 10000,
+    day5_rate: 10000,
+    extra_day_rate: 10000,
     readiness_hours: 0,
     description: 'Sleeping bag ukuran dewasa, tahan suhu dingin dataran tinggi.',
     condition_note: null,
@@ -210,9 +254,14 @@ const ITEM_DEFS: ItemDef[] = [
     size: null,
     color: null,
     total_units: 6,
+    // Flat (tidak pernah pakai diskon di model lama) — semua tingkat
+    // sama dengan harga normal.
     price_per_day: 20000,
-    discount_min_days: 5,
-    discounted_price_per_day: null,
+    day2_rate: 20000,
+    day3_rate: 20000,
+    day4_rate: 20000,
+    day5_rate: 20000,
+    extra_day_rate: 20000,
     readiness_hours: 0,
     description: 'Kompor portable lengkap dengan tabung gas kecil.',
     condition_note: null,
@@ -226,9 +275,13 @@ const ITEM_DEFS: ItemDef[] = [
     size: null,
     color: null,
     total_units: 20,
+    // Flat.
     price_per_day: 10000,
-    discount_min_days: 5,
-    discounted_price_per_day: null,
+    day2_rate: 10000,
+    day3_rate: 10000,
+    day4_rate: 10000,
+    day5_rate: 10000,
+    extra_day_rate: 10000,
     readiness_hours: 0,
     description: null,
     condition_note: null,
@@ -242,9 +295,14 @@ const ITEM_DEFS: ItemDef[] = [
     size: '60L',
     color: 'Hijau Army',
     total_units: 10,
+    // Setara perilaku lama (diskon setelah 5 hari jadi 25rb/hari): hari
+    // 1-5 ikut harga normal, hari 6 dst ikut tarif diskon.
     price_per_day: 35000,
-    discount_min_days: 5,
-    discounted_price_per_day: 25000,
+    day2_rate: 35000,
+    day3_rate: 35000,
+    day4_rate: 35000,
+    day5_rate: 35000,
+    extra_day_rate: 25000,
     // Contoh kedua jeda persiapan (selain Tenda Dome) — carrier butuh dicek
     // jahitan/kebersihan lebih menyeluruh (48 jam = 2 hari kalender).
     readiness_hours: 48,
@@ -260,9 +318,13 @@ const ITEM_DEFS: ItemDef[] = [
     size: null,
     color: 'Hitam',
     total_units: 12,
+    // Flat.
     price_per_day: 8000,
-    discount_min_days: 5,
-    discounted_price_per_day: null,
+    day2_rate: 8000,
+    day3_rate: 8000,
+    day4_rate: 8000,
+    day5_rate: 8000,
+    extra_day_rate: 8000,
     readiness_hours: 0,
     description: null,
     condition_note: null,
@@ -360,7 +422,7 @@ export async function resetDemoData(): Promise<DemoResetResult> {
   );
   const existingByCode = Object.fromEntries(existingItems.map((i) => [i.code, i.id]));
 
-  const items: Record<string, { id: string; price_per_day: number; discount_min_days: number; discounted_price_per_day: number | null }> = {};
+  const items: Record<string, { id: string } & ItemRates> = {};
   for (const def of ITEM_DEFS) {
     const existingId = existingByCode[def.code];
     if (existingId) {
@@ -421,10 +483,8 @@ export async function resetDemoData(): Promise<DemoResetResult> {
     entries: [string, number][];
   }) {
     const days = rentalDays(params.start_date, params.end_date);
-    const total_price = params.entries.reduce((sum, [code, qty]) => {
-      const it = items[code];
-      return sum + qty * computeItemRentalPrice(it.price_per_day, it.discount_min_days, it.discounted_price_per_day, days);
-    }, 0);
+    const subtotalFor = (code: string, qty: number) => qty * computeItemRentalPrice(items[code], days);
+    const total_price = params.entries.reduce((sum, [code, qty]) => sum + subtotalFor(code, qty), 0);
 
     return selfApi<{ id: string }>('/api/bookings', ownerToken, {
       method: 'POST',
@@ -433,7 +493,11 @@ export async function resetDemoData(): Promise<DemoResetResult> {
         ...(params.customer_id ? { customer_id: params.customer_id } : { customer: params.customer }),
         start_date: params.start_date,
         end_date: params.end_date,
-        items: params.entries.map(([code, qty]) => ({ item_id: items[code].id, quantity: qty })),
+        items: params.entries.map(([code, qty]) => ({
+          item_id: items[code].id,
+          quantity: qty,
+          subtotal: subtotalFor(code, qty),
+        })),
         deposit: params.deposit,
         total_price,
       }),

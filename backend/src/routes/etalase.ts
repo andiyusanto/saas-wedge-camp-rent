@@ -15,6 +15,11 @@ type PublicItem = {
   name: string;
   category: string | null;
   price_per_day: number;
+  day2_rate: number;
+  day3_rate: number;
+  day4_rate: number;
+  day5_rate: number;
+  extra_day_rate: number;
   image_url: string | null;
   variant: string | null;
   size: string | null;
@@ -270,6 +275,11 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
     ${item.category ? `<p style="margin:2px 0 0;font-size:0.8rem;color:#6E6853;">${escapeHtml(item.category)}</p>` : ''}
     ${details ? `<p style="margin:2px 0 0;font-size:0.75rem;color:#6E6853;">${escapeHtml(details)}</p>` : ''}
     <p style="margin:6px 0 0;font-weight:700;color:#2B4739;">${formatIDR(item.price_per_day)} <span style="font-weight:400;color:#6E6853;font-size:0.75rem;">/hari</span></p>
+    ${
+      item.extra_day_rate < item.price_per_day
+        ? `<p style="margin:2px 0 0;font-size:0.75rem;color:#6E6853;">Mulai ${formatIDR(item.extra_day_rate)}/hari untuk sewa panjang</p>`
+        : ''
+    }
     <span data-avail="${escapeHtml(item.id)}" style="display:none;margin-top:6px;padding:2px 8px;border-radius:999px;font-size:0.7rem;font-weight:700;"></span>
   </div>
 </div>`;

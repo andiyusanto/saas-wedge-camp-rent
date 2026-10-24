@@ -60,20 +60,50 @@ export function rentalDays(start: string, end: string): number {
   return Math.max(1, Math.round(ms / 86_400_000) + 1);
 }
 
-// Harga bertingkat sederhana: hari 1..discountMinDays pakai pricePerDay,
-// sisanya (kalau discountedPricePerDay diisi) pakai tarif itu. Sengaja
-// TIDAK dipakai untuk denda keterlambatan (lihat backend/src/lib/penalty.ts).
-export function computeItemRentalPrice(
-  pricePerDay: number,
-  discountMinDays: number,
-  discountedPricePerDay: number | null,
-  days: number,
-): number {
-  if (!discountedPricePerDay || days <= discountMinDays) {
-    return pricePerDay * days;
+// Harga bertingkat per-hari (migration 034, diadaptasi dari Bilbo-Outdoors
+// src/pricing.ts — TAPI semantik beda sengaja, lihat komentar migrasinya:
+// ini TARIF PER HARI itu sendiri, bukan total kumulatif ala Bilbo).
+// price_per_day = tarif hari ke-1, day2Rate..day5Rate = tarif hari ke-2..5,
+// extraDayRate = tarif tiap hari ke-6 dst. Total sewa N hari = jumlah
+// tarif hari 1..min(N,5) + maks(0,N-5) x extraDayRate. Alat flat (semua
+// tingkat sama dengan price_per_day) otomatis jadi N x harga flat.
+//
+// Sengaja TIDAK dipakai untuk denda keterlambatan (lihat
+// backend/src/lib/penalty.ts — dailyRate di sana berasal dari
+// price_at_booking, snapshot tarif hari-1 saja, tidak pernah tahu soal
+// tingkat ini).
+export type ItemDayRates = {
+  price_per_day: number;
+  day2_rate: number;
+  day3_rate: number;
+  day4_rate: number;
+  day5_rate: number;
+  extra_day_rate: number;
+};
+
+function dailyRateForDay(rates: ItemDayRates, day: number): number {
+  switch (day) {
+    case 1:
+      return rates.price_per_day;
+    case 2:
+      return rates.day2_rate;
+    case 3:
+      return rates.day3_rate;
+    case 4:
+      return rates.day4_rate;
+    case 5:
+      return rates.day5_rate;
+    default:
+      return rates.extra_day_rate;
   }
-  const extraDays = days - discountMinDays;
-  return pricePerDay * discountMinDays + discountedPricePerDay * extraDays;
+}
+
+export function computeItemRentalPrice(rates: ItemDayRates, days: number): number {
+  if (days <= 0) return 0;
+  let total = 0;
+  for (let day = 1; day <= Math.min(days, 5); day++) total += dailyRateForDay(rates, day);
+  if (days > 5) total += (days - 5) * rates.extra_day_rate;
+  return total;
 }
 
 const DEPOSIT_LABEL: Record<string, string> = {
@@ -99,7 +129,13 @@ export function fineLabel(type: string): string {
   return FINE_LABEL[type] ?? type;
 }
 
-export type ReceiptItem = { name: string; quantity: number; price_per_day: number };
+// subtotal = snapshot booking_items.subtotal (migration 034), dihitung
+// SEKALI saat transaksi dibuat lewat computeItemRentalPrice() — bukan
+// dihitung ulang dari price_per_day di sini, supaya struk tidak diam-diam
+// berubah kalau harga katalog alat ini diedit belakangan. null = baris
+// booking_items lama dari SEBELUM migration 034 (tidak di-backfill),
+// fallback ke price_per_day * quantity * hari (perilaku lama).
+export type ReceiptItem = { name: string; quantity: number; price_per_day: number; subtotal?: number | null };
 export type ReceiptFine = {
   type: string;
   amount: number;
@@ -140,7 +176,7 @@ export function bookingStatusLabel(status: string): string {
 export function generateWhatsAppReceipt(data: ReceiptData): string {
   const days = rentalDays(data.startDate, data.endDate);
   const itemsText = data.items
-    .map((i) => `• ${i.name} (${i.quantity}x) = ${formatIDR(i.price_per_day * i.quantity * days)}`)
+    .map((i) => `• ${i.name} (${i.quantity}x) = ${formatIDR(i.subtotal ?? i.price_per_day * i.quantity * days)}`)
     .join('\n');
 
   const remaining = Math.max(0, data.totalPrice - data.dpPaid);

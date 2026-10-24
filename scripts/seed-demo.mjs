@@ -62,10 +62,33 @@ function nextWeekend() {
   return { saturday, sunday: addDays(saturday, 1) };
 }
 
-function computeItemRentalPrice(pricePerDay, discountMinDays, discountedPricePerDay, days) {
-  if (!discountedPricePerDay || days <= discountMinDays) return pricePerDay * days;
-  const extraDays = days - discountMinDays;
-  return pricePerDay * discountMinDays + discountedPricePerDay * extraDays;
+// Sama persis dengan computeItemRentalPrice() di
+// frontend/src/utils/formatters.ts dan backend/src/lib/demoReset.ts
+// (migration 034) — tiga runtime beda, jaga tetap sinkron. `rates` =
+// { price_per_day, day2_rate, day3_rate, day4_rate, day5_rate, extra_day_rate }.
+function dailyRateForDay(rates, day) {
+  switch (day) {
+    case 1:
+      return rates.price_per_day;
+    case 2:
+      return rates.day2_rate;
+    case 3:
+      return rates.day3_rate;
+    case 4:
+      return rates.day4_rate;
+    case 5:
+      return rates.day5_rate;
+    default:
+      return rates.extra_day_rate;
+  }
+}
+
+function computeItemRentalPrice(rates, days) {
+  if (days <= 0) return 0;
+  let total = 0;
+  for (let day = 1; day <= Math.min(days, 5); day++) total += dailyRateForDay(rates, day);
+  if (days > 5) total += (days - 5) * rates.extra_day_rate;
+  return total;
 }
 
 // Sama persis dengan rentalDays() di frontend/src/utils/formatters.ts —
@@ -257,9 +280,15 @@ async function main() {
       size: null,
       color: 'Hijau Army',
       total_units: 8,
-      price_per_day: 60000,
-      discount_min_days: 5,
-      discounted_price_per_day: 45000,
+      // Contoh harga bertingkat per-hari (migration 034): hari 1 Rp30rb,
+      // hari 2 Rp20rb, hari 3 dst Rp10rb/hari (4 hari = 70rb, 7 hari =
+      // 100rb) — satu-satunya alat demo yang sengaja diubah polanya.
+      price_per_day: 30000,
+      day2_rate: 20000,
+      day3_rate: 10000,
+      day4_rate: 10000,
+      day5_rate: 10000,
+      extra_day_rate: 10000,
       // Contoh jeda persiapan (migration 028, satuan jam) — tenda butuh 24 jam
       // diangin-anginkan sebelum disewa lagi, supaya fitur ini kelihatan aktif
       // di demo. Alat lain (headlamp, kompor) sengaja tetap 0 — item-item itu
@@ -277,9 +306,13 @@ async function main() {
       size: 'Dewasa',
       color: 'Merah',
       total_units: 15,
+      // Setara perilaku lama (diskon setelah 3 hari jadi 10rb/hari).
       price_per_day: 15000,
-      discount_min_days: 3,
-      discounted_price_per_day: 10000,
+      day2_rate: 15000,
+      day3_rate: 15000,
+      day4_rate: 10000,
+      day5_rate: 10000,
+      extra_day_rate: 10000,
       readiness_hours: 0,
       description: 'Sleeping bag ukuran dewasa, tahan suhu dingin dataran tinggi.',
       condition_note: null,
@@ -293,9 +326,13 @@ async function main() {
       size: null,
       color: null,
       total_units: 6,
+      // Flat.
       price_per_day: 20000,
-      discount_min_days: 5,
-      discounted_price_per_day: null,
+      day2_rate: 20000,
+      day3_rate: 20000,
+      day4_rate: 20000,
+      day5_rate: 20000,
+      extra_day_rate: 20000,
       readiness_hours: 0,
       description: 'Kompor portable lengkap dengan tabung gas kecil.',
       condition_note: null,
@@ -309,9 +346,13 @@ async function main() {
       size: null,
       color: null,
       total_units: 20,
+      // Flat.
       price_per_day: 10000,
-      discount_min_days: 5,
-      discounted_price_per_day: null,
+      day2_rate: 10000,
+      day3_rate: 10000,
+      day4_rate: 10000,
+      day5_rate: 10000,
+      extra_day_rate: 10000,
       readiness_hours: 0,
       description: null,
       condition_note: null,
@@ -325,9 +366,13 @@ async function main() {
       size: '60L',
       color: 'Hijau Army',
       total_units: 10,
+      // Setara perilaku lama (diskon setelah 5 hari jadi 25rb/hari).
       price_per_day: 35000,
-      discount_min_days: 5,
-      discounted_price_per_day: 25000,
+      day2_rate: 35000,
+      day3_rate: 35000,
+      day4_rate: 35000,
+      day5_rate: 35000,
+      extra_day_rate: 25000,
       // Contoh kedua jeda persiapan (selain Tenda Dome) — carrier butuh dicek
       // jahitan/kebersihan lebih menyeluruh (48 jam = 2 hari kalender).
       readiness_hours: 48,
@@ -343,9 +388,13 @@ async function main() {
       size: null,
       color: 'Hitam',
       total_units: 12,
+      // Flat.
       price_per_day: 8000,
-      discount_min_days: 5,
-      discounted_price_per_day: null,
+      day2_rate: 8000,
+      day3_rate: 8000,
+      day4_rate: 8000,
+      day5_rate: 8000,
+      extra_day_rate: 8000,
       readiness_hours: 0,
       description: null,
       condition_note: null,
@@ -414,17 +463,15 @@ async function main() {
 
   async function createBooking({ customer, customer_id, start_date, end_date, deposit, entries }) {
     const days = rentalDays(start_date, end_date);
-    const total_price = entries.reduce((sum, [code, qty]) => {
-      const it = items[code];
-      return sum + qty * computeItemRentalPrice(it.price_per_day, it.discount_min_days, it.discounted_price_per_day, days);
-    }, 0);
+    const subtotalFor = (code, qty) => qty * computeItemRentalPrice(items[code], days);
+    const total_price = entries.reduce((sum, [code, qty]) => sum + subtotalFor(code, qty), 0);
 
     const payload = {
       businessId,
       ...(customer_id ? { customer_id } : { customer }),
       start_date,
       end_date,
-      items: entries.map(([code, qty]) => ({ item_id: items[code].id, quantity: qty })),
+      items: entries.map(([code, qty]) => ({ item_id: items[code].id, quantity: qty, subtotal: subtotalFor(code, qty) })),
       deposit,
       total_price,
     };

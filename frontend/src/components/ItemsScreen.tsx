@@ -6,7 +6,7 @@ import { useItems } from '../hooks/useItems';
 import type { Item, ItemInput } from '../hooks/useItems';
 import { useTeam } from '../hooks/useTeam';
 import { apiFetch } from '../lib/api';
-import { formatDateIndo, formatIDR } from '../utils/formatters';
+import { formatDateIndo, formatIDR, computeItemRentalPrice } from '../utils/formatters';
 import { resizeImageToDataUrl } from '../utils/imageResize';
 import { ScrollableRow } from './ScrollableRow';
 import { SelectOrAddField } from './SelectOrAddField';
@@ -32,8 +32,11 @@ const EMPTY_FORM: ItemInput = {
   color: '',
   total_units: 5,
   price_per_day: 25000,
-  discount_min_days: 5,
-  discounted_price_per_day: null,
+  day2_rate: 25000,
+  day3_rate: 25000,
+  day4_rate: 25000,
+  day5_rate: 25000,
+  extra_day_rate: 25000,
   readiness_hours: 0,
   image_url: '',
   description: '',
@@ -70,6 +73,61 @@ function ItemFormModal({
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  // Tingkat harga per-hari (migration 034) — field mentah terpisah dari
+  // `form` (string, boleh kosong) supaya "kosong = warisi tingkat
+  // sebelumnya" bisa diterapkan SEKALI saat Simpan (resolveTiers di
+  // bawah), bukan di tiap render/hitungan — kolom DB tetap wajib terisi
+  // penuh (not null), cuma UI-nya yang boleh kosong. Alat baru mulai
+  // kosong semua (flat, cukup isi "Sewa /Hari"); alat yang diedit
+  // ditampilkan apa adanya (nilai yang benar-benar tersimpan), bukan
+  // dikosongkan lagi — supaya tidak terlihat seperti harganya hilang.
+  const isNewItem = !initial.name;
+  const [tierRaw, setTierRaw] = useState(() => ({
+    day2: isNewItem ? '' : String(initial.day2_rate),
+    day3: isNewItem ? '' : String(initial.day3_rate),
+    day4: isNewItem ? '' : String(initial.day4_rate),
+    day5: isNewItem ? '' : String(initial.day5_rate),
+    extra: isNewItem ? '' : String(initial.extra_day_rate),
+  }));
+  const [tiersExpanded, setTiersExpanded] = useState(
+    !isNewItem &&
+      (initial.day2_rate !== initial.price_per_day ||
+        initial.day3_rate !== initial.price_per_day ||
+        initial.day4_rate !== initial.price_per_day ||
+        initial.day5_rate !== initial.price_per_day ||
+        initial.extra_day_rate !== initial.price_per_day),
+  );
+
+  function resolveTier(raw: string, previousResolved: number): number {
+    const trimmed = raw.trim();
+    if (trimmed === '') return previousResolved;
+    const n = Number(trimmed);
+    return Number.isFinite(n) ? n : previousResolved;
+  }
+
+  function resolveTiers() {
+    const day1 = Number(form.price_per_day) || 0;
+    const day2 = resolveTier(tierRaw.day2, day1);
+    const day3 = resolveTier(tierRaw.day3, day2);
+    const day4 = resolveTier(tierRaw.day4, day3);
+    const day5 = resolveTier(tierRaw.day5, day4);
+    const extra = resolveTier(tierRaw.extra, day5);
+    return { day2_rate: day2, day3_rate: day3, day4_rate: day4, day5_rate: day5, extra_day_rate: extra };
+  }
+
+  const resolvedTiers = resolveTiers();
+  const previewTotal = computeItemRentalPrice(
+    {
+      price_per_day: Number(form.price_per_day) || 0,
+      day2_rate: resolvedTiers.day2_rate,
+      day3_rate: resolvedTiers.day3_rate,
+      day4_rate: resolvedTiers.day4_rate,
+      day5_rate: resolvedTiers.day5_rate,
+      extra_day_rate: resolvedTiers.extra_day_rate,
+    },
+    3,
+  );
+
   async function handleUploadImage(file: File) {
     setUploadingImage(true);
     setError(null);
@@ -100,6 +158,7 @@ function ItemFormModal({
 
     const { error: saveError } = await onSave({
       ...form,
+      ...resolveTiers(),
       code: form.code?.trim() || null,
       variant: form.variant?.trim() || null,
       size: form.size?.trim() || null,
@@ -232,34 +291,60 @@ function ItemFormModal({
           </div>
 
           <div className="p-3 rounded-xl bg-[#F1EEE2] border border-[#DBD5C1] space-y-2">
-            <p className="font-semibold text-[#26302B]">Harga setelah sewa lama (opsional)</p>
-            <p className="text-[11px] text-[#6E6853]">
-              Kosongkan "Harga setelah diskon" kalau alat ini harganya tetap sama berapa pun lama sewanya.
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block font-semibold text-[#26302B] mb-1">Berlaku setelah (hari)</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={form.discount_min_days}
-                  onChange={(e) => set('discount_min_days', Number(e.target.value))}
-                  className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B]"
-                />
-              </div>
-              <div>
-                <label className="block font-semibold text-[#26302B] mb-1">Harga setelah diskon (Rp)</label>
-                <input
-                  type="number"
-                  min={0}
-                  step={1000}
-                  value={form.discounted_price_per_day ?? ''}
-                  onChange={(e) => set('discounted_price_per_day', e.target.value ? Number(e.target.value) : null)}
-                  placeholder="Sama seperti harga normal"
-                  className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B]"
-                />
-              </div>
-            </div>
+            {!tiersExpanded ? (
+              <button
+                type="button"
+                onClick={() => setTiersExpanded(true)}
+                className="text-xs font-semibold text-[#2B4739] hover:underline"
+              >
+                Atur harga per hari (opsional) →
+              </button>
+            ) : (
+              <>
+                <p className="font-semibold text-[#26302B]">Harga per hari (opsional)</p>
+                <p className="text-[11px] text-[#6E6853]">
+                  Kosongkan tingkat manapun supaya ikut tarif tingkat sebelumnya — alat dengan harga tetap cukup isi
+                  "Sewa /Hari" di atas saja, biarkan semua ini kosong.
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {(
+                    [
+                      ['day2', 'Hari ke-2'],
+                      ['day3', 'Hari ke-3'],
+                      ['day4', 'Hari ke-4'],
+                      ['day5', 'Hari ke-5'],
+                      ['extra', 'Hari ke-6 dst (/hari)'],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <div key={key}>
+                      <label className="block font-semibold text-[#26302B] mb-1">{label}</label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1000}
+                        value={tierRaw[key]}
+                        onChange={(e) => setTierRaw((prev) => ({ ...prev, [key]: e.target.value }))}
+                        placeholder={formatIDR(
+                          key === 'day2'
+                            ? Number(form.price_per_day) || 0
+                            : key === 'day3'
+                              ? resolvedTiers.day2_rate
+                              : key === 'day4'
+                                ? resolvedTiers.day3_rate
+                                : key === 'day5'
+                                  ? resolvedTiers.day4_rate
+                                  : resolvedTiers.day5_rate,
+                        )}
+                        className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B]"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[11px] text-[#6E6853]">
+                  Contoh: sewa 3 hari = <strong className="text-[#2B4739]">{formatIDR(previewTotal)}</strong>
+                </p>
+              </>
+            )}
           </div>
 
           <div>
@@ -391,9 +476,9 @@ function ItemCard({ item, emailByUserId, onEdit, onDeactivate, onReactivate }: {
             <p className="font-bold text-[#2B4739] text-xs">{formatIDR(item.price_per_day)}</p>
           </div>
         </div>
-        {item.discounted_price_per_day != null && (
+        {item.extra_day_rate < item.price_per_day && (
           <p className="text-[11px] text-[#6E6853] mt-2">
-            Setelah {item.discount_min_days} hari: <strong className="text-[#2B4739]">{formatIDR(item.discounted_price_per_day)}</strong>/hari
+            Mulai <strong className="text-[#2B4739]">{formatIDR(item.extra_day_rate)}</strong>/hari untuk sewa panjang
           </p>
         )}
         {item.readiness_hours > 0 && (
@@ -572,8 +657,11 @@ export function ItemsScreen({ businessId, session }: { businessId: string; sessi
                   color: modalItem.color,
                   total_units: modalItem.total_units,
                   price_per_day: modalItem.price_per_day,
-                  discount_min_days: modalItem.discount_min_days,
-                  discounted_price_per_day: modalItem.discounted_price_per_day,
+                  day2_rate: modalItem.day2_rate,
+                  day3_rate: modalItem.day3_rate,
+                  day4_rate: modalItem.day4_rate,
+                  day5_rate: modalItem.day5_rate,
+                  extra_day_rate: modalItem.extra_day_rate,
                   readiness_hours: modalItem.readiness_hours,
                   image_url: modalItem.image_url,
                   description: modalItem.description,

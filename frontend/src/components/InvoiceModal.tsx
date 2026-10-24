@@ -86,7 +86,9 @@ export function InvoiceModal({
                 <tr key={i} className="border-b border-[#DBD5C1]">
                   <td className="py-1.5">{item.name}</td>
                   <td className="py-1.5 text-center">{item.quantity}x</td>
-                  <td className="py-1.5 text-right">{formatIDR(item.price_per_day * item.quantity * days)}</td>
+                  <td className="py-1.5 text-right">
+                    {formatIDR(item.subtotal ?? item.price_per_day * item.quantity * days)}
+                  </td>
                 </tr>
               ))}
             </tbody>
