@@ -39,6 +39,54 @@ function itemRentalPrice(item: Item, days: number): number {
   );
 }
 
+function dayRate(item: Item, day: number): number {
+  switch (day) {
+    case 1:
+      return item.price_per_day;
+    case 2:
+      return item.day2_rate;
+    case 3:
+      return item.day3_rate;
+    case 4:
+      return item.day4_rate;
+    case 5:
+      return item.day5_rate;
+    default:
+      return item.extra_day_rate;
+  }
+}
+
+// Rincian tarif per unit untuk preview di Catat Transaksi (bug ditemukan
+// lewat screenshot produksi: format lama selalu "{price_per_day}/hr ×
+// {days} hr", yang untuk alat bertingkat (migration 034) salah secara
+// aritmetika di layar — mis. Tenda Dome 30rb/20rb/10rb untuk 4 hari
+// menampilkan "Rp30.000/hr × 4 hr = Rp70.000" (30.000×4 ≠ 70.000) padahal
+// TOTALNYA sendiri sudah benar sejak awal, cuma rincian yang ditampilkan
+// yang menyesatkan. Kembalikan null kalau harga per hari memang flat
+// untuk durasi ini (termasuk days<=1, trivially flat) — caller lalu pakai
+// format lama yang sudah familiar. Kalau beda, kembalikan string ringkas
+// "30.000 + 20.000 + 10.000×5" (tanpa "Rp" di tiap suku, cuma di total)
+// — tingkat yang berurutan dan sama nilainya digabung jadi "{tarif}×{n}"
+// supaya tetap ringkas untuk durasi panjang.
+function tieredBreakdown(item: Item, days: number): string | null {
+  if (days <= 0) return null;
+  const rates: number[] = [];
+  for (let d = 1; d <= Math.min(days, 5); d++) rates.push(dayRate(item, d));
+  if (days > 5) rates.push(...Array(days - 5).fill(item.extra_day_rate));
+
+  if (rates.every((r) => r === item.price_per_day)) return null;
+
+  const groups: { rate: number; count: number }[] = [];
+  for (const r of rates) {
+    const last = groups[groups.length - 1];
+    if (last && last.rate === r) last.count += 1;
+    else groups.push({ rate: r, count: 1 });
+  }
+
+  const short = (n: number) => n.toLocaleString('id-ID');
+  return groups.map((g) => (g.count === 1 ? short(g.rate) : `${short(g.rate)}×${g.count}`)).join(' + ');
+}
+
 export function NewBookingModal({
   isOpen,
   onClose,
@@ -470,6 +518,7 @@ export function NewBookingModal({
                   const qty = quantities[item.id] ?? 0;
                   const checked = qty > 0;
                   const subtotal = qty * itemRentalPrice(item, days);
+                  const breakdown = tieredBreakdown(item, days);
 
                   return (
                     <div key={item.id} className="flex items-center justify-between p-2.5 rounded-lg bg-white border border-[#DBD5C1]">
@@ -494,10 +543,18 @@ export function NewBookingModal({
                             </p>
                           )}
                           <p className="text-[11px] text-[#6E6853]">
-                            {formatIDR(item.price_per_day)}/hr
-                            {checked && (
+                            {!checked && <>{formatIDR(item.price_per_day)}/hr</>}
+                            {checked && breakdown === null && (
                               <>
-                                {' '}× {days} hr = <strong className="text-[#2B4739]">{formatIDR(subtotal)}</strong>
+                                {formatIDR(item.price_per_day)}/hr × {days} hr
+                                {qty > 1 ? ` × ${qty} unit` : ''} ={' '}
+                                <strong className="text-[#2B4739]">{formatIDR(subtotal)}</strong>
+                              </>
+                            )}
+                            {checked && breakdown !== null && (
+                              <>
+                                {qty > 1 ? `(${breakdown}) × ${qty} unit` : breakdown} ={' '}
+                                <strong className="text-[#2B4739]">{formatIDR(subtotal)}</strong>
                               </>
                             )}
                           </p>
