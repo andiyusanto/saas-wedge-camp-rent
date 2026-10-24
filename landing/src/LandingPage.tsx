@@ -11,6 +11,10 @@ import {
   Package,
   PlayCircle,
   ExternalLink,
+  Layers,
+  Timer,
+  ListChecks,
+  Hourglass,
 } from 'lucide-react';
 import { waLink, WHATSAPP_DISPLAY } from './lib/whatsapp';
 
@@ -334,6 +338,28 @@ function FeatureCard({
   );
 }
 
+function MiniFeatureItem({
+  icon: Icon,
+  title,
+  children,
+  divider,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  title: string;
+  children: string;
+  divider: boolean;
+}) {
+  return (
+    <div className={`flex flex-col gap-2 ${divider ? 'lg:pl-6 lg:border-l lg:border-[#E6E1D2]' : ''}`}>
+      <div className="w-9 h-9 rounded-lg bg-[#F1EEE2] flex items-center justify-center">
+        <Icon className="w-4 h-4 text-[#6E6853]" />
+      </div>
+      <h3 className="text-sm font-bold text-[#26302B]">{title}</h3>
+      <p className="text-xs text-[#6E6853] leading-relaxed">{children}</p>
+    </div>
+  );
+}
+
 function useScrollReveal() {
   useEffect(() => {
     const els = document.querySelectorAll('.reveal');
@@ -453,6 +479,32 @@ export function LandingPage() {
               >
                 Pantau siapa yang telat balikin alat — denda telat dan rusak/hilang dicatat terpisah, rapi.
               </FeatureCard>
+            </div>
+          </div>
+        </section>
+
+        <section className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+          <div className="reveal bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] shadow-xs p-6 sm:p-8">
+            <h2 className="text-xl font-bold text-[#26302B] mb-1.5">Dibuat Khusus untuk Rental Kamping</h2>
+            <p className="text-sm text-[#6E6853] mb-6 max-w-lg">
+              Hal-hal kecil yang sering terlewat di aplikasi umum, tapi penting untuk usaha rental alat outdoor.
+            </p>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-6">
+              <MiniFeatureItem icon={Layers} title="Harga Bertingkat" divider={false}>
+                Atur tarif berbeda tiap hari, misalnya hari pertama Rp30.000 lalu lebih murah di hari berikutnya.
+                Total sewa dan denda telat ikut terhitung otomatis.
+              </MiniFeatureItem>
+              <MiniFeatureItem icon={Timer} title="Jeda Persiapan Alat" divider>
+                Alat yang baru kembali, misalnya tenda yang perlu dijemur, tidak langsung tersedia sebelum siap
+                disewakan lagi.
+              </MiniFeatureItem>
+              <MiniFeatureItem icon={ListChecks} title="Denda Dipisah Rapi" divider>
+                Denda telat dan denda kerusakan atau kehilangan dicatat terpisah, dan kerusakan bisa ditautkan ke
+                alat yang bermasalah.
+              </MiniFeatureItem>
+              <MiniFeatureItem icon={Hourglass} title="Toleransi Keterlambatan" divider>
+                Tentukan sendiri berapa jam toleransi sebelum denda telat mulai dihitung.
+              </MiniFeatureItem>
             </div>
           </div>
         </section>
