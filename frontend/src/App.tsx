@@ -30,7 +30,14 @@ function clearInviteCodeFromUrl() {
 
 function App() {
   const { session, loading: authLoading, isPasswordRecovery, clearPasswordRecovery } = useAuth();
-  const { business, role, loading: businessLoading, refresh: refreshBusiness, updateBusiness } = useBusiness(session);
+  const {
+    business,
+    role,
+    loading: businessLoading,
+    error: businessError,
+    refresh: refreshBusiness,
+    updateBusiness,
+  } = useBusiness(session);
   const [tab, setTab] = useState<Tab>('kalender');
   const [refreshSignal, setRefreshSignal] = useState(0);
 
@@ -70,6 +77,38 @@ function App() {
   // business sudah ada, seluruh app (termasuk form yang lagi diisi) blank
   // sekejap tiap kali refresh, bukan cuma di load awal.
   if (businessLoading && !business) return null;
+
+  // Jangan jatuh ke OnboardingScreen di sini (lihat useBusiness.ts) —
+  // error sungguhan (mis. akun ini ternyata anggota lebih dari satu
+  // business) harus kelihatan sebagai error, bukan diam-diam ditawari
+  // "bikin business baru" yang justru bisa menambah business ketiga
+  // tanpa sadar. Penanganan minimal, bukan fitur pindah-bisnis.
+  if (businessError) {
+    // Pesan teknis dari Postgres/PostgREST (mis. "multiple rows returned")
+    // disimpan di console buat dukungan/debug, tapi TIDAK ditampilkan
+    // mentah-mentah ke vendor — bukan non-technical-friendly (CLAUDE.md
+    // bagian 3).
+    console.error('Gagal memuat business:', businessError);
+    return (
+      <main className="min-h-screen flex items-center justify-center p-4 bg-[#F1EEE2]">
+        <div className="w-full max-w-sm bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] shadow-sm p-6 text-center">
+          <h2 className="text-lg font-bold text-[#A8412E]">Gagal Memuat Usaha</h2>
+          <p className="text-xs text-[#6E6853] mt-2">
+            Ada masalah saat memuat data usahamu. Coba muat ulang halaman ini.
+          </p>
+          <p className="text-xs text-[#6E6853] mt-2">
+            Hubungi dukungan Sewalog kalau pesan ini terus muncul setelah dicoba lagi.
+          </p>
+          <button
+            onClick={() => refreshBusiness()}
+            className="w-full mt-4 px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-sm shadow-sm transition active:scale-95"
+          >
+            Coba Lagi
+          </button>
+        </div>
+      </main>
+    );
+  }
 
   if (!business) {
     if (inviteCode && !inviteSkipped) {

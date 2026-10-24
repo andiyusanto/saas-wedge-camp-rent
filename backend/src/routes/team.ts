@@ -283,6 +283,33 @@ router.post('/team/invites/redeem', async (req, res) => {
     return;
   }
 
+  // Satu akun cuma boleh terhubung ke SATU rental — tolak lebih awal kalau
+  // akun ini sudah jadi anggota business LAIN (beda dari business_id
+  // undangan ini). Kalau sudah jadi anggota business YANG SAMA, biarkan
+  // lanjut ke insert di bawah seperti sebelumnya (bakal kena unique
+  // constraint, perilaku lama utuh) — RLS members_select_own_business_
+  // members (migration 007) sudah cukup buat user baca baris miliknya
+  // sendiri di business manapun, jadi cukup query biasa lewat token user
+  // ini sendiri, tidak perlu function tambahan.
+  const { data: existingMemberships, error: existingError } = await supabase
+    .from('business_members')
+    .select('business_id')
+    .eq('user_id', userId);
+
+  if (existingError) {
+    res.status(400).json({ error: existingError.message });
+    return;
+  }
+
+  const alreadyMemberElsewhere = (existingMemberships ?? []).some((m) => m.business_id !== invite.business_id);
+  if (alreadyMemberElsewhere) {
+    res.status(409).json({
+      error:
+        'Akun ini sudah terhubung ke rental lain. Satu akun hanya bisa terhubung ke satu rental — pakai email lain untuk menerima undangan ini.',
+    });
+    return;
+  }
+
   const { error: memberError } = await supabase.from('business_members').insert({
     business_id: invite.business_id,
     user_id: userId,
