@@ -54,6 +54,7 @@ const APP_URL = import.meta.env.VITE_APP_URL || 'http://localhost:5173';
 const ETALASE_DEMO_URL = 'https://toko.sewalog.com/demo-coba-sewalog';
 
 const INSTAGRAM_URL = 'https://www.instagram.com/sewalogdotcom/';
+const TIKTOK_URL = 'https://www.tiktok.com/@sewalogdotcom';
 
 function WaIcon({ className }: { className?: string }) {
   return (
@@ -78,6 +79,14 @@ function InstagramIcon({ className }: { className?: string }) {
       <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
       <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
       <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+    </svg>
+  );
+}
+
+function TikTokIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+      <path d="M16.6 2h-3.3v13.2a2.9 2.9 0 1 1-2.9-2.9c.3 0 .6 0 .9.1V9a6.3 6.3 0 1 0 5.3 6.2V8.6a7.9 7.9 0 0 0 4.4 1.4V6.7a4.5 4.5 0 0 1-4.4-4.7Z" />
     </svg>
   );
 }
@@ -558,7 +567,7 @@ export function LandingPage() {
           <a href={waLink(MSG_UMUM)} target="_blank" rel="noreferrer" className="text-[#F1EEE2] font-semibold hover:underline">
             WhatsApp: {WHATSAPP_DISPLAY}
           </a>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
             <a href="/blog/" className="text-[#DBD5C1] hover:text-[#F1EEE2] hover:underline">
               Panduan &amp; Tips Rental Alat Kamping
             </a>
@@ -569,6 +578,16 @@ export function LandingPage() {
               className="inline-flex items-center gap-1.5 text-[#DBD5C1] hover:text-[#F1EEE2] hover:underline"
             >
               <InstagramIcon className="w-3.5 h-3.5" />
+              @sewalogdotcom
+            </a>
+            <a
+              href={TIKTOK_URL}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="TikTok Sewalog"
+              className="inline-flex items-center gap-1.5 text-[#DBD5C1] hover:text-[#F1EEE2] hover:underline"
+            >
+              <TikTokIcon className="w-3.5 h-3.5" />
               @sewalogdotcom
             </a>
           </div>
