@@ -61,6 +61,31 @@ const FAQ_ITEMS: { question: string; answer: string }[] = [
   },
 ];
 
+// Artikel jarang bertambah, jadi cukup data statis di sini (pola sama seperti
+// FAQ_ITEMS) — judul & ringkasan disalin persis dari public/blog/index.html,
+// bukan ditulis ulang. Kalau ada artikel baru yang lebih relevan, ganti salah
+// satu di sini.
+const BLOG_PICKS: { href: string; title: string; summary: string }[] = [
+  {
+    href: '/blog/cara-hitung-denda-telat-sewa-alat-camping-adil.html',
+    title: 'Cara Hitung Denda Telat Balik Alat Sewa Camping yang Adil Buat Penyewa & Pemilik',
+    summary:
+      'Denda telat sering jadi sumber debat: kapan mulai dihitung, dan berapa besarnya. Ini cara bikin aturan yang jelas dan konsisten.',
+  },
+  {
+    href: '/blog/cara-kelola-jaminan-denda-sewa-alat-camping.html',
+    title: 'Cara Kelola Jaminan & Denda Sewa Alat Camping Biar Gak Rugi',
+    summary:
+      'KTP ketuker, denda telat lupa ditagih, denda kerusakan gak konsisten dicatat — ini akar masalahnya dan cara membenahinya.',
+  },
+  {
+    href: '/blog/harga-sewa-per-hari-vs-per-jam-alat-camping.html',
+    title: 'Harga Sewa Per Hari vs Per Jam — Mana yang Lebih Cocok Buat Rental Camping?',
+    summary:
+      'Bingung nentuin skema harga sewa: per hari atau per jam? Ini pertimbangan praktis biar gak rugi sendiri atau bikin penyewa kabur.',
+  },
+];
+
 const APP_URL = import.meta.env.VITE_APP_URL || 'http://localhost:5173';
 
 // Slug demo tetap (scripts/seed-demo.mjs) yang sengaja dipakai buat verifikasi
@@ -390,11 +415,16 @@ export function LandingPage() {
     <div className="min-h-screen bg-[#F1EEE2] text-[#26302B] flex flex-col">
       <header className="sticky top-0 z-20 bg-[#2B4739] text-white shadow-md border-b border-[#1E3429]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-[#F1EEE2] flex items-center justify-center shrink-0">
-              <img src="/logo.svg" alt="" className="w-7 h-7" />
-            </div>
-            <span className="text-xl font-bold">Sewalog</span>
+          <div className="flex items-center gap-4 sm:gap-6">
+            <a href="/" className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-[#F1EEE2] flex items-center justify-center shrink-0">
+                <img src="/logo.svg" alt="" className="w-7 h-7" />
+              </div>
+              <span className="hidden min-[420px]:inline text-xl font-bold">Sewalog</span>
+            </a>
+            <a href="/blog/" className="text-sm font-medium text-[#DBD5C1] hover:text-white hover:underline whitespace-nowrap">
+              Tips Rental
+            </a>
           </div>
           <a
             href={waLink(MSG_UMUM)}
@@ -608,6 +638,28 @@ export function LandingPage() {
           </div>
         </section>
 
+        <section className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+          <h2 className="reveal text-2xl font-bold text-[#26302B] mb-1.5">Tips untuk Usaha Rental</h2>
+          <p className="reveal text-sm text-[#6E6853] mb-5 max-w-lg">
+            Cerita dan cara praktis dari blog Sewalog buat pemilik usaha rental alat kamping &amp; outdoor.
+          </p>
+          <div className="reveal grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+            {BLOG_PICKS.map((post) => (
+              <a
+                key={post.href}
+                href={post.href}
+                className="bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] shadow-xs p-5 hover:border-[#2B4739]/50 transition flex flex-col gap-1.5"
+              >
+                <h3 className="text-base font-bold text-[#26302B]">{post.title}</h3>
+                <p className="text-sm text-[#6E6853]">{post.summary}</p>
+              </a>
+            ))}
+          </div>
+          <a href="/blog/" className="reveal inline-flex items-center gap-1 text-sm font-semibold text-[#2B4739] hover:underline">
+            Lihat semua tips →
+          </a>
+        </section>
+
         <section className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
           <h2 className="reveal text-2xl font-bold text-[#26302B] mb-5">Pertanyaan yang Sering Ditanya</h2>
           <div className="reveal space-y-4">
@@ -633,7 +685,7 @@ export function LandingPage() {
           </a>
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
             <a href="/blog/" className="text-[#DBD5C1] hover:text-[#F1EEE2] hover:underline">
-              Panduan &amp; Tips Rental Alat Kamping
+              Tips Rental Alat Kamping
             </a>
             <a
               href={INSTAGRAM_URL}
