@@ -707,6 +707,14 @@ export function LandingPage() {
               @sewalogdotcom
             </a>
           </div>
+          <div className="flex items-center gap-4 text-[11px]">
+            <a href="/syarat/" className="text-[#DBD5C1] hover:text-[#F1EEE2] hover:underline">
+              Syarat &amp; Ketentuan
+            </a>
+            <a href="/privasi/" className="text-[#DBD5C1] hover:text-[#F1EEE2] hover:underline">
+              Kebijakan Privasi
+            </a>
+          </div>
         </div>
       </footer>
     </div>
