@@ -399,6 +399,27 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           <li><strong>Mobile-first</strong> — semua alur inti (kalender, catat transaksi, transaksi aktif) didesain dipakai sambil berdiri di depan rak alat, bukan di depan laptop.</li>
           <li><strong>Data selalu real-time</strong> — Sewalog sengaja tidak menyimpan data offline/cache agresif, supaya stok yang tampil tidak pernah basi dan menyebabkan double-booking.</li>
           <li><strong>Isolasi data per usaha</strong> — setiap usaha hanya bisa melihat data miliknya sendiri. Satu akun cuma bisa terhubung ke satu usaha (lihat bagian 1 &amp; 6).</li>
+          <li>
+            <strong>Syarat &amp; kebijakan privasi</strong> — baca{' '}
+            <a
+              href="https://sewalog.com/syarat"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-[#2B4739]"
+            >
+              Syarat &amp; Ketentuan
+            </a>{' '}
+            dan{' '}
+            <a
+              href="https://sewalog.com/privasi"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-[#2B4739]"
+            >
+              Kebijakan Privasi
+            </a>{' '}
+            Sewalog untuk detail lengkap soal data yang disimpan dan cara kami memperlakukannya.
+          </li>
           <li><strong>Wilayah tervalidasi saat ini</strong>: Malang Raya (Kota Malang, Kabupaten Malang, Kota Batu).</li>
         </ul>
       </Section>

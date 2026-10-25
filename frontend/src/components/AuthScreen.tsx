@@ -254,6 +254,30 @@ function AuthForm({ inviteCode }: { inviteCode: string | null }) {
           >
             {mode === 'masuk' ? 'Masuk' : 'Daftar'}
           </button>
+
+          {mode === 'daftar' && (
+            <p className="text-[11px] text-[#6E6853] leading-relaxed text-center">
+              Dengan mendaftar, kamu menyetujui{' '}
+              <a
+                href="https://sewalog.com/syarat"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-[#26302B]"
+              >
+                Syarat &amp; Ketentuan
+              </a>{' '}
+              dan{' '}
+              <a
+                href="https://sewalog.com/privasi"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-[#26302B]"
+              >
+                Kebijakan Privasi
+              </a>{' '}
+              Sewalog.
+            </p>
+          )}
         </form>
 
         <button
