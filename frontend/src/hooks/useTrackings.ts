@@ -42,6 +42,7 @@ export function buildReceiptData(
   b: TrackingBooking,
   businessName: string,
   businessAddress?: string | null,
+  businessLogoUrl?: string | null,
 ): ReceiptData {
   const activeDeposit = b.deposits.find((d) => d.status === 'ditahan') ?? b.deposits[0];
   return {
@@ -60,6 +61,7 @@ export function buildReceiptData(
     fines: b.penalties,
     businessName,
     businessAddress,
+    businessLogoUrl,
   };
 }
 

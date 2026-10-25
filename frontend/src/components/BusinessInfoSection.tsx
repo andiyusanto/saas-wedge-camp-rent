@@ -1,15 +1,22 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Store, CheckCircle2 } from 'lucide-react';
+import type { Session } from '@supabase/supabase-js';
+import { Store, CheckCircle2, Upload, X } from 'lucide-react';
 import type { Business, BusinessUpdateInput } from '../hooks/useBusiness';
 import { useRegencies } from '../hooks/useRegencies';
 import { RegencySelect } from './RegencySelect';
+import { apiFetch } from '../lib/api';
+import { resizeImageToDataUrl } from '../utils/imageResize';
 
 export function BusinessInfoSection({
+  session,
+  businessId,
   business,
   ownerEmail,
   onSave,
 }: {
+  session: Session;
+  businessId: string;
   business: Business;
   ownerEmail: string | null;
   onSave: (input: BusinessUpdateInput) => Promise<{ error: string | null }>;
@@ -21,6 +28,8 @@ export function BusinessInfoSection({
   const [regencyId, setRegencyId] = useState(business.regency_id ?? '');
   const { provinces, regencies } = useRegencies();
   const [toleranceHours, setToleranceHours] = useState(String(business.late_tolerance_hours));
+  const [logoUrl, setLogoUrl] = useState(business.logo_url ?? '');
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -34,7 +43,30 @@ export function BusinessInfoSection({
     setAddress(business.address ?? '');
     setRegencyId(business.regency_id ?? '');
     setToleranceHours(String(business.late_tolerance_hours));
+    setLogoUrl(business.logo_url ?? '');
   }, [business]);
+
+  // Logo usaha (migration 035) — pola sama seperti upload foto alat di
+  // ItemsScreen.tsx, cuma maxDimension lebih kecil (512, bukan 1280) dan
+  // quality lebih tinggi (0.9) karena logo biasanya elemen flat/teks,
+  // bukan foto — kompresi webp lebih kentara di situ dibanding foto.
+  async function handleUploadLogo(file: File) {
+    setUploadingLogo(true);
+    setError(null);
+
+    try {
+      const dataUrl = await resizeImageToDataUrl(file, 512, 0.9);
+      const body = await apiFetch<{ url: string }>(session, '/api/uploads/business-logo', {
+        method: 'POST',
+        body: JSON.stringify({ businessId, image: dataUrl }),
+      });
+      setLogoUrl(body.url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gagal mengunggah logo.');
+    } finally {
+      setUploadingLogo(false);
+    }
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -53,6 +85,7 @@ export function BusinessInfoSection({
       address: address.trim() || null,
       regency_id: regencyId || null,
       late_tolerance_hours: Math.max(0, Number(toleranceHours) || 0),
+      logo_url: logoUrl.trim() || null,
     });
 
     setSubmitting(false);
@@ -72,6 +105,55 @@ export function BusinessInfoSection({
       </h2>
 
       <form onSubmit={handleSubmit} className="space-y-3">
+        <div>
+          <label className="block text-sm text-[#6E6853] mb-1.5">Logo Usaha</label>
+          <div className="flex items-center gap-2">
+            {logoUrl && (
+              <span className="relative shrink-0">
+                <img
+                  src={logoUrl}
+                  alt="Pratinjau logo"
+                  className="h-14 w-14 object-contain rounded-lg border border-[#DBD5C1] bg-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => setLogoUrl('')}
+                  title="Hapus logo"
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[#A8412E] text-white flex items-center justify-center shadow-sm"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            <label className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-dashed border-[#DBD5C1] px-3 py-2.5 text-xs font-semibold text-[#6E6853] hover:bg-[#F1EEE2] cursor-pointer transition">
+              <Upload className="w-4 h-4" />
+              {uploadingLogo ? 'Mengunggah...' : logoUrl ? 'Ganti Logo' : 'Upload Logo'}
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                disabled={uploadingLogo}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleUploadLogo(file);
+                  e.target.value = '';
+                }}
+                className="hidden"
+              />
+            </label>
+          </div>
+          <input
+            type="url"
+            placeholder="atau tempel URL gambar di sini..."
+            value={logoUrl}
+            onChange={(e) => setLogoUrl(e.target.value)}
+            className="mt-2 w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] text-sm"
+          />
+          <span className="text-[11px] text-[#6E6853] block mt-1">
+            Opsional — tampil di Etalase Online, preview link WhatsApp, dan Nota Sewa cetak. Tanpa logo, tampilan
+            di tempat-tempat itu seperti sekarang.
+          </span>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
             Nama usaha *

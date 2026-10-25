@@ -22,6 +22,10 @@ const KARYAWAN_EMAIL = process.env.DEMO_KARYAWAN_EMAIL ?? 'demo.karyawan@sewalog
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? 'CobaSewalog2026';
 const BUSINESS_NAME = 'Demo — Coba Sewalog';
 
+// Logo placeholder demo (migration 035) — sama persis dengan DEMO_LOGO_URL
+// di backend/src/lib/demoReset.ts (beda runtime, jaga tetap sinkron).
+const DEMO_LOGO_URL = 'https://image.sewalog.com/logos/a8d1e327-5e1a-4d5e-b657-489c93a46e36/demo-placeholder.png';
+
 if (!SUPABASE_URL || !ANON_KEY) {
   console.error('SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY belum ada di environment.');
   console.error('Jalankan lewat: npm run seed:demo (sudah di-set --env-file=backend/.env)');
@@ -209,6 +213,13 @@ async function main() {
     businessId = businesses[0].id;
     console.log('OK business demo sudah ada:', businessId);
   }
+
+  // Idempotent di setiap reset — lihat komentar sama di demoReset.ts.
+  await rest(`businesses?id=eq.${businessId}`, ownerToken, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({ logo_url: DEMO_LOGO_URL }),
+  });
 
   // --- Pastikan akun karyawan demo tergabung di business yang sama ---
   const karyawan = await signInOrSignUp(KARYAWAN_EMAIL, DEMO_PASSWORD);

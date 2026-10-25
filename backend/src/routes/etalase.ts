@@ -28,6 +28,7 @@ type PublicItem = {
 
 type PublicPageData = {
   business_name: string;
+  logo_url: string | null;
   description: string | null;
   address: string | null;
   regency_name: string | null;
@@ -201,8 +202,15 @@ function resolvePageUrl(req: import('express').Request, slug: string): string {
 function renderPage(page: PublicPageData, slug: string, req: import('express').Request): string {
   const pageUrl = resolvePageUrl(req, slug);
 
+  // Prioritas og:image (migration 035): logo usaha (representasi brand
+  // paling otentik untuk preview link WA) -> foto alat pertama (perilaku
+  // sebelum logo ada) -> fallback generik. Logo hasil upload di-resize ke
+  // 512px (BusinessInfoSection.tsx) — cukup di atas ambang render WA
+  // (umumnya ~200px), dan sama seperti foto alat sebagai og:image
+  // sebelumnya, bisa saja persegi (bukan 1200x630) tergantung WA
+  // merender; ini bukan regresi, Etalase sudah begini dari awal.
   const itemWithPhoto = page.items.find((item) => item.image_url);
-  const ogImage = itemWithPhoto?.image_url ?? FALLBACK_OG_IMAGE;
+  const ogImage = page.logo_url ?? itemWithPhoto?.image_url ?? FALLBACK_OG_IMAGE;
 
   const title = `${page.business_name} — Etalase Online | Sewalog`;
   const description =
@@ -368,9 +376,20 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
 <body>
 <div class="wrap">
   <header style="padding-bottom:16px;border-bottom:1px solid #DBD5C1;margin-bottom:16px;">
-    <p style="margin:0 0 4px;font-size:0.75rem;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#A65C2A;">Etalase Online</p>
+    ${
+      page.logo_url
+        ? `<div style="display:flex;align-items:center;gap:12px;">
+      <img src="${escapeHtml(page.logo_url)}" alt="" style="width:56px;height:56px;object-fit:contain;border-radius:12px;border:1px solid #DBD5C1;background:#fff;flex-shrink:0;" />
+      <div style="min-width:0;">
+        <p style="margin:0 0 4px;font-size:0.75rem;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#A65C2A;">Etalase Online</p>
+        <h1 style="margin:0;font-size:1.5rem;color:#26302B;">${escapeHtml(page.business_name)}</h1>
+        ${page.regency_name ? `<p style="margin:4px 0 0;color:#6E6853;font-size:0.875rem;">${escapeHtml(page.regency_name)}</p>` : ''}
+      </div>
+    </div>`
+        : `<p style="margin:0 0 4px;font-size:0.75rem;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#A65C2A;">Etalase Online</p>
     <h1 style="margin:0;font-size:1.5rem;color:#26302B;">${escapeHtml(page.business_name)}</h1>
-    ${page.regency_name ? `<p style="margin:4px 0 0;color:#6E6853;font-size:0.875rem;">${escapeHtml(page.regency_name)}</p>` : ''}
+    ${page.regency_name ? `<p style="margin:4px 0 0;color:#6E6853;font-size:0.875rem;">${escapeHtml(page.regency_name)}</p>` : ''}`
+    }
     ${page.description ? `<p style="margin:10px 0 0;color:#26302B;line-height:1.5;">${escapeHtml(page.description)}</p>` : ''}
     ${page.address ? `<p style="margin:10px 0 0;color:#6E6853;font-size:0.875rem;">📍 ${escapeHtml(page.address)}</p>` : ''}
     ${page.operating_hours ? `<p style="margin:4px 0 0;color:#6E6853;font-size:0.875rem;white-space:pre-line;">🕒 ${escapeHtml(page.operating_hours)}</p>` : ''}

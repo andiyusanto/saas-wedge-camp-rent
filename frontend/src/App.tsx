@@ -155,6 +155,7 @@ function App() {
             session={session}
             businessName={business.name}
             businessAddress={business.address}
+            businessLogoUrl={business.logo_url}
           />
         )}
         {tab === 'alat' && <ItemsScreen businessId={business.id} session={session} />}

@@ -45,6 +45,28 @@ async function requireMembership(req: Parameters<typeof createRequestClient>[0],
   return Boolean(membership);
 }
 
+// Logo usaha (migration 035) secara produk owner-only (bagian Info Usaha
+// di Kelola Usaha, sama seperti field lain di sana — lihat migration 018
+// "owner_update_own_business"). Dicek eksplisit di sini juga, bukan cuma
+// mengandalkan RLS di langkah SIMPAN-nya nanti (supabase-js dari
+// useBusiness.ts) — R2 tidak punya RLS sendiri, jadi tanpa ini karyawan
+// tetap bisa mengunggah file ke folder logos/{businessId}/ milik usaha
+// walau ujungnya tidak bisa menyimpan URL-nya (defense in depth, bukan
+// satu-satunya lapis).
+async function requireOwnership(req: Parameters<typeof createRequestClient>[0], businessId: string) {
+  const supabase = createRequestClient(req);
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) return false;
+
+  const { data: ownedBusiness } = await supabase
+    .from('businesses')
+    .select('id')
+    .eq('id', businessId)
+    .eq('owner_id', userData.user.id)
+    .maybeSingle();
+  return Boolean(ownedBusiness);
+}
+
 router.post('/uploads/item-image', async (req, res) => {
   if (!req.headers.authorization) {
     res.status(401).json({ error: 'Belum login' });
@@ -113,6 +135,48 @@ router.post('/uploads/customer-photo', async (req, res) => {
   }
 
   const key = `customers/${businessId}/${crypto.randomUUID()}.${decoded.extension}`;
+
+  try {
+    const url = await uploadToR2(key, decoded.buffer, decoded.mimeType);
+    res.status(201).json({ url });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// Logo usaha (migration 035) — diunggah sekali lewat Info Usaha, dipakai
+// di Etalase Online, og:image, dan Nota Sewa cetak (lihat businesses.ts
+// untuk kolom, etalase.ts & InvoiceModal.tsx untuk pemakaian). Pola sama
+// persis dengan item-image/customer-photo di atas: SVG tetap ditolak
+// (decodeImageDataUrl() cuma terima webp/png/jpeg) — SVG bisa membawa
+// <script>/event handler inline atau referensi <image>/<use> eksternal,
+// vektor XSS/leak yang sama kenapa dua endpoint di atas juga menolaknya.
+router.post('/uploads/business-logo', async (req, res) => {
+  if (!req.headers.authorization) {
+    res.status(401).json({ error: 'Belum login' });
+    return;
+  }
+
+  const { businessId, image } = req.body ?? {};
+  if (!businessId) {
+    res.status(400).json({ error: 'Data tidak lengkap' });
+    return;
+  }
+
+  let decoded;
+  try {
+    decoded = decodeImageDataUrl(image);
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+    return;
+  }
+
+  if (!(await requireOwnership(req, businessId))) {
+    res.status(403).json({ error: 'Cuma pemilik usaha yang bisa mengubah logo' });
+    return;
+  }
+
+  const key = `logos/${businessId}/${crypto.randomUUID()}.${decoded.extension}`;
 
   try {
     const url = await uploadToR2(key, decoded.buffer, decoded.mimeType);

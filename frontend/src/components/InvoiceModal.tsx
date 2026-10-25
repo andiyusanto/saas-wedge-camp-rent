@@ -36,6 +36,13 @@ export function InvoiceModal({
 
         <div id="print-invoice-root" className="p-6 overflow-y-auto text-sm text-[#26302B]">
           <div className="text-center pb-4 border-b-2 border-[#26302B] mb-4">
+            {data.businessLogoUrl && (
+              <img
+                src={data.businessLogoUrl}
+                alt=""
+                className="h-14 w-14 object-contain mx-auto mb-2"
+              />
+            )}
             <h1 className="text-lg font-extrabold uppercase">{data.businessName}</h1>
             {data.businessAddress && <p className="text-xs text-[#6E6853] mt-0.5">{data.businessAddress}</p>}
             <p className="text-xs text-[#6E6853] mt-1">Nota Sewa Alat Outdoor</p>

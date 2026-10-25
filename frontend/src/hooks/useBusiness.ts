@@ -10,6 +10,7 @@ export type Business = {
   address: string | null;
   regency_id: string | null;
   late_tolerance_hours: number;
+  logo_url: string | null;
 };
 
 export type BusinessUpdateInput = {
@@ -19,6 +20,7 @@ export type BusinessUpdateInput = {
   address: string | null;
   regency_id: string | null;
   late_tolerance_hours: number;
+  logo_url: string | null;
 };
 
 export type MemberRole = 'owner' | 'karyawan';
@@ -42,7 +44,7 @@ export function useBusiness(session: Session | null) {
     // RLS (members_select_own_business) sudah membatasi ke baris milik user ini.
     const { data, error: queryError } = await supabase
       .from('businesses')
-      .select('id, name, owner_name, phone, address, regency_id, late_tolerance_hours')
+      .select('id, name, owner_name, phone, address, regency_id, late_tolerance_hours, logo_url')
       .maybeSingle();
 
     // PENTING: error di sini (mis. PGRST116 "multiple rows" kalau akun ini
@@ -103,6 +105,7 @@ export function useBusiness(session: Session | null) {
         address: input.address,
         regency_id: input.regency_id,
         late_tolerance_hours: input.late_tolerance_hours,
+        logo_url: input.logo_url,
       })
       .eq('id', business.id);
 

@@ -19,6 +19,13 @@ const KARYAWAN_EMAIL = process.env.DEMO_KARYAWAN_EMAIL ?? 'demo.karyawan@sewalog
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? 'CobaSewalog2026';
 const BUSINESS_NAME = 'Demo — Coba Sewalog';
 
+// Logo placeholder demo (migration 035) — badge "DC" rekaan, warna token
+// UI (#2B4739/#F1EEE2), BUKAN logo Sewalog dan tidak menyerupai brand
+// nyata. Diupload SEKALI ke R2 (sama pola seperti R2_BASE foto alat di
+// bawah — object sudah ada, cukup direferensikan lewat URL, bukan
+// diupload ulang tiap reset).
+const DEMO_LOGO_URL = 'https://image.sewalog.com/logos/a8d1e327-5e1a-4d5e-b657-489c93a46e36/demo-placeholder.png';
+
 function selfApiBaseUrl(): string {
   // Panggil diri sendiri lewat localhost, bukan URL publik — booking dibuat
   // lewat endpoint backend asli (bukan insert langsung ke tabel) supaya
@@ -342,6 +349,16 @@ export async function resetDemoData(): Promise<DemoResetResult> {
   } else {
     businessId = businesses[0].id;
   }
+
+  // Idempotent di setiap reset (bukan cuma saat pertama dibuat) — supaya
+  // business demo yang sudah ada dari SEBELUM migration 035 ikut kebagian
+  // logo tanpa perlu intervensi manual, dan logo tetap terpasang kalau
+  // sempat dihapus/diganti manual saat sesi demo sebelumnya.
+  await rest(`businesses?id=eq.${businessId}`, ownerToken, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({ logo_url: DEMO_LOGO_URL }),
+  });
 
   // --- Pastikan akun karyawan demo tergabung di business yang sama ---
   const karyawan = await signInOrSignUp(KARYAWAN_EMAIL, DEMO_PASSWORD);

@@ -43,10 +43,12 @@ export function TrackingScreen({
   session,
   businessName,
   businessAddress,
+  businessLogoUrl,
 }: {
   session: Session;
   businessName: string;
   businessAddress: string | null;
+  businessLogoUrl: string | null;
 }) {
   const { bookings, toleranceHours, loading, error, refresh, cancelBooking, pickupBooking } = useTrackings(session);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -94,7 +96,7 @@ export function TrackingScreen({
   }
 
   function handlePrintInvoice(b: TrackingBooking) {
-    setInvoiceData(buildReceiptData(b, businessName, businessAddress));
+    setInvoiceData(buildReceiptData(b, businessName, businessAddress, businessLogoUrl));
   }
 
   return (

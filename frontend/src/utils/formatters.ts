@@ -160,6 +160,7 @@ export type ReceiptData = {
   fines: ReceiptFine[];
   businessName: string;
   businessAddress?: string | null;
+  businessLogoUrl?: string | null;
 };
 
 const BOOKING_STATUS_LABEL: Record<string, string> = {
