@@ -1,0 +1,358 @@
+import { useRef, useState } from 'react';
+import type { Session } from '@supabase/supabase-js';
+import { X, Upload, Download, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { apiFetch } from '../lib/api';
+import { ModalBackdrop, ModalPanel } from './ModalShell';
+
+type PreviewRow = {
+  rowNumber: number;
+  name: string;
+  status: 'new' | 'update' | 'unchanged' | 'skipped';
+  itemId: string | null;
+  diff: { field: string; label: string; from: string; to: string }[];
+  reactivatable: boolean;
+  reason: string | null;
+};
+
+type UnitWarning = { rowNumber: number; name: string; itemId: string | null; currentlyUsed: number; newTotalUnits: number };
+
+type PreviewResponse = {
+  rows: PreviewRow[];
+  warnings: UnitWarning[];
+  summary: { new: number; updated: number; unchanged: number; skipped: number };
+};
+
+type CommitResponse = {
+  added: { rowNumber: number; name: string }[];
+  updated: { rowNumber: number; name: string }[];
+  unchanged: { rowNumber: number; name: string }[];
+  skipped: { rowNumber: number; name: string; reason: string }[];
+  failed: { rowNumber: number; name: string; error: string }[];
+  photos: { ok: { rowNumber: number; name: string }[]; failed: { rowNumber: number; name: string; error: string }[] };
+};
+
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Gagal membaca file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function buildWhatsAppReport(result: CommitResponse): string {
+  const lines: string[] = ['*Laporan impor data alat*', ''];
+  lines.push(`Ditambah: ${result.added.length}`);
+  lines.push(`Diperbarui: ${result.updated.length}`);
+  lines.push(`Tidak berubah: ${result.unchanged.length}`);
+  if (result.skipped.length > 0) {
+    lines.push('', `Dilewati (${result.skipped.length}):`);
+    result.skipped.forEach((s) => lines.push(`- Baris ${s.rowNumber} (${s.name || '-'}): ${s.reason}`));
+  }
+  if (result.failed.length > 0) {
+    lines.push('', `Gagal disimpan (${result.failed.length}):`);
+    result.failed.forEach((f) => lines.push(`- Baris ${f.rowNumber} (${f.name}): ${f.error}`));
+  }
+  if (result.photos.failed.length > 0) {
+    lines.push('', `Foto gagal diambil (${result.photos.failed.length}):`);
+    result.photos.failed.forEach((f) => lines.push(`- Baris ${f.rowNumber} (${f.name}): ${f.error}`));
+  }
+  return lines.join('\n');
+}
+
+export function ImportItemsModal({
+  businessId,
+  session,
+  onClose,
+  onImported,
+}: {
+  businessId: string;
+  session: Session;
+  onClose: () => void;
+  onImported: () => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [fileBase64, setFileBase64] = useState<string | null>(null);
+  const [step, setStep] = useState<'pilih' | 'pratinjau' | 'laporan'>('pilih');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<PreviewResponse | null>(null);
+  const [reactivateIds, setReactivateIds] = useState<Set<string>>(new Set());
+  const [acknowledgedWarning, setAcknowledgedWarning] = useState(false);
+  const [report, setReport] = useState<CommitResponse | null>(null);
+
+  async function handleFileChange(selected: File | null) {
+    setError(null);
+    setFile(selected);
+    setFileBase64(null);
+    if (!selected) return;
+    try {
+      const base64 = await readFileAsBase64(selected);
+      setFileBase64(base64);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function handlePreview() {
+    if (!file || !fileBase64) {
+      setError('Pilih file dulu.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await apiFetch<PreviewResponse>(session, '/api/items/import/preview', {
+        method: 'POST',
+        body: JSON.stringify({ businessId, fileBase64, filename: file.name }),
+      });
+      setPreview(result);
+      setReactivateIds(new Set());
+      setAcknowledgedWarning(false);
+      setStep('pratinjau');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleCommit() {
+    if (!file || !fileBase64 || !preview) return;
+    if (preview.warnings.length > 0 && !acknowledgedWarning) {
+      setError('Centang "Saya paham" dulu sebelum menyimpan.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await apiFetch<CommitResponse>(session, '/api/items/import/commit', {
+        method: 'POST',
+        body: JSON.stringify({
+          businessId,
+          fileBase64,
+          filename: file.name,
+          reactivateItemIds: [...reactivateIds],
+          acknowledgedUnitWarning: acknowledgedWarning,
+        }),
+      });
+      setReport(result);
+      setStep('laporan');
+      onImported();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function toggleReactivate(itemId: string) {
+    setReactivateIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  }
+
+  async function copyReport() {
+    if (!report) return;
+    try {
+      await navigator.clipboard.writeText(buildWhatsAppReport(report));
+    } catch {
+      /* clipboard tidak tersedia, abaikan diam-diam — laporan tetap terlihat di layar */
+    }
+  }
+
+  return (
+    <ModalBackdrop>
+      <ModalPanel className="bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-[#26302B]">Impor Data Alat dari Excel/CSV</h2>
+            <button onClick={onClose} className="text-[#6E6853] hover:text-[#26302B]">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {error && (
+            <div className="bg-[#A8412E]/10 border border-[#A8412E]/30 rounded-xl p-3 text-xs text-[#A8412E] font-semibold">{error}</div>
+          )}
+
+          {step === 'pilih' && (
+            <div className="space-y-4">
+              <a
+                href="/template-data-alat.xlsx"
+                download
+                className="flex items-center gap-2 text-xs font-semibold text-[#2B4739] hover:underline"
+              >
+                <Download className="w-4 h-4" />
+                Unduh template Excel
+              </a>
+              <p className="text-xs text-[#6E6853]">
+                Isi sheet "Data Alat" sesuai template (kolom bertanda * wajib), lalu unggah di sini. Mendukung .xlsx dan .csv
+                (termasuk CSV Excel Indonesia yang pakai titik koma). Maksimal 500 baris per file.
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.csv"
+                onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
+                className="block w-full text-xs text-[#26302B] file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:bg-[#2B4739] file:text-white file:font-bold file:text-xs"
+              />
+              <button
+                onClick={handlePreview}
+                disabled={!file || loading}
+                className="w-full px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] disabled:opacity-50 text-white font-bold text-xs shadow-sm transition flex items-center justify-center gap-2"
+              >
+                <Upload className="w-4 h-4" />
+                {loading ? 'Memeriksa file...' : 'Lanjut: Pratinjau'}
+              </button>
+            </div>
+          )}
+
+          {step === 'pratinjau' && preview && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-4 gap-2 text-center">
+                <div className="bg-[#2B4739]/10 rounded-xl p-2">
+                  <p className="text-lg font-bold text-[#2B4739]">{preview.summary.new}</p>
+                  <p className="text-[10px] text-[#6E6853]">Baru</p>
+                </div>
+                <div className="bg-[#A65C2A]/10 rounded-xl p-2">
+                  <p className="text-lg font-bold text-[#A65C2A]">{preview.summary.updated}</p>
+                  <p className="text-[10px] text-[#6E6853]">Diperbarui</p>
+                </div>
+                <div className="bg-[#DBD5C1]/40 rounded-xl p-2">
+                  <p className="text-lg font-bold text-[#6E6853]">{preview.summary.unchanged}</p>
+                  <p className="text-[10px] text-[#6E6853]">Tidak berubah</p>
+                </div>
+                <div className="bg-[#A8412E]/10 rounded-xl p-2">
+                  <p className="text-lg font-bold text-[#A8412E]">{preview.summary.skipped}</p>
+                  <p className="text-[10px] text-[#6E6853]">Dilewati</p>
+                </div>
+              </div>
+
+              {preview.warnings.length > 0 && (
+                <div className="bg-[#A8412E]/10 border border-[#A8412E]/40 rounded-xl p-3 space-y-2">
+                  <p className="text-xs font-bold text-[#A8412E] flex items-center gap-1">
+                    <AlertTriangle className="w-4 h-4" /> Peringatan: jumlah unit diturunkan di bawah yang sedang disewa/dipesan
+                  </p>
+                  <ul className="text-xs text-[#26302B] space-y-1">
+                    {preview.warnings.map((w) => (
+                      <li key={w.rowNumber}>
+                        Baris {w.rowNumber} ({w.name}): unit baru {w.newTotalUnits}, tapi {w.currentlyUsed} unit sedang
+                        disewa/dipesan.
+                      </li>
+                    ))}
+                  </ul>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-[#26302B] pt-1">
+                    <input type="checkbox" checked={acknowledgedWarning} onChange={(e) => setAcknowledgedWarning(e.target.checked)} />
+                    Saya paham
+                  </label>
+                </div>
+              )}
+
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {preview.rows.map((row) => (
+                  <div key={row.rowNumber} className="border border-[#E6E1D2] rounded-xl p-2.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-[#26302B]">
+                        Baris {row.rowNumber}: {row.name || '-'}
+                      </span>
+                      <span
+                        className={`font-semibold ${
+                          row.status === 'new'
+                            ? 'text-[#2B4739]'
+                            : row.status === 'update'
+                              ? 'text-[#A65C2A]'
+                              : row.status === 'skipped'
+                                ? 'text-[#A8412E]'
+                                : 'text-[#6E6853]'
+                        }`}
+                      >
+                        {row.status === 'new' && 'Baru'}
+                        {row.status === 'update' && 'Diperbarui'}
+                        {row.status === 'unchanged' && 'Tidak berubah'}
+                        {row.status === 'skipped' && 'Dilewati'}
+                      </span>
+                    </div>
+                    {row.status === 'skipped' && <p className="text-[#A8412E] mt-1">{row.reason}</p>}
+                    {row.status === 'update' && row.diff.length > 0 && (
+                      <ul className="mt-1 text-[#6E6853] space-y-0.5">
+                        {row.diff.map((d) => (
+                          <li key={d.field}>
+                            {d.label}: {d.from} → {d.to}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {row.status === 'update' && row.reactivatable && row.itemId && (
+                      <label className="flex items-center gap-2 mt-1.5 text-[#26302B]">
+                        <input
+                          type="checkbox"
+                          checked={reactivateIds.has(row.itemId)}
+                          onChange={() => toggleReactivate(row.itemId!)}
+                        />
+                        Alat ini nonaktif — aktifkan lagi?
+                      </label>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setStep('pilih')}
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-[#DBD5C1] text-[#26302B] font-bold text-xs"
+                >
+                  Kembali
+                </button>
+                <button
+                  onClick={handleCommit}
+                  disabled={loading || (preview.warnings.length > 0 && !acknowledgedWarning)}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] disabled:opacity-50 text-white font-bold text-xs"
+                >
+                  {loading ? 'Menyimpan...' : 'Simpan'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 'laporan' && report && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-[#2B4739]">
+                <CheckCircle2 className="w-5 h-5" />
+                <p className="font-bold text-sm">Impor selesai</p>
+              </div>
+              <div className="text-xs text-[#26302B] space-y-1">
+                <p>Ditambah: {report.added.length}</p>
+                <p>Diperbarui: {report.updated.length}</p>
+                <p>Tidak berubah: {report.unchanged.length}</p>
+                <p>Dilewati: {report.skipped.length}</p>
+                {report.failed.length > 0 && <p className="text-[#A8412E] font-semibold">Gagal disimpan: {report.failed.length}</p>}
+                {report.photos.failed.length > 0 && (
+                  <p className="text-[#A65C2A] font-semibold flex items-center gap-1">
+                    <XCircle className="w-3.5 h-3.5" /> Foto gagal diambil: {report.photos.failed.length}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={copyReport}
+                className="w-full px-4 py-2.5 rounded-xl border border-[#DBD5C1] text-[#26302B] font-bold text-xs"
+              >
+                Salin laporan untuk WhatsApp
+              </button>
+              <button
+                onClick={onClose}
+                className="w-full px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs"
+              >
+                Tutup
+              </button>
+            </div>
+          )}
+        </div>
+      </ModalPanel>
+    </ModalBackdrop>
+  );
+}

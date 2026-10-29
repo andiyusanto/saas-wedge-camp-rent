@@ -158,7 +158,7 @@ function App() {
             businessLogoUrl={business.logo_url}
           />
         )}
-        {tab === 'alat' && <ItemsScreen businessId={business.id} session={session} />}
+        {tab === 'alat' && <ItemsScreen businessId={business.id} session={session} role={role} />}
         {tab === 'tim' && role === 'owner' && (
           <TeamScreen session={session} businessId={business.id} business={business} onSaveBusiness={updateBusiness} />
         )}

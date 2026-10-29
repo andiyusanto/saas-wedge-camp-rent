@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { Package, Plus, Edit2, Search, Trash2, X, Upload } from 'lucide-react';
+import { Package, Plus, Edit2, Search, Trash2, X, Upload, FileSpreadsheet } from 'lucide-react';
 import { useItems } from '../hooks/useItems';
 import type { Item, ItemInput } from '../hooks/useItems';
 import { useTeam } from '../hooks/useTeam';
@@ -11,6 +11,7 @@ import { resizeImageToDataUrl } from '../utils/imageResize';
 import { ScrollableRow } from './ScrollableRow';
 import { SelectOrAddField } from './SelectOrAddField';
 import { ConfirmModal } from './ConfirmModal';
+import { ImportItemsModal } from './ImportItemsModal';
 
 // Diturunkan live dari katalog sendiri, bukan tabel enum/lookup terpisah —
 // sama seperti pola setara di Bilbo-Outdoors. Kategori sengaja ikut pola
@@ -523,13 +524,22 @@ function ItemCard({ item, emailByUserId, onEdit, onDeactivate, onReactivate }: {
   );
 }
 
-export function ItemsScreen({ businessId, session }: { businessId: string; session: Session }) {
-  const { items, inactiveItems, loading, addItem, updateItem, setItemActive } = useItems(businessId);
+export function ItemsScreen({
+  businessId,
+  session,
+  role,
+}: {
+  businessId: string;
+  session: Session;
+  role: 'owner' | 'karyawan' | null;
+}) {
+  const { items, inactiveItems, loading, addItem, updateItem, setItemActive, refresh } = useItems(businessId);
   const { members } = useTeam(session, businessId);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Semua');
   const [modalItem, setModalItem] = useState<Item | 'new' | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<Item | null>(null);
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   // Buat baris "diperbarui oleh X" di kartu alat — items.updated_by cuma
   // simpan user_id, business_members yang punya email-nya (lihat migration
@@ -568,13 +578,25 @@ export function ItemsScreen({ businessId, session }: { businessId: string; sessi
             </h2>
             <p className="text-xs text-[#6E6853]">Kelola daftar alat kamping, stok fisik toko, dan tarif sewa per hari.</p>
           </div>
-          <button
-            onClick={() => setModalItem('new')}
-            className="px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs shadow-sm transition flex items-center gap-2 shrink-0 self-start sm:self-auto"
-          >
-            <Plus className="w-4 h-4 text-[#A65C2A]" />
-            <span>Tambah Alat Baru</span>
-          </button>
+          <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+            {role === 'owner' && (
+              <button
+                onClick={() => setIsImportOpen(true)}
+                className="px-3 py-2.5 rounded-xl border border-[#DBD5C1] text-[#26302B] hover:bg-[#F1EEE2] font-bold text-xs shadow-xs transition flex items-center gap-2"
+                title="Impor banyak alat sekaligus dari file Excel/CSV"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-[#6E6853]" />
+                <span>Impor dari Excel</span>
+              </button>
+            )}
+            <button
+              onClick={() => setModalItem('new')}
+              className="px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs shadow-sm transition flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4 text-[#A65C2A]" />
+              <span>Tambah Alat Baru</span>
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t border-[#E6E1D2]">
@@ -690,6 +712,15 @@ export function ItemsScreen({ businessId, session }: { businessId: string; sessi
         }}
         onClose={() => setDeactivateTarget(null)}
       />
+
+      {isImportOpen && (
+        <ImportItemsModal
+          businessId={businessId}
+          session={session}
+          onClose={() => setIsImportOpen(false)}
+          onImported={refresh}
+        />
+      )}
     </div>
   );
 }
