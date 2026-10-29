@@ -12,6 +12,7 @@ import { ScrollableRow } from './ScrollableRow';
 import { SelectOrAddField } from './SelectOrAddField';
 import { ConfirmModal } from './ConfirmModal';
 import { ImportItemsModal } from './ImportItemsModal';
+import { ImagePreviewModal } from './ImagePreviewModal';
 
 // Diturunkan live dari katalog sendiri, bukan tabel enum/lookup terpisah —
 // sama seperti pola setara di Bilbo-Outdoors. Kategori sengaja ikut pola
@@ -420,12 +421,13 @@ function ItemFormModal({
   );
 }
 
-function ItemCard({ item, emailByUserId, onEdit, onDeactivate, onReactivate }: {
+function ItemCard({ item, emailByUserId, onEdit, onDeactivate, onReactivate, onPreviewImage }: {
   item: Item;
   emailByUserId: Record<string, string>;
   onEdit: () => void;
   onDeactivate?: () => void;
   onReactivate?: () => void;
+  onPreviewImage: (url: string) => void;
 }) {
   const editorEmail = item.updated_by ? emailByUserId[item.updated_by] : null;
   const creatorEmail = item.created_by ? emailByUserId[item.created_by] : null;
@@ -434,7 +436,9 @@ function ItemCard({ item, emailByUserId, onEdit, onDeactivate, onReactivate }: {
       <div>
         <div className="flex items-start space-x-3">
           {item.image_url ? (
-            <img src={item.image_url} alt={item.name} className="w-16 h-16 rounded-xl object-cover border border-[#DBD5C1] shrink-0 bg-[#F1EEE2]" />
+            <button type="button" onClick={() => onPreviewImage(item.image_url!)} className="shrink-0">
+              <img src={item.image_url} alt={item.name} className="w-16 h-16 rounded-xl object-cover border border-[#DBD5C1] bg-[#F1EEE2]" />
+            </button>
           ) : (
             <div className="w-16 h-16 rounded-xl border border-[#DBD5C1] shrink-0 bg-[#F1EEE2] flex items-center justify-center text-[#6E6853]">
               <Package className="w-6 h-6" />
@@ -540,6 +544,7 @@ export function ItemsScreen({
   const [modalItem, setModalItem] = useState<Item | 'new' | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<Item | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
   // Buat baris "diperbarui oleh X" di kartu alat — items.updated_by cuma
   // simpan user_id, business_members yang punya email-nya (lihat migration
@@ -643,6 +648,7 @@ export function ItemsScreen({
               emailByUserId={emailByUserId}
               onEdit={() => setModalItem(item)}
               onDeactivate={() => setDeactivateTarget(item)}
+              onPreviewImage={setPreviewImageUrl}
             />
           ))}
         </div>
@@ -659,6 +665,7 @@ export function ItemsScreen({
                 emailByUserId={emailByUserId}
                 onEdit={() => {}}
                 onReactivate={() => setItemActive(item.id, true)}
+                onPreviewImage={setPreviewImageUrl}
               />
             ))}
           </div>
@@ -720,6 +727,10 @@ export function ItemsScreen({
           onClose={() => setIsImportOpen(false)}
           onImported={refresh}
         />
+      )}
+
+      {previewImageUrl && (
+        <ImagePreviewModal url={previewImageUrl} alt="Pratinjau foto alat" onClose={() => setPreviewImageUrl(null)} />
       )}
     </div>
   );

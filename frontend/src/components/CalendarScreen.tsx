@@ -4,6 +4,7 @@ import { Search, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Pack
 import { useAvailability } from '../hooks/useAvailability';
 import { formatIDR, todayStr } from '../utils/formatters';
 import { ScrollableRow } from './ScrollableRow';
+import { ImagePreviewModal } from './ImagePreviewModal';
 
 function shortDate(dateStr: string) {
   const [, m, d] = dateStr.split('-').map(Number);
@@ -22,6 +23,7 @@ export function CalendarScreen({
   const [numDays, setNumDays] = useState(7);
   const [selectedCategory, setSelectedCategory] = useState('Semua');
   const [searchQuery, setSearchQuery] = useState('');
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
   const { data, loading, error } = useAvailability(session, numDays, baseDate);
 
@@ -163,7 +165,9 @@ export function CalendarScreen({
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 <div className="flex items-start space-x-3 min-w-[240px]">
                   {item.image_url ? (
-                    <img src={item.image_url} alt={item.name} className="w-14 h-14 rounded-xl object-cover border border-[#DBD5C1] shrink-0 bg-[#F1EEE2]" />
+                    <button type="button" onClick={() => setPreviewImageUrl(item.image_url)} className="shrink-0">
+                      <img src={item.image_url} alt={item.name} className="w-14 h-14 rounded-xl object-cover border border-[#DBD5C1] bg-[#F1EEE2]" />
+                    </button>
                   ) : (
                     <div className="w-14 h-14 rounded-xl border border-[#DBD5C1] shrink-0 bg-[#F1EEE2] flex items-center justify-center text-[#6E6853]">
                       <Package className="w-5 h-5" />
@@ -239,6 +243,10 @@ export function CalendarScreen({
             </div>
           ))}
         </div>
+      )}
+
+      {previewImageUrl && (
+        <ImagePreviewModal url={previewImageUrl} alt="Pratinjau foto alat" onClose={() => setPreviewImageUrl(null)} />
       )}
     </div>
   );
