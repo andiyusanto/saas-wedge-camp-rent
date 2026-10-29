@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { X, Upload, Download, AlertTriangle, CheckCircle2, XCircle, ChevronDown, ChevronUp, Image, ImageOff } from 'lucide-react';
+import { X, Upload, Download, AlertTriangle, CheckCircle2, XCircle, ChevronDown, ChevronUp, Image, ImageOff, Send } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import { formatIDR, computeItemRentalPrice } from '../utils/formatters';
 import { ModalBackdrop, ModalPanel } from './ModalShell';
@@ -93,22 +93,29 @@ function readFileAsBase64(file: File): Promise<string> {
   });
 }
 
+const MAX_DETAIL_LINES_PER_GROUP = 15; // cukup buat kebanyakan kasus, cegah teks/URL WA jadi terlalu panjang
+
+function detailLines<T extends { rowNumber: number; name: string }>(items: T[], toText: (item: T) => string): string[] {
+  const shown = items.slice(0, MAX_DETAIL_LINES_PER_GROUP);
+  const lines = shown.map((item) => `- Baris ${item.rowNumber} · ${item.name || '-'}: ${toText(item)}`);
+  if (items.length > shown.length) lines.push(`... dan ${items.length - shown.length} lainnya`);
+  return lines;
+}
+
 function buildWhatsAppReport(result: CommitResponse): string {
   const lines: string[] = ['*Laporan impor data alat*', ''];
   lines.push(`Ditambah: ${result.added.length}`);
   lines.push(`Diperbarui: ${result.updated.length}`);
   lines.push(`Tidak berubah: ${result.unchanged.length}`);
   if (result.skipped.length > 0) {
-    lines.push('', `Dilewati (${result.skipped.length}):`);
-    result.skipped.forEach((s) => lines.push(`- Baris ${s.rowNumber} (${s.name || '-'}): ${s.reason}`));
+    lines.push('', `Dilewati (${result.skipped.length}):`, ...detailLines(result.skipped, (s) => s.reason));
   }
   if (result.failed.length > 0) {
-    lines.push('', `Gagal disimpan (${result.failed.length}):`);
-    result.failed.forEach((f) => lines.push(`- Baris ${f.rowNumber} (${f.name}): ${f.error}`));
+    lines.push('', `Gagal disimpan (${result.failed.length}):`, ...detailLines(result.failed, (f) => f.error));
   }
   if (result.photos.failed.length > 0) {
-    lines.push('', `Foto gagal diambil (${result.photos.failed.length}):`);
-    result.photos.failed.forEach((f) => lines.push(`- Baris ${f.rowNumber} (${f.name}): ${f.error}`));
+    lines.push('', `Foto gagal diambil (${result.photos.failed.length}):`, ...detailLines(result.photos.failed, (f) => f.error));
+    lines.push('Foto bisa diunggah manual lewat tombol edit alat.');
   }
   return lines.join('\n');
 }
@@ -135,6 +142,8 @@ export function ImportItemsModal({
   const [acknowledgedWarning, setAcknowledgedWarning] = useState(false);
   const [report, setReport] = useState<CommitResponse | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const [copied, setCopied] = useState(false);
+  const [showCopyFallback, setShowCopyFallback] = useState(false);
 
   function toggleExpanded(rowNumber: number) {
     setExpandedRows((prev) => {
@@ -222,10 +231,21 @@ export function ImportItemsModal({
   async function copyReport() {
     if (!report) return;
     try {
+      if (!navigator.clipboard) throw new Error('Clipboard API tidak tersedia');
       await navigator.clipboard.writeText(buildWhatsAppReport(report));
+      setShowCopyFallback(false);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     } catch {
-      /* clipboard tidak tersedia, abaikan diam-diam — laporan tetap terlihat di layar */
+      // navigator.clipboard bisa tidak ada (http non-aman) atau ditolak user —
+      // tampilkan textarea read-only sebagai jalan keluar manual, jangan diam.
+      setShowCopyFallback(true);
     }
+  }
+
+  function openWhatsApp() {
+    if (!report) return;
+    window.open(`https://wa.me/?text=${encodeURIComponent(buildWhatsAppReport(report))}`, '_blank');
   }
 
   return (
@@ -535,15 +555,74 @@ export function ImportItemsModal({
                   </p>
                 )}
               </div>
+
+              {report.skipped.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs font-bold text-[#A8412E]">Dilewati:</p>
+                  <ul className="text-xs text-[#26302B] space-y-1">
+                    {report.skipped.map((s) => (
+                      <li key={s.rowNumber}>
+                        Baris {s.rowNumber} · {s.name || '-'}: <span className="text-[#6E6853]">{s.reason}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {report.failed.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs font-bold text-[#A8412E]">Gagal disimpan:</p>
+                  <ul className="text-xs text-[#26302B] space-y-1">
+                    {report.failed.map((f) => (
+                      <li key={f.rowNumber}>
+                        Baris {f.rowNumber} · {f.name}: <span className="text-[#6E6853]">{f.error}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {report.photos.failed.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs font-bold text-[#A65C2A]">Foto gagal diambil:</p>
+                  <ul className="text-xs text-[#26302B] space-y-1">
+                    {report.photos.failed.map((f) => (
+                      <li key={f.rowNumber}>
+                        Baris {f.rowNumber} · {f.name}: <span className="text-[#6E6853]">{f.error}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-[10px] text-[#6E6853]">Foto bisa diunggah manual lewat tombol edit alat.</p>
+                </div>
+              )}
+
+              <button
+                onClick={openWhatsApp}
+                className="w-full px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs flex items-center justify-center gap-1.5"
+              >
+                <Send className="w-3.5 h-3.5 text-[#A65C2A]" />
+                Kirim ke WhatsApp
+              </button>
               <button
                 onClick={copyReport}
                 className="w-full px-4 py-2.5 rounded-xl border border-[#DBD5C1] text-[#26302B] font-bold text-xs"
               >
-                Salin laporan untuk WhatsApp
+                {copied ? '✓ Tersalin' : 'Salin laporan untuk WhatsApp'}
               </button>
+              {showCopyFallback && (
+                <div className="space-y-1">
+                  <p className="text-[10px] text-[#6E6853]">Tekan lama untuk menyalin:</p>
+                  <textarea
+                    readOnly
+                    onFocus={(e) => e.currentTarget.select()}
+                    value={buildWhatsAppReport(report)}
+                    className="w-full h-24 text-[11px] font-mono p-2 rounded-lg border border-[#DBD5C1] bg-white text-[#26302B]"
+                  />
+                </div>
+              )}
               <button
                 onClick={onClose}
-                className="w-full px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs"
+                className="w-full px-4 py-2.5 rounded-xl border border-[#DBD5C1] text-[#26302B] font-bold text-xs"
               >
                 Tutup
               </button>

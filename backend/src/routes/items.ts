@@ -336,7 +336,14 @@ router.post('/items/import/commit', async (req, res) => {
       if (error) throw new Error(error.message);
       photoOk.push({ rowNumber: item.rowNumber, name: item.name });
     } catch (err) {
-      const message = err instanceof ImageFetchError ? err.message : (err as Error).message;
+      // Error dari fetchImageFromUrl() sudah bahasa vendor (lihat imageFetch.ts).
+      // Error LAIN (sharp gagal decode, upload R2 gagal, update DB gagal) BELUM
+      // tentu aman ditampilkan apa adanya — detail teknisnya cuma ke log server,
+      // vendor dapat pesan generik yang tetap actionable.
+      const message = err instanceof ImageFetchError ? err.message : 'Foto gagal diproses, coba unggah manual lewat form alat.';
+      if (!(err instanceof ImageFetchError)) {
+        console.error('[itemImport] Gagal proses foto baris', item.rowNumber, item.photoUrl, err);
+      }
       photoFailed.push({ rowNumber: item.rowNumber, name: item.name, error: message });
     }
   }

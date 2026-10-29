@@ -49,23 +49,38 @@ async function assertHostIsPublic(hostname: string): Promise<void> {
   }
 }
 
+function isGoogleDriveHost(hostname: string): boolean {
+  return hostname === 'drive.google.com' || hostname === 'drive.usercontent.google.com';
+}
+
 // Google Drive share link "file/d/<id>/view" (atau "open?id=<id>") tidak
-// langsung berupa file gambar — dikonversi dulu ke endpoint unduhan
-// langsungnya.
+// langsung berupa file gambar — dikonversi ke endpoint unduhan langsungnya.
+// Dulu pakai "drive.google.com/uc?export=download" (lihat git blame), tapi
+// itu sendiri cuma REDIRECT ke "drive.usercontent.google.com/download" di
+// belakang layar (dikonfirmasi lewat riset eksternal, bukan asumsi) — jadi
+// langsung ke situ, skip satu hop redirect. `confirm=t` ditambahkan supaya
+// Drive tidak membalas halaman HTML "Download anyway" (muncul untuk file
+// yang tidak bisa di-scan virus otomatis, umumnya file besar atau kadang
+// request dari IP server) alih-alih bytes gambar — tanpa parameter ini,
+// kasus itu lolos validasi status 200 tapi isinya HTML, bukan gambar.
 export function normalizeImageUrl(rawUrl: string): string {
   const driveFileMatch = rawUrl.match(/drive\.google\.com\/file\/d\/([^/]+)/);
   if (driveFileMatch) {
-    return `https://drive.google.com/uc?export=download&id=${driveFileMatch[1]}`;
+    return `https://drive.usercontent.google.com/download?id=${driveFileMatch[1]}&export=download&confirm=t`;
   }
   const driveOpenMatch = rawUrl.match(/drive\.google\.com\/open\?id=([^&]+)/);
   if (driveOpenMatch) {
-    return `https://drive.google.com/uc?export=download&id=${driveOpenMatch[1]}`;
+    return `https://drive.usercontent.google.com/download?id=${driveOpenMatch[1]}&export=download&confirm=t`;
   }
   return rawUrl;
 }
 
 const REJECTED_HOSTS = ['instagram.com', 'www.instagram.com', 'facebook.com', 'www.facebook.com', 'fb.watch'];
 
+// Semua pesan di sini sengaja bahasa vendor non-teknis dan actionable
+// (permintaan Andi) — detail teknis asli (status HTTP, nama error Node,
+// dsb) TIDAK pernah dikirim ke vendor, cuma dicatat lewat console.error
+// di pemanggilnya (routes/items.ts).
 export async function fetchImageFromUrl(rawUrl: string): Promise<{ buffer: Buffer; contentType: string }> {
   const normalized = normalizeImageUrl(rawUrl.trim());
 
@@ -73,16 +88,14 @@ export async function fetchImageFromUrl(rawUrl: string): Promise<{ buffer: Buffe
   try {
     url = new URL(normalized);
   } catch {
-    throw new ImageFetchError('Link foto bukan URL yang valid.');
+    throw new ImageFetchError('Link foto tidak valid.');
   }
 
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new ImageFetchError('Link foto harus http/https.');
+    throw new ImageFetchError('Link foto tidak valid.');
   }
   if (REJECTED_HOSTS.some((h) => url.hostname === h || url.hostname.endsWith(`.${h}`))) {
-    throw new ImageFetchError(
-      'Link Instagram/Facebook tidak bisa diambil otomatis (butuh login) — unggah fotonya manual lewat form alat.',
-    );
+    throw new ImageFetchError('Link Instagram/Facebook tidak bisa dipakai — unggah fotonya manual lewat form alat.');
   }
 
   await assertHostIsPublic(url.hostname);
@@ -92,44 +105,58 @@ export async function fetchImageFromUrl(rawUrl: string): Promise<{ buffer: Buffe
   // yang sengaja redirect ke alamat privat akan melewati pengecekan di atas.
   let currentUrl = url;
   let response: Response;
-  for (let hop = 0; hop < 3; hop++) {
-    response = await fetch(currentUrl, {
-      redirect: 'manual',
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      headers: { 'User-Agent': 'SewalogImportBot/1.0' },
-    });
+  try {
+    for (let hop = 0; hop < 3; hop++) {
+      response = await fetch(currentUrl, {
+        redirect: 'manual',
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        headers: { 'User-Agent': 'SewalogImportBot/1.0' },
+      });
 
-    if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get('location');
-      if (!location) throw new ImageFetchError('Link foto redirect tanpa tujuan.');
-      currentUrl = new URL(location, currentUrl);
-      if (currentUrl.protocol !== 'http:' && currentUrl.protocol !== 'https:') {
-        throw new ImageFetchError('Link foto redirect ke protokol yang tidak didukung.');
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get('location');
+        if (!location) throw new ImageFetchError('Link tidak bisa dibuka.');
+        currentUrl = new URL(location, currentUrl);
+        if (currentUrl.protocol !== 'http:' && currentUrl.protocol !== 'https:') {
+          throw new ImageFetchError('Link tidak bisa dibuka.');
+        }
+        await assertHostIsPublic(currentUrl.hostname);
+        continue;
       }
-      await assertHostIsPublic(currentUrl.hostname);
-      continue;
+      break;
     }
-    break;
+  } catch (err) {
+    if (err instanceof ImageFetchError) throw err;
+    // AbortSignal.timeout() melempar DOMException name 'TimeoutError'; error
+    // jaringan lain (DNS/koneksi ditolak dsb) juga ditangkap di sini — semua
+    // disamakan jadi satu pesan generik, bukan dibedakan per jenis error Node.
+    const isTimeout = (err as { name?: string }).name === 'TimeoutError' || (err as { name?: string }).name === 'AbortError';
+    throw new ImageFetchError(isTimeout ? 'Link tidak bisa dibuka (waktu habis).' : 'Link tidak bisa dibuka.');
   }
 
   const finalResponse = response!;
   if (!finalResponse.ok) {
-    throw new ImageFetchError(`Gagal mengunduh foto (HTTP ${finalResponse.status}).`);
+    throw new ImageFetchError('Link tidak bisa dibuka.');
   }
 
   const contentType = finalResponse.headers.get('content-type') ?? '';
   if (!/^image\/(jpeg|png|webp)/i.test(contentType)) {
-    throw new ImageFetchError('Link foto bukan file gambar (jpeg/png/webp) yang didukung.');
+    if (isGoogleDriveHost(currentUrl.hostname) && /^text\/html/i.test(contentType)) {
+      throw new ImageFetchError(
+        'Link Google Drive belum dibagikan ke "Siapa saja yang memiliki link", atau filenya butuh konfirmasi tambahan dari Google.',
+      );
+    }
+    throw new ImageFetchError('Link bukan gambar.');
   }
 
   const contentLength = Number(finalResponse.headers.get('content-length') ?? '0');
   if (contentLength > MAX_IMAGE_BYTES) {
-    throw new ImageFetchError('Ukuran foto dari link terlalu besar.');
+    throw new ImageFetchError('Foto terlalu besar.');
   }
 
   const arrayBuffer = await finalResponse.arrayBuffer();
   if (arrayBuffer.byteLength > MAX_IMAGE_BYTES) {
-    throw new ImageFetchError('Ukuran foto dari link terlalu besar.');
+    throw new ImageFetchError('Foto terlalu besar.');
   }
 
   return { buffer: Buffer.from(arrayBuffer), contentType };
