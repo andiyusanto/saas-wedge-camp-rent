@@ -190,17 +190,50 @@ export function ImportItemsModal({
                 <Download className="w-4 h-4" />
                 Unduh template Excel
               </a>
-              <p className="text-xs text-[#6E6853]">
-                Isi sheet "Data Alat" sesuai template (kolom bertanda * wajib), lalu unggah di sini. Mendukung .xlsx dan .csv
-                (termasuk CSV Excel Indonesia yang pakai titik koma). Maksimal 500 baris per file.
+
+              <ol className="space-y-2 text-xs text-[#26302B]">
+                <li>
+                  <span className="font-bold">1. Unduh template</span> — tekan "Unduh template Excel" di atas.
+                </li>
+                <li>
+                  <span className="font-bold">2. Isi data alat</span> — satu baris untuk satu jenis alat. Kolom bertanda *
+                  wajib diisi. Harga cukup tulis angka, misalnya 30000. Hapus 3 baris contoh sebelum mengunggah.
+                </li>
+                <li>
+                  <span className="font-bold">3. Simpan file</span>, lalu pilih file itu di bawah.
+                </li>
+                <li>
+                  <span className="font-bold">4. Cek pratinjau</span> — sebelum disimpan, kamu bisa lihat alat mana yang
+                  baru, mana yang berubah, dan mana yang perlu diperbaiki.
+                </li>
+                <li>
+                  <span className="font-bold">5. Simpan</span> — alat yang sudah ada diperbarui, bukan dibuat dobel. Alat
+                  yang tidak ada di file tidak akan dihapus.
+                </li>
+              </ol>
+              <p className="text-[10px] text-[#6E6853]">
+                Bisa .xlsx atau .csv, maksimal 500 baris. Foto boleh pakai link Google Drive (akses: siapa saja yang
+                memiliki link).
               </p>
+
               <input
                 ref={fileInputRef}
                 type="file"
                 accept=".xlsx,.csv"
                 onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
-                className="block w-full text-xs text-[#26302B] file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:bg-[#2B4739] file:text-white file:font-bold file:text-xs"
+                className="hidden"
               />
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-4 py-2 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs shrink-0"
+                >
+                  Pilih File
+                </button>
+                <span className="text-xs text-[#6E6853] truncate">{file ? file.name : 'Belum ada file dipilih'}</span>
+              </div>
+
               <button
                 onClick={handlePreview}
                 disabled={!file || loading}
