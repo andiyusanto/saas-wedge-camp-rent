@@ -151,7 +151,9 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         </p>
         <p>
           Akun baru tanpa usaha akan diarahkan ke <Ui>Setup Usaha</Ui> — isi nama usaha, nama pemilik, dan nomor
-          telepon, lalu <Ui>Simpan &amp; Lanjut</Ui>. Setelah itu langsung masuk ke Kalender Ketersediaan.
+          telepon, lalu <Ui>Simpan &amp; Lanjut</Ui>. Setelah itu langsung masuk ke Kalender Ketersediaan — kosong
+          sampai alatnya diisi lewat tab <Ui>Katalog &amp; Stok Alat</Ui> (bagian 3). Kalau alatnya banyak, lebih cepat
+          lewat <Ui>Impor dari Excel</Ui> daripada mengetik satu per satu — lihat bagian 3.
         </p>
         <Note>
           Kalau kamu membuka Sewalog lewat link undangan dari usaha lain (lihat bagian 6), kamu akan diarahkan ke
@@ -203,6 +205,33 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           Alat yang sudah tidak dipakai lagi cukup <Ui>Nonaktifkan</Ui> (ikon daya), bukan dihapus — supaya riwayat
           transaksi lama yang memakai alat tersebut tetap utuh dan bisa ditelusuri.
         </p>
+
+        <h4 className="text-sm font-bold text-[#26302B] pt-2">Impor dari Excel (banyak alat sekaligus)</h4>
+        <p>
+          Dipakai saat pertama kali mengisi banyak alat sekaligus, atau mengubah harga banyak alat dalam satu waktu —
+          daripada mengetik satu per satu. Tombol <Ui>Impor dari Excel</Ui> cuma terlihat untuk pemilik usaha.
+        </p>
+        <Steps
+          items={[
+            <>Tekan <Ui>Impor dari Excel</Ui>, lalu unduh template Excel-nya.</>,
+            <>Isi data alat di template — satu baris untuk satu jenis alat, kolom bertanda * wajib diisi, harga cukup
+              angka (mis. 30000). Hapus baris contoh sebelum menyimpan.</>,
+            <>Simpan file, lalu pilih file itu di layar impor.</>,
+            <>Cek pratinjau — lihat alat mana yang baru, mana yang berubah (dengan rincian apa yang berubah), dan mana
+              yang perlu diperbaiki dulu sebelum lanjut.</>,
+            <>Tekan <Ui>Simpan</Ui>. Alat yang sudah ada diperbarui (bukan dibuat dobel), alat baru ditambahkan.</>,
+          ]}
+        />
+        <Note>
+          Beberapa aturan penting: alat dicocokkan lewat Kode (kalau Kode kosong, lewat kombinasi nama + varian +
+          ukuran + warna) — isi Kode supaya pencocokan lebih aman. Sel yang dikosongkan di file TIDAK menghapus data
+          lama. Alat yang tidak ada di file tetap aman, tidak dihapus. Alat yang sudah dinonaktifkan tidak otomatis
+          aktif lagi hanya karena muncul di file. Harga hari ke-2 dst adalah tarif HARI ITU SENDIRI (bukan total),
+          kosongkan kalau sama dengan hari sebelumnya. Foto boleh diisi lewat link Google Drive yang dibagikan "siapa
+          saja yang memiliki link" — link Instagram/Facebook tidak bisa dipakai. Kalau jumlah unit diturunkan sampai
+          di bawah unit yang sedang disewa/dipesan, akan muncul peringatan dan kamu perlu centang "Saya paham" dulu
+          sebelum bisa menyimpan.
+        </Note>
       </Section>
 
       <Section id="g-4" num="4" title="Catat Transaksi Sewa" kicker="Form input cepat, dipakai sambil melayani pelanggan yang menunggu.">
