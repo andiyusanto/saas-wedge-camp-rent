@@ -57,8 +57,8 @@ export type ParsedRow = {
 
 export type ImportMatch =
   | { kind: 'new' }
-  | { kind: 'update'; itemId: string; diff: { field: string; label: string; from: string; to: string }[]; reactivatable: boolean }
-  | { kind: 'unchanged'; itemId: string }
+  | { kind: 'update'; itemId: string; diff: { field: string; label: string; from: string; to: string }[]; isDeactivated: boolean }
+  | { kind: 'unchanged'; itemId: string; isDeactivated: boolean }
   | { kind: 'skipped'; reason: string };
 
 export type ImportRowResult = { row: ParsedRow; match: ImportMatch };
@@ -498,12 +498,12 @@ export function matchExistingItems(rowResults: ImportRowResult[], existingItems:
     }
 
     if (diff.length === 0) {
-      return { row: r.row, match: { kind: 'unchanged', itemId: existing.id } };
+      return { row: r.row, match: { kind: 'unchanged', itemId: existing.id, isDeactivated: existing.deactivated_at !== null } };
     }
 
     return {
       row: r.row,
-      match: { kind: 'update', itemId: existing.id, diff, reactivatable: existing.deactivated_at !== null },
+      match: { kind: 'update', itemId: existing.id, diff, isDeactivated: existing.deactivated_at !== null },
     };
   });
 }

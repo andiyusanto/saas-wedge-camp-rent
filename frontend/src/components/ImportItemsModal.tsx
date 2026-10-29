@@ -29,7 +29,7 @@ type PreviewRow = {
   status: 'new' | 'update' | 'unchanged' | 'skipped';
   itemId: string | null;
   diff: { field: string; label: string; from: string; to: string }[];
-  reactivatable: boolean;
+  isDeactivated: boolean;
   reason: string | null;
   data: PreviewRowData | null;
 };
@@ -72,13 +72,14 @@ type UnitWarning = { rowNumber: number; name: string; itemId: string | null; cur
 type PreviewResponse = {
   rows: PreviewRow[];
   warnings: UnitWarning[];
-  summary: { new: number; updated: number; unchanged: number; skipped: number };
+  summary: { new: number; updated: number; unchanged: number; skipped: number; deactivatedInFile: number };
 };
 
 type CommitResponse = {
   added: { rowNumber: number; name: string }[];
   updated: { rowNumber: number; name: string }[];
   unchanged: { rowNumber: number; name: string }[];
+  reactivated: { rowNumber: number; name: string }[];
   skipped: { rowNumber: number; name: string; reason: string }[];
   failed: { rowNumber: number; name: string; error: string }[];
   photos: { ok: { rowNumber: number; name: string }[]; failed: { rowNumber: number; name: string; error: string }[] };
@@ -107,6 +108,9 @@ function buildWhatsAppReport(result: CommitResponse): string {
   lines.push(`Ditambah: ${result.added.length}`);
   lines.push(`Diperbarui: ${result.updated.length}`);
   lines.push(`Tidak berubah: ${result.unchanged.length}`);
+  if (result.reactivated.length > 0) {
+    lines.push(`Diaktifkan kembali: ${result.reactivated.length}`);
+  }
   if (result.skipped.length > 0) {
     lines.push('', `Dilewati (${result.skipped.length}):`, ...detailLines(result.skipped, (s) => s.reason));
   }
@@ -349,6 +353,13 @@ export function ImportItemsModal({
                 </div>
               </div>
 
+              {preview.summary.deactivatedInFile > 0 && (
+                <div className="bg-[#A65C2A]/10 border border-[#A65C2A]/30 rounded-xl p-3 text-xs text-[#26302B]">
+                  {preview.summary.deactivatedInFile} alat di file ini sedang nonaktif dan tidak akan diaktifkan kecuali
+                  dicentang.
+                </div>
+              )}
+
               {preview.warnings.length > 0 && (
                 <div className="bg-[#A8412E]/10 border border-[#A8412E]/40 rounded-xl p-3 space-y-2">
                   <p className="text-xs font-bold text-[#A8412E] flex items-center gap-1">
@@ -386,6 +397,11 @@ export function ImportItemsModal({
                             Baris {row.rowNumber}: {row.name || '-'}
                           </span>
                           <span className="flex items-center gap-1.5 shrink-0">
+                            {row.isDeactivated && (
+                              <span className="px-1.5 py-0.5 rounded bg-[#A65C2A]/15 text-[#A65C2A] font-bold text-[10px]">
+                                Nonaktif
+                              </span>
+                            )}
                             <span
                               className={`font-semibold ${
                                 row.status === 'new'
@@ -504,14 +520,14 @@ export function ImportItemsModal({
                         </div>
                       )}
 
-                      {row.status === 'update' && row.reactivatable && row.itemId && (
-                        <label className="flex items-center gap-2 mt-1.5 text-[#26302B]">
+                      {row.isDeactivated && row.itemId && (
+                        <label className="flex items-center gap-2 mt-1.5 text-[#26302B] font-semibold">
                           <input
                             type="checkbox"
                             checked={reactivateIds.has(row.itemId)}
                             onChange={() => toggleReactivate(row.itemId!)}
                           />
-                          Alat ini nonaktif — aktifkan lagi?
+                          Aktifkan lagi
                         </label>
                       )}
                     </div>
@@ -547,6 +563,7 @@ export function ImportItemsModal({
                 <p>Ditambah: {report.added.length}</p>
                 <p>Diperbarui: {report.updated.length}</p>
                 <p>Tidak berubah: {report.unchanged.length}</p>
+                {report.reactivated.length > 0 && <p>Diaktifkan kembali: {report.reactivated.length}</p>}
                 <p>Dilewati: {report.skipped.length}</p>
                 {report.failed.length > 0 && <p className="text-[#A8412E] font-semibold">Gagal disimpan: {report.failed.length}</p>}
                 {report.photos.failed.length > 0 && (

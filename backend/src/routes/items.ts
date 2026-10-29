@@ -72,7 +72,7 @@ type PreviewResponseRow = {
   status: 'new' | 'update' | 'unchanged' | 'skipped';
   itemId: string | null;
   diff: { field: string; label: string; from: string; to: string }[];
-  reactivatable: boolean;
+  isDeactivated: boolean;
   reason: string | null;
   data: PreviewResponseRowData | null;
 };
@@ -106,14 +106,14 @@ function toPreviewRow(r: ImportRowResult): PreviewResponseRow {
   const base = { rowNumber: r.row.rowNumber, name: r.row.name };
   switch (r.match.kind) {
     case 'new':
-      return { ...base, status: 'new', itemId: null, diff: [], reactivatable: false, reason: null, data: toPreviewRowData(r.row) };
+      return { ...base, status: 'new', itemId: null, diff: [], isDeactivated: false, reason: null, data: toPreviewRowData(r.row) };
     case 'unchanged':
       return {
         ...base,
         status: 'unchanged',
         itemId: r.match.itemId,
         diff: [],
-        reactivatable: false,
+        isDeactivated: r.match.isDeactivated,
         reason: null,
         data: toPreviewRowData(r.row),
       };
@@ -123,12 +123,12 @@ function toPreviewRow(r: ImportRowResult): PreviewResponseRow {
         status: 'update',
         itemId: r.match.itemId,
         diff: r.match.diff,
-        reactivatable: r.match.reactivatable,
+        isDeactivated: r.match.isDeactivated,
         reason: null,
         data: toPreviewRowData(r.row),
       };
     case 'skipped':
-      return { ...base, status: 'skipped', itemId: null, diff: [], reactivatable: false, reason: r.match.reason, data: null };
+      return { ...base, status: 'skipped', itemId: null, diff: [], isDeactivated: false, reason: r.match.reason, data: null };
   }
 }
 
@@ -191,6 +191,12 @@ router.post('/items/import/preview', async (req, res) => {
         updated: preview.rows.filter((r) => r.match.kind === 'update').length,
         unchanged: preview.rows.filter((r) => r.match.kind === 'unchanged').length,
         skipped: preview.rows.filter((r) => r.match.kind === 'skipped').length,
+        // Alat NONAKTIF yang muncul di file — ditandai eksplisit di ringkasan
+        // atas supaya tidak kelewat (sebelumnya baris 'unchanged' identik
+        // tidak pernah memberi tahu bahwa alatnya nonaktif sama sekali).
+        deactivatedInFile: preview.rows.filter(
+          (r) => (r.match.kind === 'unchanged' || r.match.kind === 'update') && r.match.isDeactivated,
+        ).length,
       },
     });
   } catch (err) {
@@ -264,6 +270,7 @@ router.post('/items/import/commit', async (req, res) => {
   const added: { rowNumber: number; name: string }[] = [];
   const updated: { rowNumber: number; name: string }[] = [];
   const unchanged: { rowNumber: number; name: string }[] = [];
+  const reactivated: { rowNumber: number; name: string }[] = [];
   const skipped: { rowNumber: number; name: string; reason: string }[] = [];
   const failed: { rowNumber: number; name: string; error: string }[] = [];
   const savedItemsForPhotos: { itemId: string; rowNumber: number; name: string; photoUrl: string }[] = [];
@@ -274,6 +281,20 @@ router.post('/items/import/commit', async (req, res) => {
       continue;
     }
     if (r.match.kind === 'unchanged') {
+      // Data identik dengan existing, TAPI alatnya bisa saja nonaktif dan
+      // user memilih "aktifkan lagi" — sebelumnya jalur ini sama sekali
+      // tidak menyentuh deactivated_at, jadi reaktivasi lewat impor cuma
+      // bekerja kalau datanya kebetulan juga ada field yang beda (match
+      // 'update'). itemId datang dari match existing items milik business
+      // ini sendiri (bukan dari client), jadi aman tanpa validasi tambahan.
+      if (r.match.isDeactivated && reactivateSet.has(r.match.itemId)) {
+        const { error } = await supabase.from('items').update({ deactivated_at: null }).eq('id', r.match.itemId);
+        if (error) {
+          failed.push({ rowNumber: r.row.rowNumber, name: r.row.name, error: error.message });
+          continue;
+        }
+        reactivated.push({ rowNumber: r.row.rowNumber, name: r.row.name });
+      }
       unchanged.push({ rowNumber: r.row.rowNumber, name: r.row.name });
       if (r.row.photo_url) savedItemsForPhotos.push({ itemId: r.match.itemId, rowNumber: r.row.rowNumber, name: r.row.name, photoUrl: r.row.photo_url });
       continue;
@@ -309,7 +330,8 @@ router.post('/items/import/commit', async (req, res) => {
 
     // update
     const updatePayload: Record<string, unknown> = { name: r.row.name, ...payload };
-    if (reactivateSet.has(r.match.itemId)) {
+    const willReactivate = r.match.isDeactivated && reactivateSet.has(r.match.itemId);
+    if (willReactivate) {
       updatePayload.deactivated_at = null;
     }
     const { error } = await supabase.from('items').update(updatePayload).eq('id', r.match.itemId);
@@ -318,6 +340,7 @@ router.post('/items/import/commit', async (req, res) => {
       continue;
     }
     updated.push({ rowNumber: r.row.rowNumber, name: r.row.name });
+    if (willReactivate) reactivated.push({ rowNumber: r.row.rowNumber, name: r.row.name });
     if (r.row.photo_url) savedItemsForPhotos.push({ itemId: r.match.itemId, rowNumber: r.row.rowNumber, name: r.row.name, photoUrl: r.row.photo_url });
   }
 
@@ -361,6 +384,7 @@ router.post('/items/import/commit', async (req, res) => {
     added,
     updated,
     unchanged,
+    reactivated,
     skipped,
     failed,
     photos: { ok: photoOk, failed: photoFailed },
