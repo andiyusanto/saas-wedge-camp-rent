@@ -48,6 +48,24 @@ function decodeFileBase64(fileBase64: unknown, filename: unknown): { buffer: Buf
 const EXISTING_ITEM_FIELDS =
   'id, code, name, category, variant, size, color, total_units, price_per_day, day2_rate, day3_rate, day4_rate, day5_rate, extra_day_rate, readiness_hours, description, deactivated_at';
 
+type PreviewResponseRowData = {
+  code: string | null;
+  category: string | null;
+  variant: string | null;
+  size: string | null;
+  color: string | null;
+  total_units: number;
+  price_per_day: number;
+  day2_rate: number;
+  day3_rate: number;
+  day4_rate: number;
+  day5_rate: number;
+  extra_day_rate: number;
+  readiness_hours: number;
+  description: string | null;
+  photo_url: string | null;
+};
+
 type PreviewResponseRow = {
   rowNumber: number;
   name: string;
@@ -56,19 +74,61 @@ type PreviewResponseRow = {
   diff: { field: string; label: string; from: string; to: string }[];
   reactivatable: boolean;
   reason: string | null;
+  data: PreviewResponseRowData | null;
 };
+
+// data = nilai yang BENAR-BENAR akan disimpan (sel kosong sudah diresolve
+// warisan tarif bertingkat oleh parseImportFile(), bukan dihitung ulang di
+// sini) — dipakai frontend untuk ringkasan & detail pratinjau (permintaan
+// Andi: vendor perlu lihat data sebenarnya, bukan cuma "Baru"/"Diperbarui").
+// null untuk baris 'skipped' karena datanya belum tentu valid/lengkap.
+function toPreviewRowData(row: ImportRowResult['row']): PreviewResponseRowData {
+  return {
+    code: row.code,
+    category: row.category,
+    variant: row.variant,
+    size: row.size,
+    color: row.color,
+    total_units: row.total_units,
+    price_per_day: row.price_per_day,
+    day2_rate: row.day2_rate,
+    day3_rate: row.day3_rate,
+    day4_rate: row.day4_rate,
+    day5_rate: row.day5_rate,
+    extra_day_rate: row.extra_day_rate,
+    readiness_hours: row.readiness_hours,
+    description: row.description,
+    photo_url: row.photo_url,
+  };
+}
 
 function toPreviewRow(r: ImportRowResult): PreviewResponseRow {
   const base = { rowNumber: r.row.rowNumber, name: r.row.name };
   switch (r.match.kind) {
     case 'new':
-      return { ...base, status: 'new', itemId: null, diff: [], reactivatable: false, reason: null };
+      return { ...base, status: 'new', itemId: null, diff: [], reactivatable: false, reason: null, data: toPreviewRowData(r.row) };
     case 'unchanged':
-      return { ...base, status: 'unchanged', itemId: r.match.itemId, diff: [], reactivatable: false, reason: null };
+      return {
+        ...base,
+        status: 'unchanged',
+        itemId: r.match.itemId,
+        diff: [],
+        reactivatable: false,
+        reason: null,
+        data: toPreviewRowData(r.row),
+      };
     case 'update':
-      return { ...base, status: 'update', itemId: r.match.itemId, diff: r.match.diff, reactivatable: r.match.reactivatable, reason: null };
+      return {
+        ...base,
+        status: 'update',
+        itemId: r.match.itemId,
+        diff: r.match.diff,
+        reactivatable: r.match.reactivatable,
+        reason: null,
+        data: toPreviewRowData(r.row),
+      };
     case 'skipped':
-      return { ...base, status: 'skipped', itemId: null, diff: [], reactivatable: false, reason: r.match.reason };
+      return { ...base, status: 'skipped', itemId: null, diff: [], reactivatable: false, reason: r.match.reason, data: null };
   }
 }
 

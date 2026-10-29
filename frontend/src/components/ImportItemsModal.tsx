@@ -1,8 +1,27 @@
 import { useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { X, Upload, Download, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { X, Upload, Download, AlertTriangle, CheckCircle2, XCircle, ChevronDown, ChevronUp, Image, ImageOff } from 'lucide-react';
 import { apiFetch } from '../lib/api';
+import { formatIDR, computeItemRentalPrice } from '../utils/formatters';
 import { ModalBackdrop, ModalPanel } from './ModalShell';
+
+type PreviewRowData = {
+  code: string | null;
+  category: string | null;
+  variant: string | null;
+  size: string | null;
+  color: string | null;
+  total_units: number;
+  price_per_day: number;
+  day2_rate: number;
+  day3_rate: number;
+  day4_rate: number;
+  day5_rate: number;
+  extra_day_rate: number;
+  readiness_hours: number;
+  description: string | null;
+  photo_url: string | null;
+};
 
 type PreviewRow = {
   rowNumber: number;
@@ -12,7 +31,41 @@ type PreviewRow = {
   diff: { field: string; label: string; from: string; to: string }[];
   reactivatable: boolean;
   reason: string | null;
+  data: PreviewRowData | null;
 };
+
+// Tampilkan cuma tingkat yang beda dari tingkat sebelumnya (nilai yang
+// SUDAH diresolve warisan sel kosong, sama seperti yang dipakai saat
+// commit) — alat flat (semua tingkat sama) jadi "Rp25.000/hari" saja,
+// bukan enam angka identik berulang.
+function priceLadder(d: PreviewRowData): string {
+  const tiers: { label: string; value: number }[] = [
+    { label: '', value: d.price_per_day },
+    { label: 'hari 2', value: d.day2_rate },
+    { label: 'hari 3', value: d.day3_rate },
+    { label: 'hari 4', value: d.day4_rate },
+    { label: 'hari 5', value: d.day5_rate },
+    { label: 'hari 6+', value: d.extra_day_rate },
+  ];
+  const changed = tiers.filter((t, i) => i === 0 || t.value !== tiers[i - 1].value);
+  if (changed.length === 1) return `${formatIDR(d.price_per_day)}/hari`;
+  return changed.map((t) => (t.label ? `${t.label}: ${formatIDR(t.value)}` : formatIDR(t.value))).join(' · ');
+}
+
+function exampleTotal(d: PreviewRowData): string | null {
+  const flat = [d.price_per_day, d.day2_rate, d.day3_rate, d.day4_rate, d.day5_rate, d.extra_day_rate].every(
+    (v) => v === d.price_per_day,
+  );
+  if (flat) return null; // alat flat sudah jelas dari "Rp.../hari", total 3 hari tidak nambah informasi
+  const total = computeItemRentalPrice(d, 3);
+  return `3 hari = ${formatIDR(total)}`;
+}
+
+function summaryLine(d: PreviewRowData): string {
+  const parts = [d.category, `${d.total_units} unit`, priceLadder(d)].filter(Boolean);
+  const total = exampleTotal(d);
+  return parts.join(' · ') + (total ? ` (${total})` : '');
+}
 
 type UnitWarning = { rowNumber: number; name: string; itemId: string | null; currentlyUsed: number; newTotalUnits: number };
 
@@ -81,6 +134,16 @@ export function ImportItemsModal({
   const [reactivateIds, setReactivateIds] = useState<Set<string>>(new Set());
   const [acknowledgedWarning, setAcknowledgedWarning] = useState(false);
   const [report, setReport] = useState<CommitResponse | null>(null);
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+
+  function toggleExpanded(rowNumber: number) {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(rowNumber)) next.delete(rowNumber);
+      else next.add(rowNumber);
+      return next;
+    });
+  }
 
   async function handleFileChange(selected: File | null) {
     setError(null);
@@ -286,55 +349,157 @@ export function ImportItemsModal({
                 </div>
               )}
 
-              <div className="space-y-2 max-h-80 overflow-y-auto">
-                {preview.rows.map((row) => (
-                  <div key={row.rowNumber} className="border border-[#E6E1D2] rounded-xl p-2.5 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-[#26302B]">
-                        Baris {row.rowNumber}: {row.name || '-'}
-                      </span>
-                      <span
-                        className={`font-semibold ${
-                          row.status === 'new'
-                            ? 'text-[#2B4739]'
-                            : row.status === 'update'
-                              ? 'text-[#A65C2A]'
-                              : row.status === 'skipped'
-                                ? 'text-[#A8412E]'
-                                : 'text-[#6E6853]'
-                        }`}
+              <div className="max-h-[42vh] overflow-y-auto space-y-2 pr-1 -mr-1">
+                {preview.rows.map((row) => {
+                  const isExpanded = expandedRows.has(row.rowNumber);
+                  const canExpand = row.status !== 'skipped';
+                  return (
+                    <div key={row.rowNumber} className="border border-[#E6E1D2] rounded-xl p-2.5 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => canExpand && toggleExpanded(row.rowNumber)}
+                        className="w-full text-left"
+                        disabled={!canExpand}
                       >
-                        {row.status === 'new' && 'Baru'}
-                        {row.status === 'update' && 'Diperbarui'}
-                        {row.status === 'unchanged' && 'Tidak berubah'}
-                        {row.status === 'skipped' && 'Dilewati'}
-                      </span>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold text-[#26302B]">
+                            Baris {row.rowNumber}: {row.name || '-'}
+                          </span>
+                          <span className="flex items-center gap-1.5 shrink-0">
+                            <span
+                              className={`font-semibold ${
+                                row.status === 'new'
+                                  ? 'text-[#2B4739]'
+                                  : row.status === 'update'
+                                    ? 'text-[#A65C2A]'
+                                    : row.status === 'skipped'
+                                      ? 'text-[#A8412E]'
+                                      : 'text-[#6E6853]'
+                              }`}
+                            >
+                              {row.status === 'new' && 'Baru'}
+                              {row.status === 'update' && 'Diperbarui'}
+                              {row.status === 'unchanged' && 'Tidak berubah'}
+                              {row.status === 'skipped' && 'Dilewati'}
+                            </span>
+                            {canExpand &&
+                              (isExpanded ? (
+                                <ChevronUp className="w-3.5 h-3.5 text-[#6E6853]" />
+                              ) : (
+                                <ChevronDown className="w-3.5 h-3.5 text-[#6E6853]" />
+                              ))}
+                          </span>
+                        </div>
+                        {row.status === 'skipped' && <p className="text-[#A8412E] mt-1 text-left">{row.reason}</p>}
+                        {row.data && <p className="text-[#6E6853] mt-1 text-left">{summaryLine(row.data)}</p>}
+                      </button>
+
+                      {isExpanded && row.data && (
+                        <div className="mt-2 pt-2 border-t border-[#E6E1D2] space-y-2">
+                          {row.status === 'update' && row.diff.length > 0 && (
+                            <ul className="space-y-0.5">
+                              {row.diff.map((d) => (
+                                <li key={d.field} className="text-[#A65C2A] font-semibold">
+                                  {d.label}: <span className="text-[#6E6853] font-normal">{d.from}</span> →{' '}
+                                  {d.to}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+
+                          <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[#26302B]">
+                            {row.data.code && (
+                              <>
+                                <dt className="text-[#6E6853]">Kode</dt>
+                                <dd>{row.data.code}</dd>
+                              </>
+                            )}
+                            {row.data.variant && (
+                              <>
+                                <dt className="text-[#6E6853]">Varian</dt>
+                                <dd>{row.data.variant}</dd>
+                              </>
+                            )}
+                            {row.data.size && (
+                              <>
+                                <dt className="text-[#6E6853]">Ukuran</dt>
+                                <dd>{row.data.size}</dd>
+                              </>
+                            )}
+                            {row.data.color && (
+                              <>
+                                <dt className="text-[#6E6853]">Warna</dt>
+                                <dd>{row.data.color}</dd>
+                              </>
+                            )}
+                            <dt className="text-[#6E6853]">Jeda persiapan</dt>
+                            <dd>{row.data.readiness_hours} jam</dd>
+                          </dl>
+
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="text-[#6E6853]">
+                                <th className="font-normal pr-2 py-0.5">Hari 1</th>
+                                <th className="font-normal pr-2 py-0.5">Hari 2</th>
+                                <th className="font-normal pr-2 py-0.5">Hari 3</th>
+                                <th className="font-normal pr-2 py-0.5">Hari 4</th>
+                                <th className="font-normal pr-2 py-0.5">Hari 5</th>
+                                <th className="font-normal py-0.5">Hari 6+</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr className="text-[#26302B] font-semibold">
+                                <td className="pr-2">{formatIDR(row.data.price_per_day)}</td>
+                                <td className="pr-2">{formatIDR(row.data.day2_rate)}</td>
+                                <td className="pr-2">{formatIDR(row.data.day3_rate)}</td>
+                                <td className="pr-2">{formatIDR(row.data.day4_rate)}</td>
+                                <td className="pr-2">{formatIDR(row.data.day5_rate)}</td>
+                                <td>{formatIDR(row.data.extra_day_rate)}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+
+                          {row.data.description && (
+                            <p className="text-[#6E6853] line-clamp-3">{row.data.description}</p>
+                          )}
+
+                          <p className="flex items-center gap-1.5 text-[#6E6853]">
+                            {row.data.photo_url ? (
+                              /instagram\.com|facebook\.com|fb\.watch/i.test(row.data.photo_url) ? (
+                                <>
+                                  <ImageOff className="w-3.5 h-3.5 text-[#A8412E]" />
+                                  <span className="text-[#A8412E]">Link Instagram/Facebook — tidak bisa diambil</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Image className="w-3.5 h-3.5" /> Ada link foto
+                                </>
+                              )
+                            ) : (
+                              <>
+                                <ImageOff className="w-3.5 h-3.5" /> Tanpa foto
+                              </>
+                            )}
+                          </p>
+                        </div>
+                      )}
+
+                      {row.status === 'update' && row.reactivatable && row.itemId && (
+                        <label className="flex items-center gap-2 mt-1.5 text-[#26302B]">
+                          <input
+                            type="checkbox"
+                            checked={reactivateIds.has(row.itemId)}
+                            onChange={() => toggleReactivate(row.itemId!)}
+                          />
+                          Alat ini nonaktif — aktifkan lagi?
+                        </label>
+                      )}
                     </div>
-                    {row.status === 'skipped' && <p className="text-[#A8412E] mt-1">{row.reason}</p>}
-                    {row.status === 'update' && row.diff.length > 0 && (
-                      <ul className="mt-1 text-[#6E6853] space-y-0.5">
-                        {row.diff.map((d) => (
-                          <li key={d.field}>
-                            {d.label}: {d.from} → {d.to}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    {row.status === 'update' && row.reactivatable && row.itemId && (
-                      <label className="flex items-center gap-2 mt-1.5 text-[#26302B]">
-                        <input
-                          type="checkbox"
-                          checked={reactivateIds.has(row.itemId)}
-                          onChange={() => toggleReactivate(row.itemId!)}
-                        />
-                        Alat ini nonaktif — aktifkan lagi?
-                      </label>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
-              <div className="flex gap-2">
+              <div className="sticky bottom-0 -mx-5 -mb-5 px-5 pb-5 pt-3 bg-[#FBFAF4] border-t border-[#E6E1D2] flex gap-2">
                 <button
                   onClick={() => setStep('pilih')}
                   className="flex-1 px-4 py-2.5 rounded-xl border border-[#DBD5C1] text-[#26302B] font-bold text-xs"
