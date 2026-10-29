@@ -50,6 +50,11 @@ const FAQ_ITEMS: { question: string; answer: string }[] = [
       'Tidak. Sewalog dibuka langsung dari browser HP lewat link, dan bisa ditambahkan ke layar utama supaya dibuka seperti aplikasi.',
   },
   {
+    question: 'Ribet nggak masukin data alat satu-satu?',
+    answer:
+      'Tidak harus satu-satu. Akun pemilik bisa unggah data alat sekaligus dari file Excel (.xlsx atau .csv, maksimal 500 baris) pakai template yang disediakan, dengan pratinjau sebelum disimpan. Alat yang sudah ada otomatis diperbarui, bukan dobel, dan tidak ada data yang terhapus. Foto alat bisa ditautkan lewat link Google Drive.',
+  },
+  {
     question: 'Bisa untuk harga sewa yang beda tiap hari?',
     answer:
       'Bisa. Tarif bisa diatur per hari sampai hari ke-5 plus tarif untuk hari ke-6 dan seterusnya (contoh: hari 1 Rp30.000, hari 2 Rp20.000, hari 3 dst Rp10.000 — sewa 4 hari jadi Rp70.000), total dihitung otomatis saat mencatat transaksi, dan denda keterlambatan ikut memakai tarif hari berikutnya. Alat dengan harga tetap cukup diisi satu harga.',
