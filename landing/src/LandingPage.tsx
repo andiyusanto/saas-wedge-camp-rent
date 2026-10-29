@@ -64,6 +64,11 @@ const FAQ_ITEMS: { question: string; answer: string }[] = [
     answer:
       'Data tiap usaha disimpan terpisah, jadi rental lain tidak bisa melihat data kamu. Data itu milik usahamu: kami tidak menjual atau memakainya untuk iklan, dan kamu bisa minta salinan atau penghapusan kapan saja. Rinciannya ada di Kebijakan Privasi.',
   },
+  {
+    question: 'Bisa lihat rekap pemasukan?',
+    answer:
+      'Bisa. Menu Riwayat Transaksi (khusus akun pemilik) menampilkan jumlah transaksi, uang yang sudah diterima, dan piutang untuk rentang tanggal yang kamu pilih. Ada juga tombol Unduh Excel yang menghasilkan file berisi daftar transaksi (denda telat dan kerusakan dipisah), ringkasan, dan pendapatan per alat.',
+  },
 ];
 
 // Artikel jarang bertambah, jadi cukup data statis di sini (pola sama seperti
