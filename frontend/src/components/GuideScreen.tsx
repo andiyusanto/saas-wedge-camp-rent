@@ -362,9 +362,28 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         </Note>
         <p>
           Filter tanggal (default: awal bulan berjalan sampai hari ini), status, dan pencarian nama/kode booking
-          bisa dipakai bersamaan. Tombol <Ui>Unduh CSV</Ui> mengekspor daftar yang sedang tampil (sesuai filter
-          aktif) ke file Excel/CSV.
+          bisa dipakai bersamaan. Tombol <Ui>Unduh Excel</Ui> mengunduh file .xlsx berisi daftar yang sedang tampil
+          (ikut filter tanggal ambil, status, dan pencarian).
         </p>
+        <p>Isinya 3 sheet:</p>
+        <ul className="list-disc pl-5 space-y-1 text-xs text-[#26302B]">
+          <li>
+            <span className="font-bold">Transaksi</span> — rincian per transaksi, dengan denda telat dan denda
+            kerusakan/hilang dipisah jadi dua kolom sendiri.
+          </li>
+          <li>
+            <span className="font-bold">Ringkasan</span> — jumlah transaksi, omset, sudah dibayar, piutang, dan
+            total tiap jenis denda.
+          </li>
+          <li>
+            <span className="font-bold">Per Alat</span> — alat paling laku dan pendapatannya masing-masing.
+          </li>
+        </ul>
+        <Note>
+          Kalau sedang memakai filter status atau pencarian, angka di sheet Ringkasan cuma untuk transaksi yang
+          cocok dengan filter itu, bukan seluruh usaha. Transaksi <Ui>Dibatalkan</Ui> tetap tercantum di sheet
+          Transaksi, tapi tidak ikut dihitung di Ringkasan.
+        </Note>
         <p>
           Bagian <Ui>Peralatan Terlaris Disewa</Ui> menampilkan alat yang paling sering disewa pada rentang tanggal
           yang sama (juga tidak termasuk transaksi Dibatalkan), dikelompokkan per kategori — tekan judul kategori
