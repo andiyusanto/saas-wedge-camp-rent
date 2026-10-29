@@ -246,26 +246,27 @@ async function main() {
     console.log('OK karyawan demo sudah jadi anggota');
   }
 
-  // --- Reset: tutup transaksi demo lama lewat endpoint asli ---
-  // booking_status_history sengaja append-only (tidak ada policy delete —
-  // lihat migration 008), jadi bookings lama TIDAK BISA di-hard-delete
-  // (bakal kena FK violation). Daripada melanggar prinsip itu, transaksi
-  // demo dari run sebelumnya cukup "ditutup" lewat endpoint yang sama
-  // dipakai vendor asli (pickup lalu batalkan) — otomatis hilang dari
-  // Kalender/Jaminan & Denda karena keduanya cuma menampilkan status
-  // dipesan/aktif. Riwayatnya tetap ada di database, tidak pernah dihapus.
-  console.log('-- Menutup transaksi demo dari run sebelumnya --');
-  const oldBookings = await rest(
-    `bookings?select=id,status&business_id=eq.${businessId}&status=in.(dipesan,aktif)`,
-    ownerToken,
-  );
-  for (const b of oldBookings) {
-    if (b.status === 'dipesan') {
-      await api(`/api/bookings/${b.id}/pickup`, ownerToken, { method: 'POST' });
-    }
-    await api(`/api/bookings/${b.id}/cancel`, ownerToken, { method: 'POST' });
-  }
-  console.log(`OK ${oldBookings.length} transaksi lama ditutup`);
+  // --- Reset: hapus TOTAL rantai booking demo lama (status apa pun) ---
+  // Dulu cuma menutup dipesan/aktif via /pickup+/cancel — booking yang
+  // sudah selesai/telat tidak pernah tersentuh (tidak ada endpoint produk
+  // untuk "membuka lagi" transaksi yang sudah ditutup, sengaja, demi
+  // integritas data vendor asli), jadi menumpuk selamanya dan akhirnya
+  // overflow kapasitas item dengan readiness_hours>0 (lihat catatan
+  // panjang di migrations/036_reset_demo_bookings.sql). Sekarang lewat
+  // RPC security-definer reset_demo_bookings() (migration 036), yang
+  // menghapus booking_status_history/penalties/deposits/booking_items/
+  // bookings untuk business demo SAJA — fungsinya sendiri memverifikasi
+  // business_id + pemanggil benar-benar demo sebelum menghapus apa pun,
+  // jadi tidak perlu/tidak boleh menambah policy DELETE generik yang akan
+  // melanggar prinsip append-only booking_status_history untuk vendor
+  // asli.
+  console.log('-- Menghapus transaksi demo dari run sebelumnya --');
+  await rest('rpc/reset_demo_bookings', ownerToken, {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({ p_business_id: businessId }),
+  });
+  console.log('OK transaksi lama dihapus');
 
   // --- Seed katalog alat ---
   console.log('-- Menambahkan katalog alat demo --');

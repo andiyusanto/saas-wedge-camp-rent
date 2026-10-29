@@ -381,18 +381,22 @@ export async function resetDemoData(): Promise<DemoResetResult> {
     });
   }
 
-  // --- Tutup transaksi demo lama lewat endpoint asli (bukan hard-delete —
-  // booking_status_history sengaja append-only, lihat migration 008) ---
-  const oldBookings = await rest<{ id: string; status: string }[]>(
-    `bookings?select=id,status&business_id=eq.${businessId}&status=in.(dipesan,aktif)`,
-    ownerToken,
-  );
-  for (const b of oldBookings) {
-    if (b.status === 'dipesan') {
-      await selfApi(`/api/bookings/${b.id}/pickup`, ownerToken, { method: 'POST' });
-    }
-    await selfApi(`/api/bookings/${b.id}/cancel`, ownerToken, { method: 'POST' });
-  }
+  // --- Hapus TOTAL rantai booking demo lama (status apa pun), lewat RPC
+  // security-definer reset_demo_bookings() (migration 036) — BUKAN cuma
+  // menutup dipesan/aktif via /cancel seperti sebelumnya. Booking yang
+  // sudah selesai/telat tidak punya endpoint produk untuk "dibuka lagi"
+  // (sengaja, demi integritas data vendor asli), jadi versi lama
+  // membiarkannya menumpuk selamanya — lihat catatan panjang di file
+  // migrasinya untuk kronologi bug yang ditutup di sini. Fungsi ini
+  // sendiri memverifikasi p_business_id benar-benar business demo DAN
+  // pemanggil login sebagai owner demo, jadi aman dipakai di sini tanpa
+  // menambah policy DELETE generik yang akan melanggar prinsip
+  // append-only booking_status_history untuk vendor asli.
+  await rest('rpc/reset_demo_bookings', ownerToken, {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({ p_business_id: businessId }),
+  });
 
   // --- Upsert katalog alat by-kode (bukan delete+insert, sama alasannya) ---
   const existingItems = await rest<{ id: string; code: string }[]>(

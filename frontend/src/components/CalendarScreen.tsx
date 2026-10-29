@@ -194,7 +194,13 @@ export function CalendarScreen({
                 <div className="flex-1 overflow-x-auto pb-1 scrollbar-none">
                   <div className="flex items-center gap-2 min-w-max">
                     {(data?.days ?? []).map((dateStr, i) => {
-                      const remaining = item.remaining[i];
+                      // Bisa negatif kalau jendela jeda persiapan (readiness_hours)
+                      // beberapa booking yang sudah ditutup tumpang tindih di
+                      // tanggal yang sama (lihat usedUnitsOn di lib/availability.ts)
+                      // — tampilkan 0, bukan angka negatif mentah, status di
+                      // bawahnya tetap "HABIS" seperti biasa (computeAvailabilityStatus
+                      // sudah memperlakukan remaining<=0 sebagai 'penuh').
+                      const remaining = Math.max(0, item.remaining[i]);
                       const status = item.status[i];
                       const styles =
                         status === 'penuh'
