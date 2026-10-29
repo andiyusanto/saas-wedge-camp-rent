@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { History, Receipt, Wallet, AlertCircle, CalendarClock, Download, Search, Package, ChevronDown, ChevronUp } from 'lucide-react';
 import { useHistory } from '../hooks/useHistory';
-import type { HistoryBooking } from '../hooks/useHistory';
 import { StatCard } from './StatCard';
 import { formatDateIndo, formatIDR, bookingStatusLabel } from '../utils/formatters';
+import { computeHistorySummary, downloadHistoryExcel } from '../utils/historyExport';
 
 function firstDayOfMonthStr(): string {
   const d = new Date();
@@ -23,46 +23,6 @@ const STATUS_BADGE: Record<string, string> = {
   dibatalkan: 'bg-white text-[#6E6853] border-[#DBD5C1] line-through',
 };
 
-// Excel/CSV butuh field yang mengandung koma/kutip/baris baru dikutip —
-// pola sama seperti fitur setara di Bilbo-Outdoors.
-function csvField(value: string | number): string {
-  const s = String(value);
-  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
-}
-
-function bookingsToCsv(bookings: HistoryBooking[]): string {
-  const columns = [
-    'No. Booking',
-    'Penyewa',
-    'WhatsApp',
-    'Tanggal Ambil',
-    'Tanggal Kembali',
-    'Alat',
-    'Total Harga (Rp)',
-    'Sudah Dibayar (Rp)',
-    'Sisa Tagihan (Rp)',
-    'Denda (Rp)',
-    'Status',
-  ];
-  const rows = bookings.map((b) => [
-    b.booking_number ?? '',
-    b.customer?.name ?? '',
-    b.customer?.phone ?? '',
-    b.start_date,
-    b.end_date,
-    b.items.map((i) => `${i.name} (${i.quantity}x)`).join('; '),
-    b.total_price,
-    b.dp_paid,
-    Math.max(0, b.total_price - b.dp_paid),
-    b.penalties.reduce((sum, p) => sum + p.amount, 0),
-    bookingStatusLabel(b.status),
-  ]);
-  // BOM di depan supaya Excel (khususnya di Windows) mendeteksi UTF-8,
-  // bukan salah baca lewat asumsi ANSI lama.
-  return String.fromCharCode(0xfeff) + [columns, ...rows].map((row) => row.map(csvField).join(',')).join('\r\n');
-}
-
 export function HistoryScreen({ businessId }: { businessId: string }) {
   const [from, setFrom] = useState(firstDayOfMonthStr);
   const [to, setTo] = useState(todayStrLocal);
@@ -79,15 +39,17 @@ export function HistoryScreen({ businessId }: { businessId: string }) {
     return matchesStatus && matchesSearch;
   });
 
-  // Transaksi dibatalkan sengaja dikecualikan dari ketiga KPI ini — batal
-  // artinya transaksinya tidak pernah benar-benar terjadi, jadi tidak
-  // boleh ikut dihitung sebagai volume/omset/piutang. Daftar di bawah
-  // tetap menampilkan status dibatalkan (riwayat tetap lengkap), cuma
-  // angka ringkasan di atas yang menyaringnya.
+  // Transaksi dibatalkan sengaja dikecualikan dari KPI ini — batal artinya
+  // transaksinya tidak pernah benar-benar terjadi, jadi tidak boleh ikut
+  // dihitung sebagai volume/omset/piutang. Daftar di bawah tetap
+  // menampilkan status dibatalkan (riwayat tetap lengkap), cuma angka
+  // ringkasan di atas yang menyaringnya. computeHistorySummary() dipakai
+  // juga oleh export Excel (utils/historyExport.ts) — fungsi yang sama,
+  // supaya kalau filter status/pencarian lagi "semua"/kosong, angka di
+  // sheet Ringkasan dijamin identik dengan StatCard di sini (bukan dua
+  // salinan rumus yang bisa diam-diam beda).
   const nonCancelled = bookings.filter((b) => b.status !== 'dibatalkan');
-  const totalTransaksi = nonCancelled.length;
-  const sudahDiterima = nonCancelled.reduce((sum, b) => sum + b.dp_paid, 0);
-  const piutang = nonCancelled.reduce((sum, b) => sum + Math.max(0, b.total_price - b.dp_paid), 0);
+  const { totalTransaksi, sudahDiterima, piutang } = computeHistorySummary(nonCancelled);
 
   // Peralatan terlaris — dijumlah dari transaksi non-batal pada rentang
   // yang sama dengan KPI di atas, bukan flat sepanjang waktu. Dikelompokkan
@@ -147,24 +109,16 @@ export function HistoryScreen({ businessId }: { businessId: string }) {
     });
   }
 
-  const [csvUrl, setCsvUrl] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
-  // Bikin ulang Blob URL tiap filter berubah, dan selalu revoke yang lama
-  // — createObjectURL menahan memori sampai di-revoke manual, tidak
-  // otomatis dibuang begitu komponennya re-render.
-  useEffect(() => {
-    if (filtered.length === 0) {
-      setCsvUrl(null);
-      return;
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await downloadHistoryExcel(filtered, { from, to, statusFilter, searchQuery });
+    } finally {
+      setExporting(false);
     }
-    const blob = new Blob([bookingsToCsv(filtered)], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    setCsvUrl(url);
-    return () => URL.revokeObjectURL(url);
-    // filtered sengaja tidak masuk deps (array baru tiap render) — ganti
-    // dengan input aslinya yang benar-benar menentukan isi filtered.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookings, statusFilter, searchQuery]);
+  }
 
   return (
     <div className="space-y-6">
@@ -177,18 +131,19 @@ export function HistoryScreen({ businessId }: { businessId: string }) {
             </h2>
             <p className="text-xs text-[#6E6853]">Rekap semua transaksi, termasuk yang sudah selesai atau dibatalkan.</p>
           </div>
-          <a
-            href={csvUrl ?? undefined}
-            download={csvUrl ? `riwayat-transaksi_${from}_${to}.csv` : undefined}
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={filtered.length === 0 || exporting}
             className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm transition shrink-0 ${
-              csvUrl
-                ? 'bg-[#2B4739] hover:bg-[#1E3429] text-white'
-                : 'bg-[#F1EEE2] text-[#6E6853] cursor-not-allowed pointer-events-none'
+              filtered.length === 0 || exporting
+                ? 'bg-[#F1EEE2] text-[#6E6853] cursor-not-allowed'
+                : 'bg-[#2B4739] hover:bg-[#1E3429] text-white'
             }`}
           >
             <Download className="w-4 h-4" />
-            <span>Unduh CSV</span>
-          </a>
+            <span>{exporting ? 'Menyiapkan...' : 'Unduh Excel'}</span>
+          </button>
         </div>
 
         <div className="flex flex-wrap items-end gap-3 pt-2 border-t border-[#E6E1D2]">

@@ -10,6 +10,8 @@ export type HistoryBookingItem = {
   size: string | null;
   color: string | null;
   quantity: number;
+  subtotal: number | null;
+  price_at_booking: number;
 };
 
 export type HistoryBooking = {
@@ -22,11 +24,15 @@ export type HistoryBooking = {
   dp_paid: number;
   customer: { name: string; phone: string | null } | null;
   items: HistoryBookingItem[];
-  penalties: { type: string; amount: number }[];
+  penalties: { type: string; amount: number; item_id: string | null }[];
 };
 
+// subtotal/price_at_booking (migration 034) dan penalties.item_id (migration
+// 029) ditambah buat sheet "Per Alat" & "Transaksi" di export Excel — lihat
+// utils/historyExport.ts. Pola fallback subtotal null sama persis
+// InvoiceModal.tsx (baris lama sebelum migration 034, tidak di-backfill).
 const SELECT_FIELDS =
-  'id, booking_number, status, start_date, end_date, total_price, dp_paid, customers(name, phone), booking_items(quantity, items(id, name, category, variant, size, color)), penalties(type, amount)';
+  'id, booking_number, status, start_date, end_date, total_price, dp_paid, customers(name, phone), booking_items(quantity, subtotal, price_at_booking, items(id, name, category, variant, size, color)), penalties(type, amount, item_id)';
 
 type RawBooking = {
   id: string;
@@ -40,6 +46,8 @@ type RawBooking = {
   booking_items:
     | {
         quantity: number;
+        subtotal: number | null;
+        price_at_booking: number;
         items: {
           id: string;
           name: string;
@@ -50,7 +58,7 @@ type RawBooking = {
         } | null;
       }[]
     | null;
-  penalties: { type: string; amount: number }[] | null;
+  penalties: { type: string; amount: number; item_id: string | null }[] | null;
 };
 
 function mapBooking(row: RawBooking): HistoryBooking {
@@ -71,6 +79,8 @@ function mapBooking(row: RawBooking): HistoryBooking {
       size: bi.items?.size ?? null,
       color: bi.items?.color ?? null,
       quantity: bi.quantity,
+      subtotal: bi.subtotal,
+      price_at_booking: bi.price_at_booking,
     })),
     penalties: row.penalties ?? [],
   };
