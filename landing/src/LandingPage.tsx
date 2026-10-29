@@ -57,7 +57,7 @@ const FAQ_ITEMS: { question: string; answer: string }[] = [
   {
     question: 'Apakah data alat dan transaksi aman?',
     answer:
-      'Data alat dan transaksi disimpan dengan sistem yang memisahkan data tiap usaha secara terpisah (multi-tenant dengan Row Level Security), jadi satu usaha tidak bisa mengakses data usaha lain meski memakai aplikasi yang sama.',
+      'Data tiap usaha disimpan terpisah, jadi rental lain tidak bisa melihat data kamu. Data itu milik usahamu: kami tidak menjual atau memakainya untuk iklan, dan kamu bisa minta salinan atau penghapusan kapan saja. Rinciannya ada di Kebijakan Privasi.',
   },
 ];
 

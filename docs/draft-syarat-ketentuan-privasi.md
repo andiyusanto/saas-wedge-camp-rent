@@ -1,8 +1,8 @@
-# DRAF FINAL — Syarat & Ketentuan dan Kebijakan Privasi Sewalog
+# ARSIP — Syarat & Ketentuan dan Kebijakan Privasi Sewalog
 
-> **Status: FINAL, disetujui pemilik produk (25 Okt 2026), BELUM dipasang.**
-> Bukan nasihat hukum. Satu-satunya isian tersisa: **[TANGGAL TAYANG]**,
-> diisi tanggal halaman ini dipasang di sewalog.com.
+> **Status: TAYANG di sewalog.com/syarat dan sewalog.com/privasi sejak 25 Oktober 2026.**
+> Arsip teks yang disetujui pemilik produk. Bukan nasihat hukum.
+> Kalau halaman live diubah, perbarui file ini juga.
 > Catatan operasional (internal): penghapusan permanen 3 bulan setelah
 > berhenti/tidak diperpanjang dilakukan manual lewat Supabase, karena
 > riwayat status transaksi sengaja append-only di aplikasi.
@@ -12,7 +12,7 @@
 
 # Syarat & Ketentuan Penggunaan Sewalog
 
-*Berlaku sejak: [TANGGAL TAYANG]*
+*Berlaku sejak: 25 Oktober 2026*
 
 Sewalog adalah aplikasi web untuk membantu usaha rental alat kamping dan
 outdoor mengelola stok, mencatat transaksi sewa, serta memantau jaminan dan
@@ -106,7 +106,7 @@ keluhan dapat disampaikan ke WhatsApp 0896-4945-4000 atau sewalogdotcomcorp@gmai
 
 # Kebijakan Privasi Sewalog
 
-*Berlaku sejak: [TANGGAL TAYANG]*
+*Berlaku sejak: 25 Oktober 2026*
 
 ## 1. Siapa kami
 
