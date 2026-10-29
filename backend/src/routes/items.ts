@@ -329,7 +329,16 @@ router.post('/items/import/commit', async (req, res) => {
   for (const item of savedItemsForPhotos) {
     try {
       const fetched = await fetchImageFromUrl(item.photoUrl);
-      const resized = await sharp(fetched.buffer).resize(1280, 1280, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 80 }).toBuffer();
+      // .rotate() tanpa argumen = auto-orient dari tag EXIF Orientation lalu
+      // buang tag itu dari output — tanpa ini foto potret dari HP (iPhone,
+      // kebanyakan Android) yang disimpan dengan EXIF orientation selain
+      // "normal" akan tersimpan miring 90°/180° (ditemukan Andi lewat tes
+      // link Drive sungguhan, foto JPEG iPhone orientation=upper-right).
+      const resized = await sharp(fetched.buffer)
+        .rotate()
+        .resize(1280, 1280, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 80 })
+        .toBuffer();
       const key = `items/${businessId}/${crypto.randomUUID()}.webp`;
       const url = await uploadToR2(key, resized, 'image/webp');
       const { error } = await supabase.from('items').update({ image_url: url }).eq('id', item.itemId);
