@@ -71,6 +71,25 @@ const FAQ_ITEMS: { question: string; answer: string }[] = [
   },
 ];
 
+// Klip video singkat yang relevan untuk FAQ tertentu, key harus sama persis
+// dengan salah satu `question` di FAQ_ITEMS di atas. Tersembunyi otomatis
+// (lewat VideoClip) selama src klip terkait di VIDEO_CLIPS masih kosong.
+const FAQ_CLIP_QUESTION: Partial<Record<string, 'imporExcel' | 'unduhExcel'>> = {
+  'Ribet nggak masukin data alat satu-satu?': 'imporExcel',
+  'Bisa lihat rekap pemasukan?': 'unduhExcel',
+};
+
+if (import.meta.env.DEV) {
+  const faqQuestions = new Set(FAQ_ITEMS.map((item) => item.question));
+  for (const question of Object.keys(FAQ_CLIP_QUESTION)) {
+    if (!faqQuestions.has(question)) {
+      console.warn(
+        `FAQ_CLIP_QUESTION punya key yang tidak cocok dengan FAQ_ITEMS lagi, klipnya jadi tidak tampil: "${question}"`,
+      );
+    }
+  }
+}
+
 // Artikel jarang bertambah, jadi cukup data statis di sini (pola sama seperti
 // FAQ_ITEMS) — judul & ringkasan disalin persis dari public/blog/index.html,
 // bukan ditulis ulang. Kalau ada artikel baru yang lebih relevan, ganti salah
@@ -98,14 +117,21 @@ const BLOG_PICKS: { href: string; title: string; summary: string }[] = [
 
 const APP_URL = import.meta.env.VITE_APP_URL || 'http://localhost:5173';
 
-// Video demo belum tersedia — isi salah satu konstanta ini saat videonya siap
-// (MP4/WebM di R2 image.sewalog.com, ATAU embed URL YouTube unlisted, bukan
-// dua-duanya). Section-nya otomatis disembunyikan selama DEMO_VIDEO_SRC kosong.
-const DEMO_VIDEO_SRC = '';
-const DEMO_VIDEO_TYPE: 'file' | 'youtube' = 'file';
-// Opsional: path gambar sampul (poster) 9:16. Kalau kosong, dipakai sampul
-// placeholder bergaya logo, bukan gambar rusak.
-const DEMO_VIDEO_POSTER = '';
+// Klip video (demo utama + klip fitur pendek) belum tersedia — isi src/poster
+// di satu tempat ini saat file videonya siap (MP4/WebM di R2
+// image.sewalog.com, ATAU embed URL YouTube unlisted lewat type: 'youtube').
+// Tiap pemutar (VideoClip) otomatis disembunyikan selama src-nya kosong, jadi
+// aman di-commit/push sebelum filenya benar-benar ada — sengaja dibiarkan
+// kosong dulu sampai Andi konfirmasi upload selesai.
+type ClipConfig = { src: string; type: 'file' | 'youtube'; poster: string };
+const EMPTY_CLIP: ClipConfig = { src: '', type: 'file', poster: '' };
+const VIDEO_CLIPS: Record<'demo' | 'imporExcel' | 'etalaseOnline' | 'unduhExcel' | 'strukWa', ClipConfig> = {
+  demo: { ...EMPTY_CLIP },
+  imporExcel: { ...EMPTY_CLIP },
+  etalaseOnline: { ...EMPTY_CLIP },
+  unduhExcel: { ...EMPTY_CLIP },
+  strukWa: { ...EMPTY_CLIP },
+};
 
 // Slug demo tetap (scripts/seed-demo.mjs) yang sengaja dipakai buat verifikasi
 // /toko/{slug} tetap hidup — aman dipakai sebagai contoh publik di landing page.
@@ -363,12 +389,14 @@ function FeatureCard({
   title,
   children,
   preview,
+  extra,
 }: {
   icon: ComponentType<{ className?: string }>;
   iconClass: string;
   title: string;
   children: string;
   preview: ReactNode;
+  extra?: ReactNode;
 }) {
   return (
     <div className="bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] shadow-xs p-5 flex flex-col gap-3 hover:border-[#2B4739]/50 transition">
@@ -377,51 +405,71 @@ function FeatureCard({
       </div>
       <h3 className="text-base font-bold text-[#26302B]">{title}</h3>
       <p className="text-sm text-[#6E6853]">{children}</p>
+      {extra}
       <div className="pt-3.5 border-t border-[#E6E1D2]">{preview}</div>
     </div>
   );
 }
 
-function DemoVideoSection() {
+// Pemutar klip kecil yang bisa dipakai ulang — klik untuk putar (bukan
+// autoplay di awal), tersembunyi otomatis kalau src kosong, jadi aman
+// disisipkan di mana saja sebelum file videonya ada.
+function VideoClip({
+  clip,
+  label,
+  widthClass = 'w-[220px]',
+}: {
+  clip: ClipConfig;
+  label?: string;
+  widthClass?: string;
+}) {
   const [playing, setPlaying] = useState(false);
 
-  if (!DEMO_VIDEO_SRC) return null;
+  if (!clip.src) return null;
+
+  return (
+    <div className={`${widthClass} shrink-0 aspect-[9/16] rounded-2xl overflow-hidden bg-[#1E3429] shadow-md relative`}>
+      {playing ? (
+        clip.type === 'youtube' ? (
+          <iframe
+            src={`${clip.src}?autoplay=1&playsinline=1`}
+            title={label || 'Video Sewalog'}
+            className="w-full h-full"
+            allow="autoplay; encrypted-media"
+            allowFullScreen
+          />
+        ) : (
+          <video src={clip.src} controls autoPlay playsInline className="w-full h-full object-cover" />
+        )
+      ) : (
+        <button
+          type="button"
+          onClick={() => setPlaying(true)}
+          className="w-full h-full flex items-center justify-center group relative"
+          aria-label={`Putar video${label ? ` ${label}` : ' demo Sewalog'}`}
+        >
+          {clip.poster ? (
+            <img src={clip.poster} alt="" className="absolute inset-0 w-full h-full object-cover" />
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-b from-[#2B4739] to-[#1E3429] flex flex-col items-center justify-center gap-2 px-3">
+              <img src="/logo.svg" alt="" className="w-8 h-8 opacity-70" />
+              {label && <span className="text-[11px] text-white/60 text-center">{label}</span>}
+            </div>
+          )}
+          <PlayCircle className="relative w-12 h-12 text-white drop-shadow-md group-active:scale-95 transition" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function DemoVideoSection() {
+  if (!VIDEO_CLIPS.demo.src) return null;
 
   return (
     <section className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
       <div className="reveal flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-8">
-        <div className="w-[260px] shrink-0 aspect-[9/16] rounded-2xl overflow-hidden bg-[#1E3429] shadow-md relative">
-          {playing ? (
-            DEMO_VIDEO_TYPE === 'youtube' ? (
-              <iframe
-                src={`${DEMO_VIDEO_SRC}?autoplay=1&playsinline=1`}
-                title="Video demo Sewalog"
-                className="w-full h-full"
-                allow="autoplay; encrypted-media"
-                allowFullScreen
-              />
-            ) : (
-              <video src={DEMO_VIDEO_SRC} controls autoPlay playsInline className="w-full h-full object-cover" />
-            )
-          ) : (
-            <button
-              type="button"
-              onClick={() => setPlaying(true)}
-              className="w-full h-full flex items-center justify-center group relative"
-              aria-label="Putar video demo Sewalog"
-            >
-              {DEMO_VIDEO_POSTER ? (
-                <img src={DEMO_VIDEO_POSTER} alt="" className="absolute inset-0 w-full h-full object-cover" />
-              ) : (
-                <div className="absolute inset-0 bg-gradient-to-b from-[#2B4739] to-[#1E3429] flex flex-col items-center justify-center gap-2">
-                  <img src="/logo.svg" alt="" className="w-10 h-10 opacity-70" />
-                  <span className="text-xs text-white/60">Pratinjau video</span>
-                </div>
-              )}
-              <PlayCircle className="relative w-14 h-14 text-white drop-shadow-md group-active:scale-95 transition" />
-            </button>
-          )}
-        </div>
+        <VideoClip clip={VIDEO_CLIPS.demo} label="Pratinjau video" widthClass="w-[260px]" />
         <div className="text-center sm:text-left max-w-xs">
           <h2 className="text-xl font-bold text-[#26302B] mb-2">Lihat Sewalog Dipakai Langsung</h2>
           <p className="text-sm text-[#6E6853] mb-5">
@@ -577,6 +625,11 @@ export function LandingPage() {
                 iconClass="bg-[#F9EFE7] border border-[#A65C2A]/30 text-[#A65C2A]"
                 title="Catat Transaksi"
                 preview={<TransactionMock />}
+                extra={
+                  VIDEO_CLIPS.strukWa.src ? (
+                    <VideoClip clip={VIDEO_CLIPS.strukWa} label="Struk WhatsApp" widthClass="w-[160px]" />
+                  ) : undefined
+                }
               >
                 Isi form singkat sambil pelanggan menunggu — alat, tanggal, sampai total harga otomatis kehitung.
                 Termasuk harga bertingkat: hari pertama bisa beda tarif dari hari berikutnya, tetap terhitung
@@ -641,6 +694,11 @@ export function LandingPage() {
                 Lihat Contoh Live
                 <ExternalLink className="w-4 h-4" />
               </a>
+              {VIDEO_CLIPS.etalaseOnline.src && (
+                <div className="mt-5">
+                  <VideoClip clip={VIDEO_CLIPS.etalaseOnline} label="Etalase Online" widthClass="w-[200px]" />
+                </div>
+              )}
             </div>
             <div className="mt-6 lg:mt-0 lg:flex-1 lg:max-w-xs">
               <EtalaseMock />
@@ -744,12 +802,23 @@ export function LandingPage() {
         <section className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
           <h2 className="reveal text-2xl font-bold text-[#26302B] mb-5">Pertanyaan yang Sering Ditanya</h2>
           <div className="reveal space-y-4">
-            {FAQ_ITEMS.map((item) => (
-              <div key={item.question} className="bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] shadow-xs p-5">
-                <h3 className="text-base font-bold text-[#26302B] mb-1.5">{item.question}</h3>
-                <p className="text-sm text-[#6E6853]">{item.answer}</p>
-              </div>
-            ))}
+            {FAQ_ITEMS.map((item) => {
+              const clipKey = FAQ_CLIP_QUESTION[item.question];
+              const clip = clipKey ? VIDEO_CLIPS[clipKey] : undefined;
+              return (
+                <div key={item.question} className="bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] shadow-xs p-5 sm:flex sm:items-start sm:gap-5">
+                  <div className="flex-1">
+                    <h3 className="text-base font-bold text-[#26302B] mb-1.5">{item.question}</h3>
+                    <p className="text-sm text-[#6E6853]">{item.answer}</p>
+                  </div>
+                  {clip && clip.src && (
+                    <div className="mt-4 sm:mt-0 flex justify-center">
+                      <VideoClip clip={clip} label={item.question} widthClass="w-[160px]" />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </section>
       </main>
