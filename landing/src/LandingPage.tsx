@@ -117,20 +117,38 @@ const BLOG_PICKS: { href: string; title: string; summary: string }[] = [
 
 const APP_URL = import.meta.env.VITE_APP_URL || 'http://localhost:5173';
 
-// Klip video (demo utama + klip fitur pendek) belum tersedia — isi src/poster
-// di satu tempat ini saat file videonya siap (MP4/WebM di R2
-// image.sewalog.com, ATAU embed URL YouTube unlisted lewat type: 'youtube').
+// Klip video (demo utama + klip fitur pendek) — MP4 + poster JPG di R2
+// (image.sewalog.com), ATAU embed URL YouTube unlisted lewat type: 'youtube'.
 // Tiap pemutar (VideoClip) otomatis disembunyikan selama src-nya kosong, jadi
-// aman di-commit/push sebelum filenya benar-benar ada — sengaja dibiarkan
-// kosong dulu sampai Andi konfirmasi upload selesai.
+// aman di-commit/push walau salah satu belum ada.
 type ClipConfig = { src: string; type: 'file' | 'youtube'; poster: string };
 const EMPTY_CLIP: ClipConfig = { src: '', type: 'file', poster: '' };
 const VIDEO_CLIPS: Record<'demo' | 'imporExcel' | 'etalaseOnline' | 'unduhExcel' | 'strukWa', ClipConfig> = {
-  demo: { ...EMPTY_CLIP },
-  imporExcel: { ...EMPTY_CLIP },
-  etalaseOnline: { ...EMPTY_CLIP },
-  unduhExcel: { ...EMPTY_CLIP },
-  strukWa: { ...EMPTY_CLIP },
+  demo: {
+    ...EMPTY_CLIP,
+    src: 'https://image.sewalog.com/video/demo-landing-60s.mp4',
+    poster: 'https://image.sewalog.com/video/demo-landing-60s-poster.jpg',
+  },
+  imporExcel: {
+    ...EMPTY_CLIP,
+    src: 'https://image.sewalog.com/video/impor-excel.mp4',
+    poster: 'https://image.sewalog.com/video/impor-excel-poster.jpg',
+  },
+  etalaseOnline: {
+    ...EMPTY_CLIP,
+    src: 'https://image.sewalog.com/video/etalase-online.mp4',
+    poster: 'https://image.sewalog.com/video/etalase-online-poster.jpg',
+  },
+  unduhExcel: {
+    ...EMPTY_CLIP,
+    src: 'https://image.sewalog.com/video/unduh-excel.mp4',
+    poster: 'https://image.sewalog.com/video/unduh-excel-poster.jpg',
+  },
+  strukWa: {
+    ...EMPTY_CLIP,
+    src: 'https://image.sewalog.com/video/struk-wa.mp4',
+    poster: 'https://image.sewalog.com/video/struk-wa-poster.jpg',
+  },
 };
 
 // Slug demo tetap (scripts/seed-demo.mjs) yang sengaja dipakai buat verifikasi
