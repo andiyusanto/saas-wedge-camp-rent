@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { ComponentType, ReactNode } from 'react';
 import {
   Calendar,
@@ -97,6 +97,15 @@ const BLOG_PICKS: { href: string; title: string; summary: string }[] = [
 ];
 
 const APP_URL = import.meta.env.VITE_APP_URL || 'http://localhost:5173';
+
+// Video demo belum tersedia — isi salah satu konstanta ini saat videonya siap
+// (MP4/WebM di R2 image.sewalog.com, ATAU embed URL YouTube unlisted, bukan
+// dua-duanya). Section-nya otomatis disembunyikan selama DEMO_VIDEO_SRC kosong.
+const DEMO_VIDEO_SRC = '';
+const DEMO_VIDEO_TYPE: 'file' | 'youtube' = 'file';
+// Opsional: path gambar sampul (poster) 9:16. Kalau kosong, dipakai sampul
+// placeholder bergaya logo, bukan gambar rusak.
+const DEMO_VIDEO_POSTER = '';
 
 // Slug demo tetap (scripts/seed-demo.mjs) yang sengaja dipakai buat verifikasi
 // /toko/{slug} tetap hidup — aman dipakai sebagai contoh publik di landing page.
@@ -373,6 +382,66 @@ function FeatureCard({
   );
 }
 
+function DemoVideoSection() {
+  const [playing, setPlaying] = useState(false);
+
+  if (!DEMO_VIDEO_SRC) return null;
+
+  return (
+    <section className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+      <div className="reveal flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-8">
+        <div className="w-[260px] shrink-0 aspect-[9/16] rounded-2xl overflow-hidden bg-[#1E3429] shadow-md relative">
+          {playing ? (
+            DEMO_VIDEO_TYPE === 'youtube' ? (
+              <iframe
+                src={`${DEMO_VIDEO_SRC}?autoplay=1&playsinline=1`}
+                title="Video demo Sewalog"
+                className="w-full h-full"
+                allow="autoplay; encrypted-media"
+                allowFullScreen
+              />
+            ) : (
+              <video src={DEMO_VIDEO_SRC} controls autoPlay playsInline className="w-full h-full object-cover" />
+            )
+          ) : (
+            <button
+              type="button"
+              onClick={() => setPlaying(true)}
+              className="w-full h-full flex items-center justify-center group relative"
+              aria-label="Putar video demo Sewalog"
+            >
+              {DEMO_VIDEO_POSTER ? (
+                <img src={DEMO_VIDEO_POSTER} alt="" className="absolute inset-0 w-full h-full object-cover" />
+              ) : (
+                <div className="absolute inset-0 bg-gradient-to-b from-[#2B4739] to-[#1E3429] flex flex-col items-center justify-center gap-2">
+                  <img src="/logo.svg" alt="" className="w-10 h-10 opacity-70" />
+                  <span className="text-xs text-white/60">Pratinjau video</span>
+                </div>
+              )}
+              <PlayCircle className="relative w-14 h-14 text-white drop-shadow-md group-active:scale-95 transition" />
+            </button>
+          )}
+        </div>
+        <div className="text-center sm:text-left max-w-xs">
+          <h2 className="text-xl font-bold text-[#26302B] mb-2">Lihat Sewalog Dipakai Langsung</h2>
+          <p className="text-sm text-[#6E6853] mb-5">
+            Video singkat cara cek ketersediaan alat dan catat transaksi sewa, langsung dari HP.
+          </p>
+          <a
+            href={APP_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 bg-white hover:bg-[#F1EEE2] active:scale-95 transition text-[#2B4739] font-semibold px-5 py-2.5 rounded-xl border border-[#2B4739]/30 shadow-xs"
+          >
+            <PlayCircle className="w-4 h-4" />
+            Coba Akun Demo
+          </a>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function MiniFeatureItem({
   icon: Icon,
   title,
@@ -472,6 +541,8 @@ export function LandingPage() {
             <HeroPreview />
           </div>
         </section>
+
+        <DemoVideoSection />
 
         <section className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
           <h2 className="reveal text-2xl font-bold text-[#26302B] mb-5">Masalah yang Sering Bikin Pusing</h2>
