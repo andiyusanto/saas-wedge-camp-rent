@@ -15,9 +15,15 @@ function shortDate(dateStr: string) {
 export function CalendarScreen({
   session,
   onSelectBookItem,
+  pendingRequestCount = 0,
+  onViewPendingRequests,
 }: {
   session: Session;
   onSelectBookItem: (itemId: string, startDate: string) => void;
+  // Rencana tahap 4 bagian C: banner di layar pertama setelah login,
+  // membawa ke bagian "Pesanan masuk" (tab Transaksi Aktif).
+  pendingRequestCount?: number;
+  onViewPendingRequests?: () => void;
 }) {
   const [baseDate, setBaseDate] = useState(todayStr());
   const [numDays, setNumDays] = useState(7);
@@ -52,6 +58,17 @@ export function CalendarScreen({
 
   return (
     <div className="space-y-6">
+      {pendingRequestCount > 0 && (
+        <button
+          onClick={onViewPendingRequests}
+          className="w-full text-left bg-[#A65C2A]/12 border border-[#A65C2A]/40 rounded-2xl px-4 py-3 flex items-center justify-between gap-2 hover:bg-[#A65C2A]/20 transition"
+        >
+          <span className="text-sm font-bold text-[#A65C2A]">
+            🔔 {pendingRequestCount} pesanan online menunggu konfirmasi
+          </span>
+          <span className="text-sm font-bold text-[#A65C2A]">&rarr;</span>
+        </button>
+      )}
       <div className="bg-[#FBFAF4] rounded-2xl p-4 sm:p-5 border border-[#DBD5C1] shadow-sm space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
+import sharp from 'sharp';
 import { createRequestClient } from '../lib/supabaseClient.js';
 import { uploadToR2 } from '../lib/r2.js';
 
@@ -180,6 +181,73 @@ router.post('/uploads/business-logo', async (req, res) => {
 
   try {
     const url = await uploadToR2(key, decoded.buffer, decoded.mimeType);
+    res.status(201).json({ url });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// QRIS statis (rencana 2.8b, migration 037) — owner-only (sama alasan
+// logo: pengaturan cara bayar cuma boleh diubah pemilik, bukan karyawan,
+// keputusan Andi 31 Okt). Ukuran dibatasi lebih ketat (2MB, bukan 5MB
+// seperti endpoint lain) karena gambar QRIS statis selalu kecil/simpel —
+// file besar di sini lebih mungkin salah upload daripada kebutuhan
+// sungguhan. decode+reencode via sharp WAJIB di sini (beda dari endpoint
+// lain yang upload buffer asli apa adanya) — gambar QRIS dipakai pihak
+// KETIGA (pelanggan) discan langsung oleh aplikasi e-wallet/bank mereka,
+// jadi perlu dipastikan filenya benar-benar cuma data gambar (metadata/
+// payload tersembunyi ikut hilang lewat decode-reencode, bukan cuma
+// redimensi) sebelum disimpan sebagai "QRIS resmi milik rental ini".
+// Selalu disimpan sebagai .webp terlepas format asli unggahan, supaya
+// cocok dengan constraint qris_image_url_is_own_r2 (prefix path, bukan
+// ekstensi) dan konsisten dengan pola foto alat (items.ts).
+const MAX_QRIS_BYTES = 2 * 1024 * 1024;
+
+router.post('/uploads/qris-image', async (req, res) => {
+  if (!req.headers.authorization) {
+    res.status(401).json({ error: 'Belum login' });
+    return;
+  }
+
+  const { businessId, image } = req.body ?? {};
+  if (!businessId) {
+    res.status(400).json({ error: 'Data tidak lengkap' });
+    return;
+  }
+
+  let decoded;
+  try {
+    decoded = decodeImageDataUrl(image);
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+    return;
+  }
+  if (decoded.buffer.length > MAX_QRIS_BYTES) {
+    res.status(400).json({ error: 'Ukuran gambar QRIS maksimal 2MB.' });
+    return;
+  }
+
+  if (!(await requireOwnership(req, businessId))) {
+    res.status(403).json({ error: 'Cuma pemilik usaha yang bisa mengubah cara bayar QRIS' });
+    return;
+  }
+
+  let reencoded: Buffer;
+  try {
+    reencoded = await sharp(decoded.buffer)
+      .rotate()
+      .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 85 })
+      .toBuffer();
+  } catch {
+    res.status(400).json({ error: 'Gambar QRIS tidak bisa diproses, coba file lain.' });
+    return;
+  }
+
+  const key = `qris/${businessId}/${crypto.randomUUID()}.webp`;
+
+  try {
+    const url = await uploadToR2(key, reencoded, 'image/webp');
     res.status(201).json({ url });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });

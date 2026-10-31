@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabaseClient';
 import { useAuth } from './hooks/useAuth';
 import { useBusiness } from './hooks/useBusiness';
+import { useBookingRequests } from './hooks/useBookingRequests';
 import { AuthScreen } from './components/AuthScreen';
 import { ResetPasswordScreen } from './components/ResetPasswordScreen';
 import { OnboardingScreen } from './components/OnboardingScreen';
@@ -40,6 +41,12 @@ function App() {
   } = useBusiness(session);
   const [tab, setTab] = useState<Tab>('kalender');
   const [refreshSignal, setRefreshSignal] = useState(0);
+  // Badge tab + banner Kalender (rencana 2.4 bagian B+C) — instance
+  // terpisah dari yang dipakai TrackingScreen sendiri (poll ringan
+  // masing-masing, bukan realtime, lihat useBookingRequests.ts) supaya
+  // badge/banner tetap jalan walau belum pernah membuka tab Transaksi
+  // Aktif sama sekali.
+  const { pendingCount: pendingRequestCount } = useBookingRequests(business?.id ?? null);
 
   // Jaring pengaman kalau karyawan sempat berada di tab owner-only (mis.
   // baru saja diturunkan dari owner ke karyawan oleh pemilik lain) — Navbar
@@ -143,16 +150,24 @@ function App() {
         businessName={business.name}
         role={role}
         onLogout={() => supabase?.auth.signOut()}
+        pendingRequestCount={pendingRequestCount}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-12">
         {tab === 'kalender' && (
-          <CalendarScreen key={`cal-${refreshSignal}`} session={session} onSelectBookItem={openNewBooking} />
+          <CalendarScreen
+            key={`cal-${refreshSignal}`}
+            session={session}
+            onSelectBookItem={openNewBooking}
+            pendingRequestCount={pendingRequestCount}
+            onViewPendingRequests={() => setTab('tracking')}
+          />
         )}
         {tab === 'tracking' && (
           <TrackingScreen
             key={`trk-${refreshSignal}`}
             session={session}
+            business={business}
             businessName={business.name}
             businessAddress={business.address}
             businessLogoUrl={business.logo_url}
@@ -165,6 +180,7 @@ function App() {
         {tab === 'riwayat' && role === 'owner' && <HistoryScreen businessId={business.id} />}
         {tab === 'etalase-online' && role === 'owner' && (
           <EtalaseOnlineScreen
+            session={session}
             businessId={business.id}
             businessName={business.name}
             businessPhone={business.phone}
@@ -187,6 +203,7 @@ function App() {
             setIsNewBookingOpen(false);
             setRefreshSignal((n) => n + 1);
           }}
+          requestPrefill={null}
         />
       )}
 

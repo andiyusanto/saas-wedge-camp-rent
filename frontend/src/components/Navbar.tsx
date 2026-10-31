@@ -27,6 +27,7 @@ export function Navbar({
   businessName,
   role,
   onLogout,
+  pendingRequestCount = 0,
 }: {
   activeTab: Tab;
   setActiveTab: (tab: Tab) => void;
@@ -34,6 +35,11 @@ export function Navbar({
   businessName: string;
   role: MemberRole | null;
   onLogout: () => void;
+  // Rencana tahap 4, bagian B+C: jumlah booking_requests 'menunggu'
+  // (sudah difilter belum kedaluwarsa, lihat useBookingRequests.ts) —
+  // badge di tab "Transaksi Aktif", bukan tab terpisah (keputusan Andi
+  // 30 Okt, lihat research/etalase-online-ordering-plan-2026-10.md 2.4).
+  pendingRequestCount?: number;
 }) {
   const visibleTabs = TABS.filter((t) => !t.ownerOnly || role === 'owner');
   return (
@@ -87,7 +93,7 @@ export function Navbar({
               <button
                 key={id}
                 onClick={() => setActiveTab(id)}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap shrink-0 transition ${
+                className={`relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap shrink-0 transition ${
                   activeTab === id
                     ? 'bg-[#FBFAF4] text-[#2B4739] shadow-xs font-bold'
                     : 'text-[#DBD5C1] hover:text-white hover:bg-[#2B4739]/80'
@@ -95,6 +101,11 @@ export function Navbar({
               >
                 <Icon className="w-4 h-4" />
                 <span>{label}</span>
+                {id === 'tracking' && pendingRequestCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#A65C2A] text-white text-[9px] font-bold flex items-center justify-center border border-[#1E3429]">
+                    {pendingRequestCount > 9 ? '9+' : pendingRequestCount}
+                  </span>
+                )}
               </button>
             ))}
           </ScrollableRow>

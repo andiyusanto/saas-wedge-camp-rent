@@ -1,5 +1,10 @@
 import { useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import type { Business } from '../hooks/useBusiness';
+import { useBookingRequests } from '../hooks/useBookingRequests';
+import type { BookingRequest } from '../hooks/useBookingRequests';
+import { NewBookingModal } from './NewBookingModal';
+import { ModalBackdrop, ModalPanel } from './ModalShell';
 import {
   ShieldAlert,
   AlertTriangle,
@@ -41,20 +46,55 @@ type StatusFilter = 'all' | 'overdue' | 'active' | 'pending_pickup';
 
 export function TrackingScreen({
   session,
+  business,
   businessName,
   businessAddress,
   businessLogoUrl,
 }: {
   session: Session;
+  business: Business;
   businessName: string;
   businessAddress: string | null;
   businessLogoUrl: string | null;
 }) {
   const { bookings, toleranceHours, loading, error, refresh, cancelBooking, pickupBooking } = useTrackings(session);
+  const {
+    requests: pendingRequests,
+    loading: pendingLoading,
+    checkStillConfirmable,
+    confirmWithBooking,
+    rejectRequest,
+    refresh: refreshPendingRequests,
+    fetchHistoricalRequests,
+  } = useBookingRequests(business.id);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [returnTarget, setReturnTarget] = useState<TrackingBooking | null>(null);
   const [fineTarget, setFineTarget] = useState<TrackingBooking | null>(null);
+  // Rencana tahap 4, bagian "Pesanan masuk" — alur Konfirmasi.
+  const [confirmPrefillTarget, setConfirmPrefillTarget] = useState<BookingRequest | null>(null);
+  const [confirmPrecheckError, setConfirmPrecheckError] = useState<string | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<BookingRequest | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [rejectSubmitting, setRejectSubmitting] = useState(false);
+  const [rejectedForWA, setRejectedForWA] = useState<{ request: BookingRequest; reason: string } | null>(null);
+  // Review -c1 (tahap 4, poin 1b): kalau booking SUDAH tersimpan tapi
+  // confirm_booking_request gagal setelahnya (pesanan sudah diproses
+  // staff lain / kedaluwarsa di tengah jalan), booking itu jadi "yatim"
+  // — menahan stok tanpa pernah tertaut ke booking_requests manapun.
+  // JANGAN dibiarkan diam-diam begitu saja — tampilkan pesan jelas +
+  // tombol untuk membatalkannya lewat alur Batalkan yang SUDAH ADA
+  // (melepas stok+jaminan), bukan state baru yang belum teruji.
+  const [orphanBooking, setOrphanBooking] = useState<{ bookingId: string; customerName: string } | null>(null);
+  const [showOldRequests, setShowOldRequests] = useState(false);
+  const [oldRequests, setOldRequests] = useState<BookingRequest[] | null>(null);
+
+  async function toggleOldRequests() {
+    if (!showOldRequests && oldRequests === null) {
+      setOldRequests(await fetchHistoricalRequests());
+    }
+    setShowOldRequests((v) => !v);
+  }
   const [cancelTarget, setCancelTarget] = useState<TrackingBooking | null>(null);
   const [invoiceData, setInvoiceData] = useState<ReceiptData | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -99,8 +139,199 @@ export function TrackingScreen({
     setInvoiceData(buildReceiptData(b, businessName, businessAddress, businessLogoUrl));
   }
 
+  // Review -c1 (tahap 4, poin 1a): precheck LANGSUNG dari DB tepat
+  // sebelum membuka modal prefill — daftar di layar bisa basi (polling
+  // 60 detik, atau staff lain di perangkat lain sudah memproses duluan).
+  async function handleOpenConfirm(r: BookingRequest) {
+    setConfirmPrecheckError(null);
+    const check = await checkStillConfirmable(r.id);
+    if (!check.ok) {
+      setConfirmPrecheckError(check.reason);
+      await refreshPendingRequests();
+      return;
+    }
+    setConfirmPrefillTarget(r);
+  }
+
+  // Dipanggil dari onSaved NewBookingModal SETELAH booking baru benar-benar
+  // tersimpan server-side (stok sudah ditahan di titik ini) — confirm_
+  // booking_request tinggal menautkan baris booking_requests ke booking
+  // itu. Kalau RPC ini gagal (pesanan sudah diproses staff lain / sempat
+  // kedaluwarsa persis di jendela waktu ini, lihat review -c1 poin 1),
+  // booking yang sudah terlanjur dibuat itu JADI YATIM — ditangani lewat
+  // orphanBooking state di bawah, BUKAN dibiarkan diam begitu saja.
+  async function handleBookingSavedForRequest(bookingId: string) {
+    const target = confirmPrefillTarget;
+    setConfirmPrefillTarget(null);
+    if (!target) return;
+
+    const { error: err } = await confirmWithBooking(target.id, bookingId);
+    if (err) {
+      setOrphanBooking({ bookingId, customerName: target.customer_name });
+      setActionError(
+        `Transaksi untuk ${target.customer_name} sudah tersimpan, TAPI gagal menautkan ke pesanan online (${err}). ` +
+          'Transaksinya tetap valid, tapi pesanan online ini belum tertandai selesai — batalkan transaksi ini kalau tidak jadi dipakai, atau hubungi dukungan.',
+      );
+    }
+    refresh();
+    refreshPendingRequests();
+  }
+
+  function buildStatusLink(token: string) {
+    return `${import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001'}/pesanan/${token}`;
+  }
+
+  async function handleRejectSubmit() {
+    if (!rejectTarget) return;
+    setRejectSubmitting(true);
+    const { error: err } = await rejectRequest(rejectTarget.id, rejectReason.trim());
+    setRejectSubmitting(false);
+    if (err) {
+      setActionError(err);
+      return;
+    }
+    setRejectedForWA({ request: rejectTarget, reason: rejectReason.trim() });
+    setRejectTarget(null);
+    setRejectReason('');
+  }
+
+  // Review -c1 (poin 3): WA ke pelanggan tersedia di 3 titik — baris
+  // daftar (hubungi langsung), dan setelah Tolak (kabari alasannya +
+  // link status). Pesan selalu menyertakan link status (buildStatusLink)
+  // supaya pelanggan bisa cek ulang tanpa nanya lagi.
+  function handleContactRequestWA(r: BookingRequest) {
+    const text = `Halo ${r.customer_name}, terkait pesanan online Anda untuk ${r.start_date} s/d ${r.end_date} di ${businessName}.`;
+    window.open(getWhatsAppShareUrl(r.customer_phone, text), '_blank');
+  }
+
+  function handleRejectedWA() {
+    if (!rejectedForWA) return;
+    const { request, reason } = rejectedForWA;
+    const text =
+      `Halo ${request.customer_name}, mohon maaf pesanan online Anda di ${businessName} untuk ${request.start_date} s/d ${request.end_date} ` +
+      `tidak bisa kami proses${reason ? ` (${reason})` : ''}. Cek detail: ${buildStatusLink(request.confirmation_token)}`;
+    window.open(getWhatsAppShareUrl(request.customer_phone, text), '_blank');
+  }
+
   return (
     <div className="space-y-6">
+      {orphanBooking && (
+        <div className="bg-[#FAF0EE] border border-[#A8412E]/40 rounded-2xl p-4 space-y-2">
+          <p className="text-sm font-bold text-[#A8412E]">Transaksi tersimpan, tapi gagal ditautkan ke pesanan online</p>
+          <p className="text-xs text-[#6E6853]">
+            Transaksi untuk {orphanBooking.customerName} sudah tersimpan dan stok sudah ditahan — tapi gagal menandai
+            pesanan online-nya selesai. Kalau transaksi ini memang jadi dipakai, biarkan saja (cari manual di daftar di
+            bawah). Kalau TIDAK jadi, batalkan supaya stoknya lepas lagi:
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => runAction(() => cancelBooking(orphanBooking.bookingId)).then(() => setOrphanBooking(null))}
+              className="px-3 py-2 rounded-xl bg-[#A8412E] hover:bg-[#8D3524] text-white font-bold text-xs transition"
+            >
+              Batalkan transaksi barusan
+            </button>
+            <button
+              onClick={() => setOrphanBooking(null)}
+              className="px-3 py-2 rounded-xl border border-[#DBD5C1] hover:bg-[#F1EEE2] text-[#26302B] font-semibold text-xs transition"
+            >
+              Biarkan, ini valid
+            </button>
+          </div>
+        </div>
+      )}
+
+      {rejectedForWA && (
+        <div className="bg-[#F9EFE7] border border-[#A65C2A]/40 rounded-2xl p-4 flex items-center justify-between gap-3">
+          <p className="text-xs text-[#A65C2A] font-semibold">Pesanan {rejectedForWA.request.customer_name} ditolak.</p>
+          <div className="flex gap-2 shrink-0">
+            <button
+              onClick={handleRejectedWA}
+              className="px-3 py-2 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs transition"
+            >
+              Kabari pelanggan di WA
+            </button>
+            <button onClick={() => setRejectedForWA(null)} className="px-2 text-[#6E6853] text-xs">
+              Tutup
+            </button>
+          </div>
+        </div>
+      )}
+
+      {confirmPrecheckError && (
+        <p className="text-xs font-semibold text-[#A8412E] bg-[#FAF0EE] border border-[#A8412E]/30 rounded-lg p-2.5">
+          {confirmPrecheckError}
+        </p>
+      )}
+
+      {!pendingLoading && pendingRequests.length > 0 && (
+        <div className="bg-[#F9EFE7] rounded-2xl border border-[#A65C2A]/40 shadow-xs overflow-hidden">
+          <div className="px-4 py-3 border-b border-[#A65C2A]/30">
+            <h3 className="font-bold text-[#A65C2A] text-sm">Pesanan masuk ({pendingRequests.length})</h3>
+          </div>
+          <div className="divide-y divide-[#A65C2A]/20">
+            {pendingRequests.map((r) => (
+              <div key={r.id} className="p-4 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-bold text-[#26302B] text-sm truncate">{r.customer_name}</p>
+                    <p className="text-xs text-[#6E6853] truncate">
+                      {r.items.map((i) => `${i.name} ×${i.quantity}`).join(', ')}
+                    </p>
+                    <p className="text-xs text-[#6E6853]">
+                      {formatDateIndo(r.start_date)} s/d {formatDateIndo(r.end_date)} · {formatIDR(r.estimated_price)}
+                    </p>
+                    {r.note && <p className="text-xs text-[#6E6853] italic">"{r.note}"</p>}
+                  </div>
+                  <button
+                    onClick={() => handleContactRequestWA(r)}
+                    title={r.customer_phone}
+                    className="shrink-0 flex items-center gap-1 px-2 py-1.5 rounded-lg border border-[#DBD5C1] bg-white text-[#2B4739] text-xs font-bold hover:bg-[#F1EEE2] transition"
+                  >
+                    <Phone className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleOpenConfirm(r)}
+                    className="flex-1 px-3 py-2 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs transition"
+                  >
+                    Konfirmasi
+                  </button>
+                  <button
+                    onClick={() => setRejectTarget(r)}
+                    className="flex-1 px-3 py-2 rounded-xl border border-[#A8412E]/40 text-[#A8412E] hover:bg-[#FAF0EE] font-bold text-xs transition"
+                  >
+                    Tolak
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <button onClick={toggleOldRequests} className="text-xs font-semibold text-[#6E6853] hover:text-[#2B4739] underline">
+        {showOldRequests ? 'Sembunyikan pesanan lama' : 'Lihat pesanan lama'}
+      </button>
+      {showOldRequests && (
+        <div className="bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] divide-y divide-[#DBD5C1]">
+          {(oldRequests ?? []).length === 0 ? (
+            <p className="p-4 text-xs text-[#6E6853]">Belum ada pesanan ditolak/kedaluwarsa.</p>
+          ) : (
+            (oldRequests ?? []).map((r) => (
+              <div key={r.id} className="p-3 flex items-center justify-between gap-2 text-xs">
+                <span className="text-[#26302B]">
+                  {r.customer_name} — {formatDateIndo(r.start_date)}
+                </span>
+                <span className={`font-bold ${r.status === 'ditolak' ? 'text-[#A8412E]' : 'text-[#6E6853]'}`}>
+                  {r.status === 'ditolak' ? 'Ditolak' : 'Kedaluwarsa'}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatCard label="Sewa Terlambat" value={totalOverdue} color="danger" icon={AlertOctagon} sub="Perlu tindakan denda" />
         <StatCard label="Jaminan Ditahan" value={totalRetained} color="warning" icon={ShieldAlert} sub="KTP / SIM / STNK / Uang" />
@@ -205,6 +436,58 @@ export function TrackingScreen({
       />
 
       <InvoiceModal isOpen={invoiceData !== null} onClose={() => setInvoiceData(null)} data={invoiceData} />
+
+      {confirmPrefillTarget && (
+        <NewBookingModal
+          isOpen={true}
+          onClose={() => setConfirmPrefillTarget(null)}
+          session={session}
+          business={business}
+          requestPrefill={{
+            customerName: confirmPrefillTarget.customer_name,
+            customerPhone: confirmPrefillTarget.customer_phone,
+            startDate: confirmPrefillTarget.start_date,
+            endDate: confirmPrefillTarget.end_date,
+            items: confirmPrefillTarget.items.map((i) => ({ itemId: i.item_id, quantity: i.quantity })),
+            estimatedPrice: confirmPrefillTarget.estimated_price,
+          }}
+          onSaved={handleBookingSavedForRequest}
+        />
+      )}
+
+      {rejectTarget && (
+        <ModalBackdrop>
+          <ModalPanel className="bg-[#FBFAF4] w-full max-w-sm rounded-2xl border border-[#DBD5C1] shadow-xl overflow-hidden p-5 space-y-3">
+            <h3 className="font-bold text-[#26302B] text-base">Tolak pesanan {rejectTarget.customer_name}?</h3>
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="Alasan (opsional, akan terlihat pelanggan)"
+              rows={3}
+              className="w-full px-3 py-2 text-sm rounded-xl bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => {
+                  setRejectTarget(null);
+                  setRejectReason('');
+                }}
+                disabled={rejectSubmitting}
+                className="px-4 py-2 rounded-xl border border-[#DBD5C1] hover:bg-[#F1EEE2] text-[#26302B] font-semibold text-xs transition disabled:opacity-60"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleRejectSubmit}
+                disabled={rejectSubmitting}
+                className="px-4 py-2 rounded-xl bg-[#A8412E] hover:bg-[#8D3524] text-white font-bold text-xs shadow-sm transition disabled:opacity-60"
+              >
+                {rejectSubmitting ? 'Memproses...' : 'Tolak'}
+              </button>
+            </div>
+          </ModalPanel>
+        </ModalBackdrop>
+      )}
     </div>
   );
 }

@@ -87,6 +87,28 @@ function tieredBreakdown(item: Item, days: number): string | null {
   return groups.map((g) => (g.count === 1 ? short(g.rate) : `${short(g.rate)}×${g.count}`)).join(' + ');
 }
 
+// Rencana tahap 4: prefill lebih kaya dari sekadar satu alat+tanggal
+// (preselectedItemId/preselectedStartDate di atas, dipakai jalur Kalender
+// "pesan alat ini") — dipakai saat vendor menekan "Konfirmasi" di bagian
+// "Pesanan masuk" (TrackingScreen), yang bisa multi-alat + sudah ada nama
+// & nomor WA pelanggan dari booking_requests. Kedua jalur prefill ini
+// SENGAJA dibiarkan terpisah (bukan disatukan ke satu prop) — prop lama
+// dipakai luas di tempat lain, mengubah bentuknya berisiko regresi di
+// jalur yang sudah stabil.
+export type BookingRequestPrefill = {
+  customerName: string;
+  customerPhone: string;
+  startDate: string;
+  endDate: string;
+  items: { itemId: string; quantity: number }[];
+  // Cuma buat ditampilkan sebagai konteks ("Dari pesanan online, perkiraan
+  // Rp X") — BUKAN dipakai menghitung total_price transaksi (itu tetap
+  // dihitung dari harga katalog SAAT INI seperti biasa, lihat rencana 2.13
+  // "harga diubah vendor setelah pesanan masuk" — estimasi lama tidak
+  // valid dijadikan harga final).
+  estimatedPrice: number;
+};
+
 export function NewBookingModal({
   isOpen,
   onClose,
@@ -94,6 +116,7 @@ export function NewBookingModal({
   business,
   preselectedItemId,
   preselectedStartDate,
+  requestPrefill,
   onSaved,
 }: {
   isOpen: boolean;
@@ -102,7 +125,8 @@ export function NewBookingModal({
   business: Business;
   preselectedItemId?: string | null;
   preselectedStartDate?: string | null;
-  onSaved: () => void;
+  requestPrefill?: BookingRequestPrefill | null;
+  onSaved: (bookingId: string) => void;
 }) {
   const { items } = useItems(business.id);
   const { results: customerSuggestions, search: searchCustomers, clear: clearCustomerSuggestions } =
@@ -131,12 +155,31 @@ export function NewBookingModal({
 
   useEffect(() => {
     if (!isOpen) return;
-    setStartDate(preselectedStartDate || todayStr());
-    setEndDate(preselectedStartDate || todayStr());
-    setQuantities(preselectedItemId ? { [preselectedItemId]: 1 } : {});
+    if (requestPrefill) {
+      setStartDate(requestPrefill.startDate);
+      setEndDate(requestPrefill.endDate);
+      setQuantities(Object.fromEntries(requestPrefill.items.map((i) => [i.itemId, i.quantity])));
+      setCustomerName(requestPrefill.customerName);
+      // Review -c1 (tahap 4, poin 2): customer_phone dari booking_requests
+      // tersimpan dalam bentuk kanonik "628xxx" (lihat normalizePhone() di
+      // backend/src/routes/bookingRequests.ts) — vendor biasa mengetik dan
+      // membaca nomor dalam bentuk lokal "08xx", jadi dikonversi balik di
+      // sini SAAT prefill, murni tampilan (nilai yang disimpan ke booking
+      // baru tetap dari field customerPhone, boleh dalam bentuk apapun
+      // vendor ketik/edit).
+      setCustomerPhone(
+        requestPrefill.customerPhone.startsWith('62')
+          ? '0' + requestPrefill.customerPhone.slice(2)
+          : requestPrefill.customerPhone,
+      );
+    } else {
+      setStartDate(preselectedStartDate || todayStr());
+      setEndDate(preselectedStartDate || todayStr());
+      setQuantities(preselectedItemId ? { [preselectedItemId]: 1 } : {});
+      setCustomerName('');
+      setCustomerPhone('');
+    }
     setItemSearchQuery('');
-    setCustomerName('');
-    setCustomerPhone('');
     setCustomerAddress('');
     setSelectedCustomerId(null);
     setShowSuggestions(false);
@@ -148,7 +191,7 @@ export function NewBookingModal({
     setDepositAmount('');
     setDpPaid('0');
     setError(null);
-  }, [isOpen, preselectedItemId, preselectedStartDate]);
+  }, [isOpen, preselectedItemId, preselectedStartDate, requestPrefill]);
 
   useEffect(() => {
     return () => {
@@ -259,7 +302,7 @@ export function NewBookingModal({
 
     setSubmitting(true);
 
-    let body: { booking_number: string; status: string };
+    let body: { id: string; booking_number: string; status: string };
     try {
       body = await apiFetch(session, '/api/bookings', {
         method: 'POST',
@@ -322,7 +365,7 @@ export function NewBookingModal({
       }
     }
 
-    onSaved();
+    onSaved(body.id);
   }
 
   return (
@@ -339,6 +382,15 @@ export function NewBookingModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-5 text-xs sm:text-sm">
+          {requestPrefill && (
+            <div className="bg-[#F9EFE7] border border-[#A65C2A]/40 rounded-xl p-3 text-xs">
+              <p className="font-bold text-[#A65C2A]">Dari pesanan online</p>
+              <p className="text-[#6E6853]">
+                Perkiraan harga saat pelanggan pesan: <strong className="text-[#26302B]">{formatIDR(requestPrefill.estimatedPrice)}</strong> —
+                harga final tetap ditentukan di bawah dari katalog saat ini.
+              </p>
+            </div>
+          )}
           <div className="space-y-3 bg-[#F1EEE2] p-4 rounded-xl border border-[#DBD5C1]">
             <h3 className="font-bold text-[#26302B] flex items-center gap-2">
               <User className="w-4 h-4 text-[#2B4739]" />

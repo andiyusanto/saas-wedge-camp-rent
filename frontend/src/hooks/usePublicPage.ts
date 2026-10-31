@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
+// Rencana 2.8/2.8b (tahap 4) — kolom pesanan online + cara bayar/DP,
+// migration 037. Semuanya owner-only untuk DIUBAH (RLS sudah membatasi
+// update ke is_owner_of, migration 019 — kolom baru tunduk policy yang
+// sama, tidak perlu policy terpisah).
+export type DpMode = 'none' | 'percent' | 'fixed';
+
 export type PublicPage = {
   business_id: string;
   published: boolean;
@@ -10,6 +16,17 @@ export type PublicPage = {
   regency_id: string | null;
   operating_hours: string | null;
   public_phone: string | null;
+  accept_online_orders: boolean;
+  confirmation_message: string | null;
+  pay_transfer_enabled: boolean;
+  bank_name: string | null;
+  bank_account_number: string | null;
+  bank_account_holder: string | null;
+  pay_qris_enabled: boolean;
+  qris_image_url: string | null;
+  pay_cash_enabled: boolean;
+  dp_mode: DpMode;
+  dp_value: number | null;
 };
 
 export type PublicPageInput = {
@@ -20,6 +37,23 @@ export type PublicPageInput = {
   regency_id: string | null;
   operating_hours: string | null;
   public_phone: string | null;
+  accept_online_orders: boolean;
+  confirmation_message: string | null;
+  pay_transfer_enabled: boolean;
+  bank_name: string | null;
+  bank_account_number: string | null;
+  bank_account_holder: string | null;
+  pay_qris_enabled: boolean;
+  qris_image_url: string | null;
+  pay_cash_enabled: boolean;
+  dp_mode: DpMode;
+  dp_value: number | null;
+};
+
+export type PaymentChangeLog = {
+  created_at: string;
+  changed_by: string | null;
+  changed_by_email: string | null;
 };
 
 // Belum ada baris sama sekali sampai vendor pertama kali menyimpan lewat
@@ -40,7 +74,9 @@ export function usePublicPage(businessId: string | null) {
     setLoading(true);
     const { data } = await supabase
       .from('public_pages')
-      .select('business_id, published, slug, description, address, regency_id, operating_hours, public_phone')
+      .select(
+        'business_id, published, slug, description, address, regency_id, operating_hours, public_phone, accept_online_orders, confirmation_message, pay_transfer_enabled, bank_name, bank_account_number, bank_account_holder, pay_qris_enabled, qris_image_url, pay_cash_enabled, dp_mode, dp_value',
+      )
       .eq('business_id', businessId)
       .maybeSingle();
 
@@ -90,5 +126,37 @@ export function usePublicPage(businessId: string | null) {
     return { available: data as boolean, error: null };
   }
 
-  return { page, loading, refresh, savePublicPage, checkSlugAvailable };
+  // Review -c1 (tahap 4, poin 5): pemberitahuan "info pembayaran terakhir
+  // diubah oleh X" — public_page_payment_changes.changed_by cuma auth.uid()
+  // (uuid), tidak ada kolom email di tabel itu sendiri (sengaja, lihat
+  // migration 037, append-only lewat trigger). Email diambil lewat JOIN
+  // CLIENT-SIDE ke business_members.email (snapshot, migration 010) —
+  // tidak ada FK langsung changed_by->business_members buat PostgREST
+  // embed otomatis, jadi dua query terpisah, bukan satu nested select.
+  async function fetchLatestPaymentChange(): Promise<PaymentChangeLog | null> {
+    if (!supabase || !businessId) return null;
+    const { data: changeRow } = await supabase
+      .from('public_page_payment_changes')
+      .select('created_at, changed_by')
+      .eq('business_id', businessId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!changeRow) return null;
+
+    let email: string | null = null;
+    if (changeRow.changed_by) {
+      const { data: memberRow } = await supabase
+        .from('business_members')
+        .select('email')
+        .eq('business_id', businessId)
+        .eq('user_id', changeRow.changed_by)
+        .maybeSingle();
+      email = memberRow?.email ?? null;
+    }
+
+    return { created_at: changeRow.created_at, changed_by: changeRow.changed_by, changed_by_email: email };
+  }
+
+  return { page, loading, refresh, savePublicPage, checkSlugAvailable, fetchLatestPaymentChange };
 }
