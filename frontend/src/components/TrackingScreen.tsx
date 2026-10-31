@@ -50,12 +50,17 @@ export function TrackingScreen({
   businessName,
   businessAddress,
   businessLogoUrl,
+  writable = true,
 }: {
   session: Session;
   business: Business;
   businessName: string;
   businessAddress: string | null;
   businessLogoUrl: string | null;
+  // Rencana langganan: Konfirmasi pesanan online = bikin booking baru,
+  // dikunci kalau hanya-baca — Tolak/return/cancel/denda TIDAK disentuh
+  // (tetap terbuka, lihat migration 044 bagian 6).
+  writable?: boolean;
 }) {
   const { bookings, toleranceHours, loading, error, refresh, cancelBooking, pickupBooking } = useTrackings(session);
   const {
@@ -293,7 +298,9 @@ export function TrackingScreen({
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleOpenConfirm(r)}
-                    className="flex-1 px-3 py-2 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs transition"
+                    disabled={!writable}
+                    title={!writable ? 'Masa aktif langganan sudah habis — hubungi Sewalog untuk memperpanjang.' : undefined}
+                    className="flex-1 px-3 py-2 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs transition disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#2B4739]"
                   >
                     Konfirmasi
                   </button>
@@ -452,6 +459,7 @@ export function TrackingScreen({
             estimatedPrice: confirmPrefillTarget.estimated_price,
           }}
           onSaved={handleBookingSavedForRequest}
+          writable={writable}
         />
       )}
 

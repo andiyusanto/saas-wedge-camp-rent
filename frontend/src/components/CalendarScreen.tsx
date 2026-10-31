@@ -17,9 +17,14 @@ export function CalendarScreen({
   onSelectBookItem,
   pendingRequestCount = 0,
   onViewPendingRequests,
+  writable = true,
 }: {
   session: Session;
   onSelectBookItem: (itemId: string, startDate: string) => void;
+  // Rencana langganan: "Sewa Alat Ini" membuka Catat Transaksi baru —
+  // dikunci kalau hanya-baca (RLS bookings INSERT tetap penegak
+  // sebenarnya, migration 044).
+  writable?: boolean;
   // Rencana tahap 4 bagian C: banner di layar pertama setelah login,
   // membawa ke bagian "Pesanan masuk" (tab Transaksi Aktif).
   pendingRequestCount?: number;
@@ -250,7 +255,9 @@ export function CalendarScreen({
                 <div className="flex items-center justify-end shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-[#E6E1D2]">
                   <button
                     onClick={() => onSelectBookItem(item.id, baseDate)}
-                    className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-[#FBFAF4] text-xs font-semibold shadow-xs transition active:scale-95"
+                    disabled={!writable}
+                    title={!writable ? 'Masa aktif langganan sudah habis — hubungi Sewalog untuk memperpanjang.' : undefined}
+                    className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-[#FBFAF4] text-xs font-semibold shadow-xs transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#2B4739]"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Sewa Alat Ini</span>

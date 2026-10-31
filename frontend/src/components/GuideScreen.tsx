@@ -311,7 +311,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         <p>
           Bagian <Ui>Info Usaha</Ui> di paling atas tab ini untuk ubah nama usaha, nama pemilik, no. telepon, alamat
           usaha, dan toleransi telat (lihat bagian 1). Alamat di sini ikut tercetak otomatis di struk WhatsApp dan
-          Nota Sewa cetak/PDF kalau diisi — beda dari alamat di tab <Ui>Etalase Online</Ui> (bagian 8) yang tampil
+          Nota Sewa cetak/PDF kalau diisi — beda dari alamat di tab <Ui>Etalase &amp; Pesanan</Ui> (bagian 8) yang tampil
           publik ke siapa saja, alamat di sini murni buat kebutuhan internal/struk. Di bawahnya ada bagian{' '}
           <Ui>Kelola Karyawan</Ui> untuk undang staf lewat link, tanpa perlu bikin username/password dari sisi
           pemilik:

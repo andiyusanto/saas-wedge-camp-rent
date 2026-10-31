@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import sharp from 'sharp';
 import { createRequestClient } from '../lib/supabaseClient.js';
 import { uploadToR2 } from '../lib/r2.js';
+import { isBusinessWritable, SUBSCRIPTION_LOCKED_MESSAGE } from '../lib/subscription.js';
 import { fetchImageFromUrl, ImageFetchError } from '../lib/imageFetch.js';
 import {
   parseImportFile,
@@ -233,6 +234,14 @@ router.post('/items/import/commit', async (req, res) => {
 
   if (!(await requireOwnership(req, businessId))) {
     res.status(403).json({ error: 'Cuma pemilik usaha yang bisa mengimpor data alat' });
+    return;
+  }
+
+  // Impor alat = "tambah/ubah alat" (DIKUNCI, rencana langganan) — RLS
+  // tetap penegak sebenarnya (items INSERT/UPDATE, migration 044). CUMA
+  // di commit, bukan preview (preview tidak menulis apa pun).
+  if (!(await isBusinessWritable(createRequestClient(req), businessId))) {
+    res.status(403).json({ error: SUBSCRIPTION_LOCKED_MESSAGE });
     return;
   }
 

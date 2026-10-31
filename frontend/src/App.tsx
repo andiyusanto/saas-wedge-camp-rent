@@ -3,6 +3,12 @@ import { supabase } from './lib/supabaseClient';
 import { useAuth } from './hooks/useAuth';
 import { useBusiness } from './hooks/useBusiness';
 import { useBookingRequests } from './hooks/useBookingRequests';
+import { useSubscription } from './hooks/useSubscription';
+import { useIsAppAdmin } from './hooks/useIsAppAdmin';
+import { SubscriptionBanner } from './components/SubscriptionBanner';
+import { AdminScreen } from './components/AdminScreen';
+import { LanggananScreen } from './components/LanggananScreen';
+import { isDemoAccountEmail } from './utils/demo';
 import { AuthScreen } from './components/AuthScreen';
 import { ResetPasswordScreen } from './components/ResetPasswordScreen';
 import { OnboardingScreen } from './components/OnboardingScreen';
@@ -47,19 +53,28 @@ function App() {
   // badge/banner tetap jalan walau belum pernah membuka tab Transaksi
   // Aktif sama sekali.
   const { pendingCount: pendingRequestCount } = useBookingRequests(business?.id ?? null);
+  const { subscription } = useSubscription(business?.id ?? null);
+  const { isAdmin: isAppAdmin } = useIsAppAdmin(session);
+  const isDemoAccount = isDemoAccountEmail(session?.user.email);
 
   // Jaring pengaman kalau karyawan sempat berada di tab owner-only (mis.
   // baru saja diturunkan dari owner ke karyawan oleh pemilik lain) — Navbar
   // sendiri sudah menyembunyikan tab-nya, ini cuma jaga-jaga isi <main>.
   useEffect(() => {
     if (
-      (tab === 'tim' || tab === 'riwayat' || tab === 'etalase-online' || tab === 'toko-online') &&
+      (tab === 'tim' || tab === 'riwayat' || tab === 'etalase-online' || tab === 'toko-online' || tab === 'langganan') &&
       role !== null &&
       role !== 'owner'
     ) {
       setTab('kalender');
     }
-  }, [tab, role]);
+    // Admin bisa diturunkan dari app_admins sewaktu-waktu — kalau sedang
+    // di tab Alat Admin dan statusnya sudah dipastikan bukan admin,
+    // jangan diam-diam ditinggal di tab yang isinya sudah tidak relevan.
+    if (tab === 'admin' && !isAppAdmin) {
+      setTab('kalender');
+    }
+  }, [tab, role, isAppAdmin]);
 
   const [isNewBookingOpen, setIsNewBookingOpen] = useState(false);
   const [preselectedItemId, setPreselectedItemId] = useState<string | null>(null);
@@ -151,9 +166,14 @@ function App() {
         role={role}
         onLogout={() => supabase?.auth.signOut()}
         pendingRequestCount={pendingRequestCount}
+        writable={subscription?.writable ?? true}
+        isAppAdmin={isAppAdmin}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-12">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-12 space-y-4">
+        {!isDemoAccount && (
+          <SubscriptionBanner subscription={subscription} isOwner={role === 'owner'} businessName={business.name} />
+        )}
         {tab === 'kalender' && (
           <CalendarScreen
             key={`cal-${refreshSignal}`}
@@ -161,6 +181,7 @@ function App() {
             onSelectBookItem={openNewBooking}
             pendingRequestCount={pendingRequestCount}
             onViewPendingRequests={() => setTab('tracking')}
+            writable={subscription?.writable ?? true}
           />
         )}
         {tab === 'tracking' && (
@@ -171,11 +192,12 @@ function App() {
             businessName={business.name}
             businessAddress={business.address}
             businessLogoUrl={business.logo_url}
+            writable={subscription?.writable ?? true}
           />
         )}
-        {tab === 'alat' && <ItemsScreen businessId={business.id} session={session} role={role} />}
+        {tab === 'alat' && <ItemsScreen businessId={business.id} session={session} role={role} writable={subscription?.writable ?? true} />}
         {tab === 'tim' && role === 'owner' && (
-          <TeamScreen session={session} businessId={business.id} business={business} onSaveBusiness={updateBusiness} />
+          <TeamScreen session={session} businessId={business.id} business={business} onSaveBusiness={updateBusiness} writable={subscription?.writable ?? true} />
         )}
         {tab === 'riwayat' && role === 'owner' && <HistoryScreen businessId={business.id} />}
         {tab === 'etalase-online' && role === 'owner' && (
@@ -189,6 +211,15 @@ function App() {
         )}
         {tab === 'toko-online' && role === 'owner' && <OnlineStoreScreen businessName={business.name} />}
         {tab === 'panduan' && <GuideScreen businessName={business.name} />}
+        {tab === 'admin' && isAppAdmin && <AdminScreen />}
+        {tab === 'langganan' && role === 'owner' && (
+          <LanggananScreen
+            businessId={business.id}
+            businessName={business.name}
+            subscription={subscription}
+            isDemoAccount={isDemoAccount}
+          />
+        )}
       </main>
 
       {isNewBookingOpen && (
@@ -204,6 +235,7 @@ function App() {
             setRefreshSignal((n) => n + 1);
           }}
           requestPrefill={null}
+          writable={subscription?.writable ?? true}
         />
       )}
 

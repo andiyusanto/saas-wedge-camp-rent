@@ -17,11 +17,16 @@ export function TeamScreen({
   businessId,
   business,
   onSaveBusiness,
+  writable = true,
 }: {
   session: Session;
   businessId: string;
   business: Business;
   onSaveBusiness: (input: BusinessUpdateInput) => Promise<{ error: string | null }>;
+  // Rencana langganan: undang karyawan BARU dikunci (business_invites
+  // INSERT, migration 044) — hapus/nonaktifkan karyawan TETAP terbuka
+  // (tidak disentuh di sini sama sekali).
+  writable?: boolean;
 }) {
   const { members, invites, loading, error, createInvite, revokeInvite, removeMember } = useTeam(session, businessId);
   const ownerEmail = members.find((m) => m.role === 'owner')?.email ?? null;
@@ -84,7 +89,8 @@ export function TeamScreen({
           </select>
           <button
             onClick={handleCreateInvite}
-            disabled={creating}
+            disabled={creating || !writable}
+            title={!writable ? 'Masa aktif langganan sudah habis — hubungi Sewalog untuk memperpanjang.' : undefined}
             className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-semibold text-sm shadow-sm transition disabled:opacity-60"
           >
             <UserPlus className="w-4 h-4" />
@@ -92,6 +98,11 @@ export function TeamScreen({
           </button>
         </div>
 
+        {!writable && (
+          <p className="text-xs font-semibold text-[#A8412E]">
+            Masa aktif langganan sudah habis — undang karyawan baru dikunci. Menghapus/menonaktifkan karyawan tetap bisa dilakukan.
+          </p>
+        )}
         {actionError && <p className="text-xs text-[#A8412E]">{actionError}</p>}
       </div>
 

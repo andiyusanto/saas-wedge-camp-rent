@@ -118,6 +118,7 @@ export function NewBookingModal({
   preselectedStartDate,
   requestPrefill,
   onSaved,
+  writable = true,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -127,6 +128,10 @@ export function NewBookingModal({
   preselectedStartDate?: string | null;
   requestPrefill?: BookingRequestPrefill | null;
   onSaved: (bookingId: string) => void;
+  // Rencana langganan: "Catat Transaksi baru" dikunci kalau hanya-baca —
+  // RLS (bookings INSERT, migration 044) tetap penegak sebenarnya,
+  // default true supaya pemanggil lama tidak pecah.
+  writable?: boolean;
 }) {
   const { items } = useItems(business.id);
   const { results: customerSuggestions, search: searchCustomers, clear: clearCustomerSuggestions } =
@@ -382,6 +387,17 @@ export function NewBookingModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-5 text-xs sm:text-sm">
+          {/* Review -c1: peringatan hanya-baca HARUS di PALING ATAS form,
+              sebelum field apa pun — vendor tidak boleh baru tahu transaksi
+              tidak bisa disimpan setelah mengisi seluruh form di depan
+              pelanggan yang menunggu. Duplikat lagi di dekat tombol Simpan
+              (di bawah) untuk yang sempat scroll lewat peringatan ini. */}
+          {!writable && (
+            <p className="text-xs font-semibold text-[#A8412E] bg-[#FAF0EE] border border-[#A8412E]/30 rounded-lg p-2.5">
+              Masa aktif langganan sudah habis — transaksi baru tidak bisa disimpan. Hubungi Sewalog untuk memperpanjang
+              sebelum melanjutkan.
+            </p>
+          )}
           {requestPrefill && (
             <div className="bg-[#F9EFE7] border border-[#A65C2A]/40 rounded-xl p-3 text-xs">
               <p className="font-bold text-[#A65C2A]">Dari pesanan online</p>
@@ -738,6 +754,11 @@ export function NewBookingModal({
             </p>
           )}
 
+          {!writable && (
+            <p className="text-xs font-semibold text-[#A8412E] bg-[#FAF0EE] border border-[#A8412E]/30 rounded-lg p-2.5">
+              Masa aktif langganan sudah habis — Catat Transaksi baru dikunci. Hubungi Sewalog untuk memperpanjang.
+            </p>
+          )}
           <div className="pt-3 border-t border-[#DBD5C1] flex items-center justify-end space-x-3 shrink-0">
             <button
               type="button"
@@ -748,7 +769,7 @@ export function NewBookingModal({
             </button>
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || !writable}
               className="px-5 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs shadow-md transition flex items-center space-x-2 active:scale-95 disabled:opacity-60"
             >
               <CheckCircle2 className="w-4 h-4 text-[#A65C2A]" />

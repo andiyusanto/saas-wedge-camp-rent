@@ -3,6 +3,7 @@ import { createRequestClient } from '../lib/supabaseClient.js';
 import { fetchActiveBookingItems, usedUnitsOn } from '../lib/availability.js';
 import { dateRange, todayInWIB } from '../lib/dates.js';
 import { logBookingStatus } from '../lib/audit.js';
+import { isBusinessWritable, SUBSCRIPTION_LOCKED_MESSAGE } from '../lib/subscription.js';
 
 const router = Router();
 
@@ -77,6 +78,15 @@ router.post('/bookings', async (req, res) => {
   }
 
   const supabase = createRequestClient(req);
+
+  // Catat Transaksi baru = "kerja baru" (DIKUNCI, rencana langganan) —
+  // RLS (migration 044, business_is_writable di WITH CHECK bookings
+  // INSERT) adalah penegak SEBENARNYA; pesan ramah di sini cuma supaya
+  // vendor tidak melihat error RLS mentah.
+  if (!(await isBusinessWritable(supabase, businessId))) {
+    res.status(403).json({ error: SUBSCRIPTION_LOCKED_MESSAGE });
+    return;
+  }
 
   const { data: itemRows, error: itemsError } = await supabase
     .from('items')

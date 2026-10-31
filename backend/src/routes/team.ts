@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
 import { createRequestClient, createAnonClient } from '../lib/supabaseClient.js';
+import { isBusinessWritable, SUBSCRIPTION_LOCKED_MESSAGE } from '../lib/subscription.js';
 
 const router = Router();
 
@@ -132,6 +133,16 @@ router.post('/team/invites', async (req, res) => {
 
   if ((await getCallerRole(supabase, businessId)) !== 'owner') {
     res.status(403).json({ error: 'Cuma pemilik yang bisa mengundang anggota' });
+    return;
+  }
+
+  // Undang karyawan baru = "kerja baru" (DIKUNCI, rencana langganan) —
+  // RLS (business_invites INSERT, migration 044) tetap penegak
+  // sebenarnya. Menghapus/menonaktifkan karyawan TETAP terbuka (tidak
+  // disentuh di sini sama sekali — pemilik harus selalu bisa mencabut
+  // akses).
+  if (!(await isBusinessWritable(supabase, businessId))) {
+    res.status(403).json({ error: SUBSCRIPTION_LOCKED_MESSAGE });
     return;
   }
 

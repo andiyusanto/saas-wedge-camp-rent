@@ -421,13 +421,17 @@ function ItemFormModal({
   );
 }
 
-function ItemCard({ item, emailByUserId, onEdit, onDeactivate, onReactivate, onPreviewImage }: {
+function ItemCard({ item, emailByUserId, onEdit, onDeactivate, onReactivate, onPreviewImage, editDisabled }: {
   item: Item;
   emailByUserId: Record<string, string>;
   onEdit: () => void;
   onDeactivate?: () => void;
   onReactivate?: () => void;
   onPreviewImage: (url: string) => void;
+  // Rencana langganan: "ubah alat" dikunci kalau hanya-baca — RLS
+  // (items UPDATE, migration 044) sudah menegakkan ini sungguhan, ini
+  // cuma supaya tombolnya tidak kelihatan bisa diklik padahal akan gagal.
+  editDisabled?: boolean;
 }) {
   const editorEmail = item.updated_by ? emailByUserId[item.updated_by] : null;
   const creatorEmail = item.created_by ? emailByUserId[item.created_by] : null;
@@ -511,7 +515,9 @@ function ItemCard({ item, emailByUserId, onEdit, onDeactivate, onReactivate, onP
           <>
             <button
               onClick={onEdit}
-              className="px-3 py-1.5 rounded-lg bg-white border border-[#DBD5C1] hover:bg-[#F1EEE2] text-[#26302B] text-xs font-semibold flex items-center gap-1 transition"
+              disabled={editDisabled}
+              title={editDisabled ? 'Masa aktif langganan sudah habis — hubungi Sewalog untuk memperpanjang.' : undefined}
+              className="px-3 py-1.5 rounded-lg bg-white border border-[#DBD5C1] hover:bg-[#F1EEE2] text-[#26302B] text-xs font-semibold flex items-center gap-1 transition disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
             >
               <Edit2 className="w-3.5 h-3.5 text-[#2B4739]" />
               Edit
@@ -532,10 +538,14 @@ export function ItemsScreen({
   businessId,
   session,
   role,
+  writable = true,
 }: {
   businessId: string;
   session: Session;
   role: 'owner' | 'karyawan' | null;
+  // Rencana langganan — default true supaya pemanggil lama (kalau ada)
+  // tidak pecah; App.tsx selalu mengirim nilai sungguhan dari useSubscription.
+  writable?: boolean;
 }) {
   const { items, inactiveItems, loading, addItem, updateItem, setItemActive, refresh } = useItems(businessId);
   const { members } = useTeam(session, businessId);
@@ -587,8 +597,9 @@ export function ItemsScreen({
             {role === 'owner' && (
               <button
                 onClick={() => setIsImportOpen(true)}
-                className="px-3 py-2.5 rounded-xl border border-[#DBD5C1] text-[#26302B] hover:bg-[#F1EEE2] font-bold text-xs shadow-xs transition flex items-center gap-2"
-                title="Impor banyak alat sekaligus dari file Excel/CSV"
+                disabled={!writable}
+                title={!writable ? 'Masa aktif langganan sudah habis — hubungi Sewalog untuk memperpanjang.' : 'Impor banyak alat sekaligus dari file Excel/CSV'}
+                className="px-3 py-2.5 rounded-xl border border-[#DBD5C1] text-[#26302B] hover:bg-[#F1EEE2] font-bold text-xs shadow-xs transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
               >
                 <FileSpreadsheet className="w-4 h-4 text-[#6E6853]" />
                 <span>Impor dari Excel</span>
@@ -596,7 +607,9 @@ export function ItemsScreen({
             )}
             <button
               onClick={() => setModalItem('new')}
-              className="px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs shadow-sm transition flex items-center gap-2"
+              disabled={!writable}
+              title={!writable ? 'Masa aktif langganan sudah habis — hubungi Sewalog untuk memperpanjang.' : undefined}
+              className="px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs shadow-sm transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#2B4739]"
             >
               <Plus className="w-4 h-4 text-[#A65C2A]" />
               <span>Tambah Alat Baru</span>
@@ -649,6 +662,7 @@ export function ItemsScreen({
               onEdit={() => setModalItem(item)}
               onDeactivate={() => setDeactivateTarget(item)}
               onPreviewImage={setPreviewImageUrl}
+              editDisabled={!writable}
             />
           ))}
         </div>

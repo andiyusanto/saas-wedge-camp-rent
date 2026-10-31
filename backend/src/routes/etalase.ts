@@ -34,6 +34,7 @@ type PublicPageData = {
   regency_name: string | null;
   operating_hours: string | null;
   public_phone: string | null;
+  writable: boolean;
   items: PublicItem[];
 };
 
@@ -739,7 +740,9 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
 
   <section>
     <h2 style="font-size:1rem;margin:0 0 4px;color:#26302B;">Katalog Alat</h2>
-    <p style="margin:0 0 10px;font-size:0.8rem;color:#6E6853;">Pilih tanggal ambil &amp; kembali untuk cek sisa unit tersedia per alat sepanjang periode itu (butuh JavaScript aktif) — atau langsung hubungi kami lewat WhatsApp.</p>
+    ${
+      page.writable
+        ? `<p style="margin:0 0 10px;font-size:0.8rem;color:#6E6853;">Pilih tanggal ambil &amp; kembali untuk cek sisa unit tersedia per alat sepanjang periode itu (butuh JavaScript aktif) — atau langsung hubungi kami lewat WhatsApp.</p>
     <div class="avail-controls">
       <label class="avail-field">
         <span>Tanggal ambil</span>
@@ -753,7 +756,13 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
       <button type="button" id="avail-check">Cek Ketersediaan</button>
     </div>
     <p id="avail-status" style="margin:4px 0 0;font-size:0.75rem;color:#6E6853;min-height:1em;"></p>
-    <p id="cart-date-notice" class="cart-notice"></p>
+    <p id="cart-date-notice" class="cart-notice"></p>`
+        : // Review -c1 (rencana langganan): business hanya-baca — cek
+          // ketersediaan+tombol pesan DIHILANGKAN SELURUHNYA (bukan
+          // cuma tombol pesan), sesuai keputusan "Etalase publik: Tampil,
+          // TANPA cek stok & tombol pesan". Katalog+harga tetap tampil.
+          `<p style="margin:0 0 10px;font-size:0.8rem;color:#6E6853;">Hubungi kami langsung lewat WhatsApp untuk cek ketersediaan &amp; harga.</p>`
+    }
     ${categoryFilterHtml}
     <div class="items">
       ${itemsHtml}
@@ -858,8 +867,16 @@ document.addEventListener('keydown', function (e) {
     });
   }
 
-  var slug = ${JSON.stringify(slug)};
+  // Review -c1 (rencana langganan): elemen avail-start dkk TIDAK ADA
+  // sama sekali di HTML kalau !page.writable (lihat renderPage — seluruh
+  // blok avail-controls dihilangkan server-side, bukan cuma disembunyikan
+  // CSS) — bungkus SEMUA logic cek-ketersediaan+keranjang+form pesanan
+  // di bawah ini dengan satu guard, supaya tidak crash null-reference
+  // DAN sekaligus otomatis menonaktifkan form pesanan juga (dua-duanya
+  // bergantung ke elemen yang sama).
   var startInput = document.getElementById('avail-start');
+  if (startInput) {
+  var slug = ${JSON.stringify(slug)};
   var endInput = document.getElementById('avail-end');
   var btn = document.getElementById('avail-check');
   var status = document.getElementById('avail-status');
@@ -1185,6 +1202,7 @@ document.addEventListener('keydown', function (e) {
         errorEl.style.display = 'block';
       });
   });
+  } // end if (startInput)
 })();
 </script>
 </body>
