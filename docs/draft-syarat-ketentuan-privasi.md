@@ -106,7 +106,7 @@ keluhan dapat disampaikan ke WhatsApp 0896-4945-4000 atau sewalogdotcomcorp@gmai
 
 # Kebijakan Privasi Sewalog
 
-*Berlaku sejak: 25 Oktober 2026*
+*Berlaku sejak: 25 Oktober 2026 — terakhir diperbarui: 31 Oktober 2026*
 
 ## 1. Siapa kami
 
@@ -124,7 +124,13 @@ Sewalog dikelola oleh PT Perorangan Markabam Notodesun Digital.
 - katalog alat: nama, foto, harga, jumlah unit,
 - data penyewa: nama, nomor telepon, alamat, dan bila diisi oleh rental,
   nomor dokumen identitas serta foto penyewa saat pengambilan,
-- transaksi sewa, jenis jaminan yang ditahan, dan denda.
+- transaksi sewa, jenis jaminan yang ditahan, dan denda,
+- nama, nomor WhatsApp, dan catatan yang dikirim pelanggan sendiri lewat
+  formulir pesanan online di halaman Etalase (kalau rental mengaktifkan
+  fitur ini),
+- info pembayaran rental (nama bank, nomor dan nama pemilik rekening,
+  gambar QRIS) yang diisi rental untuk ditampilkan kepada pelanggan
+  setelah pesanannya dikonfirmasi.
 
 ## 3. Untuk apa data dipakai
 
