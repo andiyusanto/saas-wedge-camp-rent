@@ -316,18 +316,40 @@ router.post('/bookings/:id/cancel', async (req, res) => {
     return;
   }
 
-  if (booking.status !== 'aktif') {
+  // Perbaikan bug nyata (ditemukan lewat tes skenario "booking yatim"
+  // tahap Pesanan Online, tapi bug ini sendiri sudah ada sejak awal,
+  // terpisah dari fitur itu): sebelumnya cuma 'aktif' yang boleh
+  // dibatalkan, padahal BookingCard.tsx sudah lama menampilkan tombol
+  // "Batalkan" untuk booking 'dipesan' (belum diambil fisik, label UI
+  // "Siap Diambil") juga — klik Batalkan pada booking macam itu SELALU
+  // gagal dengan pesan keliru "Transaksi sudah diproses sebelumnya".
+  // Tidak ada logic di bawah yang spesifik ke 'aktif' (release deposit +
+  // update status sama saja berlaku untuk 'dipesan'), jadi perbaikannya
+  // cuma memperluas status yang diterima.
+  if (booking.status !== 'aktif' && booking.status !== 'dipesan') {
     res.status(400).json({ error: 'Transaksi sudah diproses sebelumnya' });
     return;
   }
 
-  const { error: updateError } = await supabase
+  // UPDATE sendiri dibuat conditional (bukan percaya begitu saja hasil
+  // SELECT di atas) + cek baris yang BENAR-BENAR ter-update — mencegah
+  // dua klik "Batalkan" bersamaan (mis. dua tab/dua staff) dari keduanya
+  // "berhasil" dan menjalankan efek samping (release deposit, log status)
+  // dua kali. Pola conditional update yang sama dengan confirm_booking_
+  // request (migration 037).
+  const { data: updatedRows, error: updateError } = await supabase
     .from('bookings')
     .update({ status: 'dibatalkan', cancelled_at: new Date().toISOString() })
-    .eq('id', id);
+    .eq('id', id)
+    .in('status', ['aktif', 'dipesan'])
+    .select('id');
 
   if (updateError) {
     res.status(400).json({ error: updateError.message });
+    return;
+  }
+  if (!updatedRows || updatedRows.length === 0) {
+    res.status(400).json({ error: 'Transaksi sudah diproses sebelumnya' });
     return;
   }
 
