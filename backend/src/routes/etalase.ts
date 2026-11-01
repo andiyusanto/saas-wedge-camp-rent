@@ -35,6 +35,10 @@ type PublicPageData = {
   operating_hours: string | null;
   public_phone: string | null;
   writable: boolean;
+  // Syarat & Ketentuan (migration 047) — tampil TERLEPAS dari status
+  // Pesanan Online (keputusan Andi), makanya diambil dari get_public_page
+  // (selalu dipanggil untuk katalog), bukan cuma ordering-config.
+  terms_content: string | null;
   items: PublicItem[];
 };
 
@@ -186,6 +190,8 @@ router.get('/api/public/etalase/:slug/ordering-config', async (req, res) => {
     pay_transfer_enabled: boolean;
     pay_qris_enabled: boolean;
     pay_cash_enabled: boolean;
+    terms_content: string | null;
+    terms_version_id: string | null;
   };
   res.json({
     enabled: true,
@@ -194,6 +200,15 @@ router.get('/api/public/etalase/:slug/ordering-config', async (req, res) => {
       qris: page.pay_qris_enabled,
       cash: page.pay_cash_enabled,
     },
+    // Syarat & Ketentuan (migration 047) — diambil fresh tiap kali form
+    // pesanan dibuka (bukan dari get_public_page saat load halaman
+    // pertama kali), supaya kalau vendor ubah teksnya SETELAH pengunjung
+    // buka halaman tapi SEBELUM submit, versi yang ditampilkan+dikirim
+    // balik tetap yang terbaru — create_booking_request sendiri tetap
+    // jadi penjaga utama (menolak kalau basi), ini cuma supaya kasus
+    // "terlambat" itu jarang terjadi di awal.
+    terms_content: page.terms_content,
+    terms_version_id: page.terms_version_id,
   });
 });
 
@@ -206,6 +221,8 @@ type BookingRequestStatus = {
   payment_method: 'transfer' | 'qris' | 'cash' | null;
   dp_amount: number | null;
   rejection_reason: string | null;
+  expires_at: string;
+  accepted_terms_content: string | null;
   business_name: string;
   logo_url: string | null;
   public_phone: string | null;
@@ -276,6 +293,26 @@ function formatDateID(dateStr: string): string {
   return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
 
+// Batas konfirmasi (tahap 5) — tampil cuma untuk status 'menunggu'
+// (lihat renderStatusPage), WIB hardcoded (CLAUDE.md bagian 4: device
+// pelanggan/vendor fisik di Malang Raya), bukan timezone server.
+function formatDeadlineWIB(expiresAtIso: string): string {
+  const d = new Date(expiresAtIso);
+  const dayDate = d.toLocaleDateString('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'Asia/Jakarta',
+  });
+  const time = d.toLocaleTimeString('id-ID', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Jakarta',
+  });
+  return `${dayDate} pukul ${time} WIB`;
+}
+
 // Review -c1 (tahap 3, poin 1): OG tags di halaman ini SENGAJA generik
 // (cuma nama toko) — link ini dibagikan lewat WA, jadi preview-nya
 // terlihat oleh SIAPA PUN yang menerima forward link itu. Nama
@@ -322,11 +359,18 @@ function renderStatusPage(data: BookingRequestStatus, req: import('express').Req
   let bodyExtraHtml = '';
 
   if (data.status === 'menunggu') {
-    // Review -c1 (poin 4): jangan dobel kalau vendor sudah isi pesan
-    // konfirmasi custom sendiri — default cuma tampil kalau itu kosong.
-    bodyExtraHtml = data.confirmation_message
-      ? ''
-      : `<p style="margin:10px 0 0;font-size:0.85rem;color:#6E6853;">Vendor biasanya membalas dalam 24 jam. Kalau mendesak, langsung chat WA.</p>`;
+    // Batas konfirmasi (tahap 5) — pakai expires_at sungguhan dari
+    // confirmation_deadline_hours per-business (migration 046), bukan
+    // lagi teks generik "24 jam" yang dulu selalu sama padahal angkanya
+    // sekarang bisa beda per vendor. Cuma tampil untuk status 'menunggu'
+    // (instruksi review) — sudah tidak relevan begitu dikonfirmasi/
+    // ditolak/kedaluwarsa.
+    // Beda dari confirmation_message custom vendor (paragraf terpisah,
+    // lihat di bawah) — ini data faktual (tanggal/jam sungguhan), bukan
+    // teks reassurance, jadi SELALU ditampilkan terlepas vendor sudah
+    // isi pesan custom atau belum (beda dari perilaku lama yang
+    // menyembunyikan baris "24 jam" generik kalau custom message ada).
+    bodyExtraHtml = `<p style="margin:10px 0 0;font-size:0.85rem;color:#6E6853;">Batas konfirmasi: <strong style="color:#26302B;">${escapeHtml(formatDeadlineWIB(data.expires_at))}</strong>. Kalau mendesak, langsung chat WA.</p>`;
   } else if (data.status === 'ditolak') {
     bodyExtraHtml = `<p style="margin:10px 0 0;font-size:0.85rem;color:#A8412E;">Alasan: ${escapeHtml(data.rejection_reason ?? 'Tidak disebutkan')}. Silakan hubungi lewat WA untuk tanggal lain, atau pesan ulang.</p>`;
   } else if (data.status === 'kedaluwarsa') {
@@ -437,6 +481,21 @@ function renderStatusPage(data: BookingRequestStatus, req: import('express').Req
     ${data.confirmation_message && data.status === 'menunggu' ? `<p style="margin:10px 0 0;font-size:0.85rem;color:#26302B;">${escapeHtml(data.confirmation_message)}</p>` : ''}
     ${bodyExtraHtml}
     ${waButtonHtml}
+    ${
+      // Syarat & Ketentuan (migration 047) — link ke versi yang DISETUJUI
+      // pelanggan saat pesan (accepted_terms_content, dari
+      // booking_requests.terms_version_id), bukan versi current toko
+      // saat ini kalau sudah berbeda. <details> polos (tanpa JS) cukup
+      // di sini — beda dari halaman katalog yang perlu modal karena ada
+      // form di atasnya, halaman status ini statis.
+      data.accepted_terms_content
+        ? `<details style="margin-top:14px;">
+      <summary style="font-size:0.8rem;color:#2B4739;font-weight:700;cursor:pointer;">Syarat yang kamu setujui</summary>
+      <p style="margin:6px 0 0;font-size:0.75rem;color:#6E6853;">Syarat ini dibuat oleh ${escapeHtml(data.business_name)} — Sewalog bukan pihak dalam perjanjian sewa ini.</p>
+      <div style="margin-top:8px;white-space:pre-wrap;font-size:0.8rem;color:#26302B;background:#F1EEE2;border-radius:10px;padding:10px;">${escapeHtml(data.accepted_terms_content)}</div>
+    </details>`
+        : ''
+    }
   </div>
   <footer style="margin-top:24px;text-align:center;font-size:0.75rem;color:#6E6853;">
     Pesanan online ini dibuat pakai <a href="https://sewalog.com" style="color:#2B4739;font-weight:600;">Sewalog</a>.
@@ -769,6 +828,19 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
     </div>
   </section>
 
+  ${
+    // Syarat & Ketentuan (migration 047) — tampil TERLEPAS dari status
+    // Pesanan Online (keputusan Andi), makanya dicek di sini (bagian
+    // katalog, selalu dirender), bukan dikondisikan ke accept_online_orders.
+    page.terms_content
+      ? `<section style="margin-top:24px;">
+    <h2 style="font-size:1rem;margin:0 0 4px;color:#26302B;">Syarat Sewa</h2>
+    <p style="margin:0 0 10px;font-size:0.75rem;color:#6E6853;">Syarat ini dibuat oleh ${escapeHtml(page.business_name)} — Sewalog bukan pihak dalam perjanjian sewa ini.</p>
+    <div style="background:#FBFAF4;border:1px solid #DBD5C1;border-radius:16px;padding:16px;white-space:pre-wrap;font-size:0.85rem;color:#26302B;">${escapeHtml(page.terms_content)}</div>
+  </section>`
+      : ''
+  }
+
   <footer style="margin-top:32px;padding-top:16px;border-top:1px solid #DBD5C1;font-size:0.75rem;color:#6E6853;">
     Etalase online ini dibuat pakai <a href="https://sewalog.com" style="color:#2B4739;font-weight:600;">Sewalog</a>.
   </footer>
@@ -810,8 +882,24 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
     <label class="field-label">Cara bayar</label>
     <div id="order-payment-methods"></div>
 
+    <div class="pay-option" id="order-terms-section" style="display:none;align-items:flex-start;gap:8px;margin-top:10px;">
+      <input type="checkbox" id="order-terms-checkbox" style="margin-top:3px;" />
+      <label for="order-terms-checkbox" style="margin:0;">
+        Saya setuju dengan <a href="#" id="order-terms-link" style="color:#2B4739;font-weight:700;">Syarat &amp; Ketentuan</a> toko ini.
+      </label>
+    </div>
+
     <div class="form-error" id="order-form-error"></div>
     <button type="button" class="submit-btn" id="order-submit-btn">Kirim Pesanan</button>
+  </div>
+</div>
+
+<div id="terms-modal" class="modal-overlay">
+  <div class="modal-panel">
+    <button type="button" class="modal-close" id="terms-modal-close" aria-label="Tutup">&times;</button>
+    <h2 style="font-size:1.1rem;margin:0 0 4px;">Syarat &amp; Ketentuan</h2>
+    <p style="margin:0 0 10px;font-size:0.75rem;color:#6E6853;">Syarat ini dibuat oleh ${escapeHtml(page.business_name)} — Sewalog bukan pihak dalam perjanjian sewa ini.</p>
+    <div id="terms-modal-content" style="white-space:pre-wrap;font-size:0.85rem;color:#26302B;max-height:50vh;overflow-y:auto;"></div>
   </div>
 </div>
 
@@ -978,14 +1066,37 @@ document.addEventListener('keydown', function (e) {
   var paymentMethods = { transfer: false, qris: false, cash: false };
   var cart = []; // [{item_id, name, quantity, remaining, rates: {...}}]
   var orderDates = { start: null, end: null };
+  // Syarat & Ketentuan (migration 047/048) — diisi ulang tiap fetch
+  // ordering-config (sekali saat load halaman, dan sekali lagi kalau
+  // create_booking_request menolak karena basi, lihat loadOrderingConfig
+  // di bawah), bukan sekali-jadi saat load — supaya selalu fresh.
+  var termsContent = null;
+  var termsVersionId = null;
 
-  fetch('/api/public/etalase/' + encodeURIComponent(slug) + '/ordering-config')
-    .then(function (r) { return r.json(); })
-    .then(function (cfg) {
-      orderingEnabled = !!(cfg && cfg.enabled);
-      paymentMethods = (cfg && cfg.payment_methods) || paymentMethods;
-    })
-    .catch(function () { orderingEnabled = false; });
+  function loadOrderingConfig() {
+    return fetch('/api/public/etalase/' + encodeURIComponent(slug) + '/ordering-config')
+      .then(function (r) { return r.json(); })
+      .then(function (cfg) {
+        orderingEnabled = !!(cfg && cfg.enabled);
+        paymentMethods = (cfg && cfg.payment_methods) || paymentMethods;
+        termsContent = (cfg && cfg.terms_content) || null;
+        termsVersionId = (cfg && cfg.terms_version_id) || null;
+        var termsSection = document.getElementById('order-terms-section');
+        if (termsSection) termsSection.style.display = termsContent ? 'flex' : 'none';
+      })
+      .catch(function () { orderingEnabled = false; });
+  }
+  loadOrderingConfig();
+
+  var termsModal = document.getElementById('terms-modal');
+  document.getElementById('order-terms-link').addEventListener('click', function (e) {
+    e.preventDefault();
+    document.getElementById('terms-modal-content').textContent = termsContent || '';
+    termsModal.style.display = 'flex';
+  });
+  document.getElementById('terms-modal-close').addEventListener('click', function () {
+    termsModal.style.display = 'none';
+  });
 
   // Dipanggil tiap kali hasil cek ketersediaan baru datang (lihat
   // pemanggilan di atas). Kalau tanggal yang baru dicek BEDA dari
@@ -1008,6 +1119,30 @@ document.addEventListener('keydown', function (e) {
 
   function rentalDaysCount(start, end) {
     return Math.round((new Date(end + 'T00:00:00') - new Date(start + 'T00:00:00')) / 86400000) + 1;
+  }
+
+  // Review -c1: rentang tanggal di header keranjang sebelumnya tampil
+  // mentah ISO ("2026-11-03 – 2026-11-04"), kurang ramah dibaca pelanggan
+  // awam. Format pendek ala Indonesia: "3–4 Nov 2026" kalau bulan+tahun
+  // sama, "30 Nov – 2 Des 2026" kalau beda bulan (tahun sama), atau
+  // "30 Des 2026 – 2 Jan 2027" kalau beda tahun — tanggal tunggal cuma
+  // "3 November 2026" (dieja penuh, konsisten dengan formatDateID() di
+  // halaman status).
+  var MONTH_ABBR_ID = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  function formatDateRangeID(startStr, endStr) {
+    var s = new Date(startStr + 'T00:00:00');
+    var e = new Date(endStr + 'T00:00:00');
+    if (startStr === endStr) {
+      return s.getDate() + ' ' + s.toLocaleDateString('id-ID', { month: 'long' }) + ' ' + s.getFullYear();
+    }
+    var sameYear = s.getFullYear() === e.getFullYear();
+    var sameMonth = sameYear && s.getMonth() === e.getMonth();
+    if (sameMonth) {
+      return s.getDate() + '–' + e.getDate() + ' ' + MONTH_ABBR_ID[e.getMonth()] + ' ' + e.getFullYear();
+    }
+    var startLabel = s.getDate() + ' ' + MONTH_ABBR_ID[s.getMonth()] + (sameYear ? '' : ' ' + s.getFullYear());
+    var endLabel = e.getDate() + ' ' + MONTH_ABBR_ID[e.getMonth()] + ' ' + e.getFullYear();
+    return startLabel + ' – ' + endLabel;
   }
 
   // Salinan vanilla-JS dari computeItemRentalPrice() (frontend/src/utils/
@@ -1050,7 +1185,7 @@ document.addEventListener('keydown', function (e) {
     var dateRangeEl = document.getElementById('cart-date-range');
     if (orderDates.start && orderDates.end) {
       var daysForLabel = rentalDaysCount(orderDates.start, orderDates.end);
-      var dateLabel = orderDates.start === orderDates.end ? orderDates.start : orderDates.start + ' – ' + orderDates.end;
+      var dateLabel = formatDateRangeID(orderDates.start, orderDates.end);
       dateRangeEl.textContent = dateLabel + ' · ' + daysForLabel + ' hari';
     } else {
       dateRangeEl.textContent = '';
@@ -1165,6 +1300,12 @@ document.addEventListener('keydown', function (e) {
       errorEl.style.display = 'block';
       return;
     }
+    var termsCheckbox = document.getElementById('order-terms-checkbox');
+    if (termsContent && !termsCheckbox.checked) {
+      errorEl.textContent = 'Centang persetujuan Syarat & Ketentuan dulu sebelum kirim pesanan.';
+      errorEl.style.display = 'block';
+      return;
+    }
 
     var submitBtn = document.getElementById('order-submit-btn');
     submitBtn.disabled = true;
@@ -1181,6 +1322,7 @@ document.addEventListener('keydown', function (e) {
         end_date: orderDates.end,
         items: cart.map(function (c) { return { item_id: c.item_id, quantity: c.quantity }; }),
         payment_method: paymentMethodInput.value,
+        terms_version_id: termsContent ? termsVersionId : null,
         website: document.getElementById('order-website').value, // honeypot
       }),
     })
@@ -1189,6 +1331,14 @@ document.addEventListener('keydown', function (e) {
         submitBtn.disabled = false;
         submitBtn.textContent = 'Kirim Pesanan';
         if (!res.ok || !res.body.token) {
+          // stale_terms (migration 047/048): vendor ubah syaratnya di
+          // antara halaman dibuka dan pelanggan submit — muat ulang teks
+          // terbaru + minta centang lagi, BUKAN cuma tampilkan error dan
+          // diam, supaya pelanggan tahu kenapa dan bisa langsung lanjut.
+          if (res.body && res.body.stale_terms) {
+            termsCheckbox.checked = false;
+            loadOrderingConfig();
+          }
           errorEl.textContent = (res.body && res.body.error) || 'Gagal mengirim pesanan. Coba lagi.';
           errorEl.style.display = 'block';
           return;

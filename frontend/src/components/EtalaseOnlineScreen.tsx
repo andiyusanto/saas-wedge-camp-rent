@@ -35,7 +35,8 @@ export function EtalaseOnlineScreen({
   businessPhone: string | null;
   businessAddress: string | null;
 }) {
-  const { page, loading, savePublicPage, checkSlugAvailable, fetchLatestPaymentChange } = usePublicPage(businessId);
+  const { page, loading, savePublicPage, checkSlugAvailable, fetchLatestPaymentChange, fetchCurrentTerms, saveRentalTerms } =
+    usePublicPage(businessId);
   const { provinces, regencies } = useRegencies();
 
   const [published, setPublished] = useState(false);
@@ -53,6 +54,17 @@ export function EtalaseOnlineScreen({
   const [payCashEnabled, setPayCashEnabled] = useState(false);
   const [dpMode, setDpMode] = useState<DpMode>('none');
   const [dpValue, setDpValue] = useState('');
+  // Tahap 5 (migration 046) — batas konfirmasi per-business, jam. String
+  // (bukan number) supaya input kosong sementara saat diketik ulang tidak
+  // dipaksa jadi 0 — divalidasi & di-clamp 2-72 cuma saat Simpan.
+  const [confirmationDeadlineHours, setConfirmationDeadlineHours] = useState('24');
+  // Syarat & Ketentuan (migration 047) — disimpan lewat RPC set_rental_terms
+  // TERPISAH dari handleSubmit utama (lihat handleSaveTerms di bawah), jadi
+  // state+status-nya juga terpisah dari form public_pages biasa.
+  const [termsContent, setTermsContent] = useState('');
+  const [savingTerms, setSavingTerms] = useState(false);
+  const [termsError, setTermsError] = useState<string | null>(null);
+  const [termsSaved, setTermsSaved] = useState(false);
   const [lastPaymentChange, setLastPaymentChange] = useState<PaymentChangeLog | null>(null);
   const [slugStatus, setSlugStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
   const slugDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -96,6 +108,7 @@ export function EtalaseOnlineScreen({
       setPayCashEnabled(page.pay_cash_enabled);
       setDpMode(page.dp_mode);
       setDpValue(page.dp_value != null ? String(page.dp_value) : '');
+      setConfirmationDeadlineHours(String(page.confirmation_deadline_hours));
     } else {
       setSlug(slugify(businessName));
       setAddress(businessAddress ?? '');
@@ -114,6 +127,53 @@ export function EtalaseOnlineScreen({
     fetchLatestPaymentChange().then(setLastPaymentChange);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [businessId]);
+
+  // Syarat & Ketentuan — dimuat ulang tiap kali current_terms_version_id
+  // BERUBAH NILAINYA (termasuk setelah disimpan, lewat refresh() di dalam
+  // saveRentalTerms), bukan cuma sekali saat mount.
+  //
+  // BUG yang pernah terjadi (ditemukan 1 Nov 2026): `loading` SEMPAT ikut
+  // jadi dependency di sini — tapi `loading` itu milik usePublicPage()
+  // SECARA KESELURUHAN, ikut ber-toggle true→false tiap kali refresh()
+  // dipanggil DARI MANA PUN, termasuk tombol "Simpan" utama (public_pages
+  // biasa) yang SAMA SEKALI TIDAK MENYENTUH current_terms_version_id.
+  // Urutan nyata yang memicu: vendor kosongkan textarea (state lokal
+  // kosong) → klik "Simpan" (utama) → refresh()-nya men-toggle loading →
+  // effect ini ikut nge-fire gara-gara loading berubah → fetchCurrentTerms()
+  // baca ulang current_terms_version_id yang MASIH LAMA (belum sempat
+  // diubah, user belum klik "Simpan Syarat") → menimpa balik textarea
+  // yang baru dikosongkan dengan teks lama dari DB, SEBELUM "Simpan
+  // Syarat" sempat diklik. Akibatnya tombol "Simpan Syarat" menyimpan
+  // teks LAMA lagi (sudah ketimpa), bukan kosong — terlihat seperti
+  // "tidak bisa dihapus". Diperbaiki: dependency HANYA pada nilai
+  // current_terms_version_id itu sendiri, bukan flag loading generik —
+  // effect ini cuma boleh bereaksi ke PERUBAHAN NILAI pointer syarat,
+  // titik, independen dari proses simpan lain yang sedang berjalan.
+  useEffect(() => {
+    fetchCurrentTerms().then((v) => setTermsContent(v?.content ?? ''));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page?.current_terms_version_id]);
+
+  const TERMS_TEMPLATE = `1. Penyewa wajib menunjukkan identitas asli (KTP/SIM) yang sah sebagai jaminan selama masa sewa.
+2. Alat yang disewa wajib dikembalikan dalam kondisi baik, bersih, dan lengkap sesuai saat diterima.
+3. Keterlambatan pengembalian dikenakan denda sesuai tarif yang berlaku di tempat kami.
+4. Kerusakan atau kehilangan alat menjadi tanggung jawab penyewa dan akan dikenakan ganti rugi sesuai kondisi barang.
+5. Pembatalan pesanan mohon diinformasikan sesegera mungkin lewat WhatsApp.
+6. Dengan menyetujui syarat ini, penyewa dianggap telah membaca dan memahami seluruh ketentuan di atas.`;
+
+  async function handleSaveTerms() {
+    setSavingTerms(true);
+    setTermsError(null);
+    setTermsSaved(false);
+    const { error: err } = await saveRentalTerms(termsContent.trim());
+    setSavingTerms(false);
+    if (err) {
+      setTermsError(err);
+      return;
+    }
+    setTermsSaved(true);
+    setTimeout(() => setTermsSaved(false), 2500);
+  }
 
   const paymentChangedRecently =
     lastPaymentChange && Date.now() - new Date(lastPaymentChange.created_at).getTime() < 7 * 24 * 60 * 60 * 1000;
@@ -234,6 +294,11 @@ export function EtalaseOnlineScreen({
       setError(dpError);
       return;
     }
+    const deadlineHoursNum = Number(confirmationDeadlineHours);
+    if (!Number.isInteger(deadlineHoursNum) || deadlineHoursNum < 2 || deadlineHoursNum > 72) {
+      setError('Batas konfirmasi harus berupa angka jam antara 2-72.');
+      return;
+    }
 
     const input: PublicPageInput = {
       published,
@@ -254,6 +319,7 @@ export function EtalaseOnlineScreen({
       pay_cash_enabled: payCashEnabled,
       dp_mode: dpMode,
       dp_value: dpMode === 'none' ? null : Number(dpValue),
+      confirmation_deadline_hours: deadlineHoursNum,
     };
 
     setSubmitting(true);
@@ -466,6 +532,21 @@ export function EtalaseOnlineScreen({
               />
             </label>
 
+            <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
+              Batas konfirmasi (jam)
+              <input
+                type="number"
+                min={2}
+                max={72}
+                value={confirmationDeadlineHours}
+                onChange={(e) => setConfirmationDeadlineHours(e.target.value)}
+                className="w-28 px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+              />
+              <span className="text-[11px] text-[#6E6853]">
+                Pesanan otomatis kedaluwarsa kalau belum dikonfirmasi dalam sekian jam (2-72 jam, default 24).
+              </span>
+            </label>
+
             <div className="space-y-2 pt-1 border-t border-[#E6E1D2]">
               <p className="text-sm font-semibold text-[#26302B]">Cara bayar yang diterima</p>
 
@@ -568,6 +649,47 @@ export function EtalaseOnlineScreen({
                   className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] text-sm focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
                 />
               )}
+            </div>
+
+            <div className="space-y-2 pt-1 border-t border-[#E6E1D2]">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-[#26302B]">Syarat &amp; Ketentuan sewa</p>
+                <button
+                  type="button"
+                  onClick={() => setTermsContent(TERMS_TEMPLATE)}
+                  className="shrink-0 text-xs font-semibold text-[#2B4739] underline"
+                >
+                  Pakai contoh
+                </button>
+              </div>
+              <p className="text-[11px] text-[#6E6853]">
+                Kosongkan untuk tidak memakai Syarat & Ketentuan sama sekali. Kalau diisi, pelanggan wajib centang
+                setuju sebelum kirim pesanan online — ditampilkan juga di halaman Etalase, terlepas dari status
+                Pesanan Online.
+              </p>
+              <textarea
+                value={termsContent}
+                onChange={(e) => setTermsContent(e.target.value)}
+                rows={6}
+                maxLength={8000}
+                placeholder="Tulis syarat & ketentuan sewa usahamu di sini..."
+                className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] text-sm focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+              />
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] text-[#6E6853]">{termsContent.length}/8000 karakter</span>
+                <div className="flex items-center gap-3">
+                  {termsSaved && <span className="text-xs font-semibold text-[#2B4739]">Tersimpan.</span>}
+                  <button
+                    type="button"
+                    onClick={handleSaveTerms}
+                    disabled={savingTerms}
+                    className="px-3 py-1.5 rounded-lg bg-[#2B4739] hover:bg-[#1E3429] text-white font-semibold text-xs shadow-sm transition disabled:opacity-60"
+                  >
+                    {savingTerms ? 'Menyimpan...' : 'Simpan Syarat'}
+                  </button>
+                </div>
+              </div>
+              {termsError && <p className="text-xs font-semibold text-[#A8412E]">{termsError}</p>}
             </div>
         </>
       </div>

@@ -130,7 +130,10 @@ Sewalog dikelola oleh PT Perorangan Markabam Notodesun Digital.
   fitur ini),
 - info pembayaran rental (nama bank, nomor dan nama pemilik rekening,
   gambar QRIS) yang diisi rental untuk ditampilkan kepada pelanggan
-  setelah pesanannya dikonfirmasi.
+  setelah pesanannya dikonfirmasi,
+- kalau rental mengaktifkan Syarat & Ketentuan sewa miliknya sendiri,
+  versi syarat yang disetujui pelanggan saat memesan ikut disimpan
+  bersama pesanan tersebut sebagai bukti persetujuan.
 
 ## 3. Untuk apa data dipakai
 

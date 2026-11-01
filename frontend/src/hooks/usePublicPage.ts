@@ -27,6 +27,11 @@ export type PublicPage = {
   pay_cash_enabled: boolean;
   dp_mode: DpMode;
   dp_value: number | null;
+  // Tahap 5 (migration 046) — batas konfirmasi per-business, jam, 2-72,
+  // default 24. Dipakai backend (bookingRequests.ts) mengganti
+  // DEFAULT_EXPIRY_HOURS yang dulu hardcoded.
+  confirmation_deadline_hours: number;
+  current_terms_version_id: string | null;
 };
 
 export type PublicPageInput = {
@@ -48,6 +53,15 @@ export type PublicPageInput = {
   pay_cash_enabled: boolean;
   dp_mode: DpMode;
   dp_value: number | null;
+  confirmation_deadline_hours: number;
+};
+
+// Syarat & Ketentuan (migration 047) — TIDAK ikut PublicPage/
+// PublicPageInput di atas sengaja: ditulis lewat RPC set_rental_terms
+// terpisah (versi append-only), bukan lewat update public_pages biasa.
+export type RentalTermsVersion = {
+  id: string;
+  content: string;
 };
 
 export type PaymentChangeLog = {
@@ -75,7 +89,7 @@ export function usePublicPage(businessId: string | null) {
     const { data } = await supabase
       .from('public_pages')
       .select(
-        'business_id, published, slug, description, address, regency_id, operating_hours, public_phone, accept_online_orders, confirmation_message, pay_transfer_enabled, bank_name, bank_account_number, bank_account_holder, pay_qris_enabled, qris_image_url, pay_cash_enabled, dp_mode, dp_value',
+        'business_id, published, slug, description, address, regency_id, operating_hours, public_phone, accept_online_orders, confirmation_message, pay_transfer_enabled, bank_name, bank_account_number, bank_account_holder, pay_qris_enabled, qris_image_url, pay_cash_enabled, dp_mode, dp_value, confirmation_deadline_hours, current_terms_version_id',
       )
       .eq('business_id', businessId)
       .maybeSingle();
@@ -158,5 +172,31 @@ export function usePublicPage(businessId: string | null) {
     return { created_at: changeRow.created_at, changed_by: changeRow.changed_by, changed_by_email: email };
   }
 
-  return { page, loading, refresh, savePublicPage, checkSlugAvailable, fetchLatestPaymentChange };
+  // Syarat & Ketentuan saat ini (migration 047) — dibaca terpisah dari
+  // `page` (bukan kolom public_pages, cuma pointer-nya yang ada di
+  // sana) lewat join manual ke rental_terms_versions (RLS select-only,
+  // owner_select_own_rental_terms_versions). null kalau toko belum
+  // pernah isi syarat (current_terms_version_id null).
+  async function fetchCurrentTerms(): Promise<RentalTermsVersion | null> {
+    if (!supabase || !businessId || !page?.current_terms_version_id) return null;
+    const { data } = await supabase
+      .from('rental_terms_versions')
+      .select('id, content')
+      .eq('id', page.current_terms_version_id)
+      .maybeSingle();
+    return data ?? null;
+  }
+
+  // Satu-satunya jalur tulis ke rental_terms_versions/
+  // public_pages.current_terms_version_id — RPC set_rental_terms
+  // (owner-only, bikin versi baru cuma kalau teks benar-benar berubah).
+  async function saveRentalTerms(content: string): Promise<{ error: string | null }> {
+    if (!supabase || !businessId) return { error: 'Belum login' };
+    const { error } = await supabase.rpc('set_rental_terms', { p_business_id: businessId, p_content: content || null });
+    if (error) return { error: error.message };
+    await refresh();
+    return { error: null };
+  }
+
+  return { page, loading, refresh, savePublicPage, checkSlugAvailable, fetchLatestPaymentChange, fetchCurrentTerms, saveRentalTerms };
 }

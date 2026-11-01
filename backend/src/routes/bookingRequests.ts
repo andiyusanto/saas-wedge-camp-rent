@@ -146,6 +146,7 @@ router.post('/public/booking-requests/:slug', perIpLimiter, async (req, res) => 
     end_date,
     items,
     payment_method,
+    terms_version_id, // Syarat & Ketentuan (migration 047) — null kalau toko tidak punya syarat
     website, // honeypot — field tersembunyi di form, manusia tidak akan mengisinya
   } = req.body ?? {};
 
@@ -231,6 +232,7 @@ router.post('/public/booking-requests/:slug', perIpLimiter, async (req, res) => 
     pay_transfer_enabled: boolean;
     pay_qris_enabled: boolean;
     pay_cash_enabled: boolean;
+    confirmation_deadline_hours: number;
   };
 
   if (
@@ -309,12 +311,16 @@ router.post('/public/booking-requests/:slug', perIpLimiter, async (req, res) => 
     estimatedPrice += computeItemRentalPrice(catalogItem, rentalDaysCount) * requested.quantity;
   }
 
-  // Batas kedaluwarsa (rencana 2.6 revisi): mana yang lebih dulu — N jam
-  // dari sekarang (default 24, belum ada setting per-business di versi
-  // ini, lihat catatan di bawah) ATAU awal hari start_date WIB.
-  const DEFAULT_EXPIRY_HOURS = 24;
+  // Batas kedaluwarsa (rencana 2.6 revisi, tahap 5): mana yang lebih dulu
+  // — N jam dari sekarang (N = confirmation_deadline_hours per-business,
+  // migration 046, default 24 kalau vendor belum pernah mengatur) ATAU
+  // awal hari start_date WIB. Hard cap 7 hari tetap ditegakkan di
+  // create_booking_request sendiri (migration 037), independen dari
+  // setting ini — kalau vendor set 72 jam tapi pelanggan pesan utk
+  // tanggal 6 hari lagi, byHours (72 jam dari sekarang) masih < startOf
+  // PickupDayWib, jadi expiresAt tetap byHours yang aman di bawah cap.
   const now = Date.now();
-  const byHours = new Date(now + DEFAULT_EXPIRY_HOURS * 60 * 60 * 1000);
+  const byHours = new Date(now + page.confirmation_deadline_hours * 60 * 60 * 1000);
   const startOfPickupDayWib = new Date(`${start_date}T00:00:00+07:00`);
   const expiresAt = byHours < startOfPickupDayWib ? byHours : startOfPickupDayWib;
 
@@ -339,6 +345,13 @@ router.post('/public/booking-requests/:slug', perIpLimiter, async (req, res) => 
     return;
   }
 
+  // Syarat & Ketentuan (migration 047) — cuma string UUID yang diterima
+  // (apa pun selain itu dianggap tidak ada persetujuan), dikirim apa
+  // adanya ke create_booking_request yang jadi penjaga SEBENARNYA (server
+  // menolak kalau beda dari current_terms_version_id SAAT INSERT, bukan
+  // percaya mentah-mentah ke nilai dari klien).
+  const termsVersionId = typeof terms_version_id === 'string' && terms_version_id.length > 0 ? terms_version_id : null;
+
   const { data: newId, error: createError } = await supabase.rpc('create_booking_request', {
     p_secret: secret,
     p_business_id: page.business_id,
@@ -352,7 +365,23 @@ router.post('/public/booking-requests/:slug', perIpLimiter, async (req, res) => 
     p_dp_amount: null,
     p_expires_at: expiresAt.toISOString(),
     p_items: requestedItems.map((i) => ({ item_id: i.item_id, quantity: i.quantity })),
+    p_terms_version_id: termsVersionId,
   });
+
+  if (createError?.message?.includes('syarat telah diperbarui')) {
+    // Review -c1: vendor sempat ubah teks Syarat & Ketentuan SETELAH
+    // pelanggan buka form tapi SEBELUM submit — jangan tampilkan pesan
+    // server mentah, dan jangan diam-diam catat persetujuan ke versi
+    // yang tidak pernah mereka baca (itu justru yang dicegah fitur ini).
+    // Frontend (etalase.ts client script) menangani `stale_terms: true`
+    // dengan memuat ulang terms_content/terms_version_id terbaru dari
+    // /ordering-config dan meminta pelanggan membaca+centang ulang.
+    res.status(409).json({
+      error: 'Syarat & Ketentuan toko ini baru diperbarui. Silakan baca ulang dan centang lagi sebelum kirim pesanan.',
+      stale_terms: true,
+    });
+    return;
+  }
 
   if (createError || !newId) {
     // Review -c1 #4: createError.message bisa berisi teks internal (mis.
