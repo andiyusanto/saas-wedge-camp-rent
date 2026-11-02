@@ -12,7 +12,7 @@ import { isDemoAccountEmail } from './utils/demo';
 import { AuthScreen } from './components/AuthScreen';
 import { ResetPasswordScreen } from './components/ResetPasswordScreen';
 import { OnboardingScreen } from './components/OnboardingScreen';
-import { RedeemInviteScreen } from './components/RedeemInviteScreen';
+import { InviteConfirmScreen } from './components/RedeemInviteScreen';
 import { ItemsScreen } from './components/ItemsScreen';
 import { CalendarScreen } from './components/CalendarScreen';
 import { NewBookingModal } from './components/NewBookingModal';
@@ -25,14 +25,65 @@ import { EtalaseOnlineScreen } from './components/EtalaseOnlineScreen';
 import { Navbar } from './components/Navbar';
 import type { Tab } from './components/Navbar';
 
-function readInviteCodeFromUrl(): string | null {
-  return new URLSearchParams(window.location.search).get('invite');
+// Bug nyata ditemukan 2 Nov 2026 (lihat RedeemInviteScreen.tsx untuk
+// alur lengkapnya): kode undangan SEBELUMNYA cuma dibaca dari
+// `window.location.search` sekali saat App mount — itu hilang begitu
+// user klik link konfirmasi EMAIL dari Supabase (reload halaman penuh,
+// URL baru tidak lagi punya `?invite=...`), jadi redemption tidak pernah
+// jalan dan user yang sudah diundang malah jatuh ke OnboardingScreen
+// (bikin business baru sendiri, bukan join yang diundang). Diperbaiki
+// dua lapis: (1) kode disimpan ke localStorage begitu PERTAMA kali
+// terlihat di URL, dibaca balik sebagai fallback kalau URL sudah tidak
+// punya `?invite=` lagi (menutupi reload lewat link email); (2)
+// AuthForm.tsx mengirim `emailRedirectTo` yang membawa `?invite=...` di
+// URL redirect-nya sendiri (lihat komentar di sana) — dua-duanya
+// independen, salah satu gagal yang lain tetap menutupi.
+const INVITE_STORAGE_KEY = 'sewalog_pending_invite';
+// Review -c1: device bisa dipakai gantian (mis. HP/tablet kasir toko) —
+// kode yang "nyangkut" di localStorage TANPA batas waktu berisiko
+// ke-redeem ke akun orang lain yang login belakangan di device yang
+// sama. 24 jam cukup untuk nutupi jeda wajar sampai email konfirmasi
+// diklik, tapi tidak nyangkut selamanya. Kedaluwarsa ASLI undangannya
+// sendiri (business_invites.expires_at) tetap jadi penjaga utama di
+// server (get_invite_preview/redeem RPC) — ini cuma lapisan klien,
+// mana yang lebih dulu tercapai.
+const INVITE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+function readInviteCode(): string | null {
+  const fromUrl = new URLSearchParams(window.location.search).get('invite');
+  if (fromUrl) {
+    try {
+      localStorage.setItem(INVITE_STORAGE_KEY, JSON.stringify({ code: fromUrl, storedAt: Date.now() }));
+    } catch {
+      // Private browsing/storage diblokir — tidak fatal, cuma berarti
+      // fallback lintas-reload ini tidak akan menutupi kasusnya kalau
+      // terjadi. emailRedirectTo (lapis kedua) tetap jalan independen.
+    }
+    return fromUrl;
+  }
+  try {
+    const raw = localStorage.getItem(INVITE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { code: string; storedAt: number };
+    if (Date.now() - parsed.storedAt > INVITE_MAX_AGE_MS) {
+      localStorage.removeItem(INVITE_STORAGE_KEY);
+      return null;
+    }
+    return parsed.code;
+  } catch {
+    return null;
+  }
 }
 
-function clearInviteCodeFromUrl() {
+function clearInviteCode() {
   const url = new URL(window.location.href);
   url.searchParams.delete('invite');
   window.history.replaceState({}, '', url.toString());
+  try {
+    localStorage.removeItem(INVITE_STORAGE_KEY);
+  } catch {
+    // tidak fatal, lihat catatan di readInviteCode().
+  }
 }
 
 function App() {
@@ -80,8 +131,11 @@ function App() {
   const [preselectedItemId, setPreselectedItemId] = useState<string | null>(null);
   const [preselectedStartDate, setPreselectedStartDate] = useState<string | null>(null);
 
-  const [inviteCode, setInviteCode] = useState<string | null>(readInviteCodeFromUrl);
-  const [inviteSkipped, setInviteSkipped] = useState(false);
+  const [inviteCode, setInviteCode] = useState<string | null>(readInviteCode);
+  // Ditampilkan/tidak ditampilkan lagi untuk SESI INI setelah pengguna
+  // menjawab konfirmasi ("Gabung"/"Bukan saya") — beda dari inviteCode
+  // yang disimpan lintas-reload, flag ini sengaja TIDAK persisten.
+  const [inviteDismissed, setInviteDismissed] = useState(false);
 
   if (authLoading) return null;
 
@@ -92,6 +146,32 @@ function App() {
   if (isPasswordRecovery) return <ResetPasswordScreen onDone={clearPasswordRecovery} />;
 
   if (!session) return <AuthScreen inviteCode={inviteCode} />;
+
+  // Review -c1: konfirmasi undangan WAJIB tampil begini pun akun ini
+  // SUDAH punya business sendiri — device bisa dipakai gantian (lihat
+  // catatan INVITE_MAX_AGE_MS di atas), jadi kode yang nyangkut dari
+  // sesi SEBELUMNYA (mis. owner lupa logout, lalu staf lain login di HP
+  // yang sama) tidak boleh diam-diam diabaikan ATAU diam-diam di-redeem
+  // — harus selalu ditanya eksplisit, dicek SEBELUM gate `!business` di
+  // bawah (bukan cuma untuk akun yang belum punya business).
+  if (inviteCode && !inviteDismissed) {
+    return (
+      <InviteConfirmScreen
+        session={session}
+        code={inviteCode}
+        onJoined={() => {
+          clearInviteCode();
+          setInviteCode(null);
+          refreshBusiness();
+        }}
+        onDismiss={() => {
+          clearInviteCode();
+          setInviteCode(null);
+          setInviteDismissed(true);
+        }}
+      />
+    );
+  }
 
   // Cuma blank total di load awal (belum ada data business sama sekali) —
   // refresh() dipanggil ulang setelah update (mis. simpan Info Usaha) juga
@@ -133,20 +213,6 @@ function App() {
   }
 
   if (!business) {
-    if (inviteCode && !inviteSkipped) {
-      return (
-        <RedeemInviteScreen
-          session={session}
-          code={inviteCode}
-          onJoined={() => {
-            clearInviteCodeFromUrl();
-            setInviteCode(null);
-            refreshBusiness();
-          }}
-          onSkip={() => setInviteSkipped(true)}
-        />
-      );
-    }
     return <OnboardingScreen onCreated={refreshBusiness} />;
   }
 

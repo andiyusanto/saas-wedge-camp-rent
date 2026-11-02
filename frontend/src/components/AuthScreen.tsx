@@ -71,7 +71,12 @@ function InviteBanner({ inviteCode }: { inviteCode: string }) {
 }
 
 function AuthForm({ inviteCode }: { inviteCode: string | null }) {
-  const [mode, setMode] = useState<'masuk' | 'daftar' | 'lupa'>('masuk');
+  // Temuan Andi (2 Nov 2026): penerima undangan hampir selalu BELUM
+  // punya akun — default ke mode Daftar begitu ada ?invite= di URL,
+  // bukan Masuk (default lama). Tanpa ?invite=, perilaku tidak berubah
+  // (tetap default Masuk). Link "Sudah punya akun? Masuk" tetap ada buat
+  // yang kebetulan sudah pernah daftar.
+  const [mode, setMode] = useState<'masuk' | 'daftar' | 'lupa'>(inviteCode ? 'daftar' : 'masuk');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState<string | null>(null);
@@ -91,7 +96,17 @@ function AuthForm({ inviteCode }: { inviteCode: string | null }) {
       const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
       if (signInError) setError(signInError.message);
     } else {
-      const { error: signUpError } = await supabase.auth.signUp({ email, password });
+      // Review koordinator (2 Nov 2026): lapis kedua buat masalah kode
+      // undangan hilang setelah klik link konfirmasi email — emailRedirectTo
+      // membawa `?invite=...` di URL redirect Supabase SENDIRI (ditambah
+      // token sesi oleh Supabase sebagai query/hash tambahan, bukan
+      // menimpa yang sudah ada), independen dari localStorage (App.tsx)
+      // yang cuma menutupi kasus browser/device yang sama. Dua-duanya
+      // tidak saling bergantung — kalau satu gagal (mis. localStorage
+      // diblokir di private browsing), yang satu lagi tetap menutupi.
+      const redirectBase = `${window.location.origin}${window.location.pathname}`;
+      const emailRedirectTo = inviteCode ? `${redirectBase}?invite=${encodeURIComponent(inviteCode)}` : redirectBase;
+      const { error: signUpError } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo } });
       if (signUpError) {
         setError(signUpError.message);
       } else {
