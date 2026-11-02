@@ -346,8 +346,8 @@ export function EtalaseOnlineScreen({
         </h2>
         <p className="text-sm text-[#6E6853] leading-relaxed">
           Halaman publik read-only berisi katalog alat &amp; kontak usahamu — bisa dilihat siapa saja lewat link,
-          tanpa perlu login. Transaksi tetap manual lewat WhatsApp, <strong>bukan toko online/checkout</strong>{' '}
-          (itu tab "Toko Online" terpisah, masih rencana masa depan yang belum dibangun).
+          tanpa perlu login. Transaksi tetap manual lewat WhatsApp, <strong>bukan toko online/checkout</strong> —
+          pembayaran online belum tersedia, pembayaran tetap langsung ke rekening/QRIS/tunai milikmu.
         </p>
 
         <div className="space-y-3 pt-2 border-t border-[#E6E1D2]">

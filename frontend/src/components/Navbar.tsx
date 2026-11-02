@@ -4,6 +4,14 @@ import type { MemberRole } from '../hooks/useBusiness';
 
 export type Tab = 'kalender' | 'tracking' | 'alat' | 'tim' | 'riwayat' | 'etalase-online' | 'toko-online' | 'panduan' | 'admin' | 'langganan';
 
+// Disembunyikan dari Navbar sejak 2 Nov 2026 (permintaan Andi) — maknanya
+// sudah tumpang-tindih dengan Pesanan Online (bagian 6/8b CLAUDE.md), dan
+// pemrosesan pembayaran online TETAP non-goal terlepas dari ini (lihat
+// CLAUDE.md bagian 8). Komponennya sendiri (OnlineStoreScreen.tsx)
+// SENGAJA tidak dihapus — satu flag ini saja yang perlu diubah balik ke
+// `true` kalau fitur ini mau ditampilkan lagi nanti.
+export const SHOW_TOKO_ONLINE_TAB = false;
+
 const TABS: { id: Tab; label: string; icon: typeof Calendar; ownerOnly?: boolean; adminOnly?: boolean }[] = [
   { id: 'kalender', label: 'Kalender Ketersediaan', icon: Calendar },
   { id: 'tracking', label: 'Transaksi Aktif', icon: ShieldAlert },
@@ -15,15 +23,16 @@ const TABS: { id: Tab; label: string; icon: typeof Calendar; ownerOnly?: boolean
   // OnlineStoreScreen.tsx & EtalaseOnlineScreen.tsx. Ditaruh berdekatan
   // di navbar supaya hubungannya tetap terasa tanpa disatukan.
   //
-  // Label tab ini sengaja "Etalase & Pesanan" (permintaan Andi 31 Okt
-  // 2026, setelah fitur Pesanan Online dari Etalase tahap 4 dibangun) —
-  // beda dari judul layar/kartu di dalamnya ("Etalase Online"/"Pesanan
+  // Label tab ini sengaja "Etalase & Pesanan Online" (direvisi Andi 2
+  // Nov 2026 dari "Etalase & Pesanan", permintaan asli 31 Okt 2026
+  // setelah fitur Pesanan Online dari Etalase tahap 4 dibangun) — beda
+  // dari judul layar/kartu di dalamnya ("Etalase Online"/"Pesanan
   // Online" tetap dipakai di situ, cuma label tab navbar ini yang
   // berubah) supaya vendor yang belum pernah buka tab ini tahu dari
   // navbar sendiri bahwa ada fitur pesanan di dalamnya, bukan cuma
-  // etalase pasif — dipersingkat dari draf awal "Etalase dan Pemesanan
-  // Online" supaya tetap muat rapi di scroller tab HP.
-  { id: 'etalase-online', label: 'Etalase & Pesanan', icon: Store, ownerOnly: true },
+  // etalase pasif. Diverifikasi tetap muat satu baris di scroller tab
+  // HP pada lebar 390px.
+  { id: 'etalase-online', label: 'Etalase & Pesanan Online', icon: Store, ownerOnly: true },
   { id: 'tim', label: 'Kelola Usaha', icon: Users, ownerOnly: true },
   { id: 'toko-online', label: 'Toko Online', icon: Globe, ownerOnly: true },
   { id: 'langganan', label: 'Langganan', icon: CreditCard, ownerOnly: true },
@@ -66,7 +75,9 @@ export function Navbar({
   // (migration 044), independen dari role owner/karyawan mana pun.
   isAppAdmin?: boolean;
 }) {
-  const visibleTabs = TABS.filter((t) => (!t.ownerOnly || role === 'owner') && (!t.adminOnly || isAppAdmin));
+  const visibleTabs = TABS.filter(
+    (t) => (!t.ownerOnly || role === 'owner') && (!t.adminOnly || isAppAdmin) && (t.id !== 'toko-online' || SHOW_TOKO_ONLINE_TAB),
+  );
   return (
     <header className="sticky top-0 z-30 bg-[#2B4739] text-white shadow-md border-b border-[#1E3429]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { BookOpen, MessageCircle } from 'lucide-react';
 import { getWhatsAppShareUrl } from '../utils/formatters';
+import { SHOW_TOKO_ONLINE_TAB } from './Navbar';
 
 // Panduan pemakaian in-app, mengikuti alur fitur nyata di Sewalog. Jaga tetap
 // sinkron kalau alur di tab lain berubah (label tombol, urutan langkah, dsb).
@@ -101,6 +102,11 @@ const TOC: { id: string; num: string; title: string }[] = [
   { id: 'g-7', num: '7', title: 'Riwayat Transaksi' },
   { id: 'g-8', num: '8', title: 'Etalase Online' },
   { id: 'g-8b', num: '8b', title: 'Pesanan Online' },
+  // Tab-nya sendiri disembunyikan dari Navbar sejak 2 Nov 2026 (lihat
+  // SHOW_TOKO_ONLINE_TAB, Navbar.tsx) — entri TOC & Section-nya ikut
+  // disembunyikan di bawah (filter saat render), bukan dihapus, supaya
+  // konsisten: tidak ada gunanya mengiklankan Panduan untuk tab yang
+  // tidak bisa diakses sama sekali.
   { id: 'g-9', num: '9', title: 'Toko Online' },
   { id: 'g-a', num: 'A', title: 'Catatan Penting' },
 ];
@@ -123,7 +129,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
 
       <div className="bg-white border border-[#DBD5C1] rounded-2xl p-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
-          {TOC.map((t) => (
+          {TOC.filter((t) => t.id !== 'g-9' || SHOW_TOKO_ONLINE_TAB).map((t) => (
             <a key={t.id} href={`#${t.id}`} className="text-xs font-semibold text-[#26302B] hover:text-[#2B4739] hover:underline py-0.5">
               <span className="font-mono text-[#A65C2A] mr-1.5">{t.num}</span>
               {t.title}
@@ -319,14 +325,14 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         <p>
           Bagian <Ui>Info Usaha</Ui> di paling atas tab ini untuk ubah nama usaha, nama pemilik, no. telepon, alamat
           usaha, dan toleransi telat (lihat bagian 1). Alamat di sini ikut tercetak otomatis di struk WhatsApp dan
-          Nota Sewa cetak/PDF kalau diisi — beda dari alamat di tab <Ui>Etalase &amp; Pesanan</Ui> (bagian 8) yang tampil
+          Nota Sewa cetak/PDF kalau diisi — beda dari alamat di tab <Ui>Etalase &amp; Pesanan Online</Ui> (bagian 8) yang tampil
           publik ke siapa saja, alamat di sini murni buat kebutuhan internal/struk.
         </p>
         <p className="font-bold text-xs mt-2">Cara Hitung Durasi Sewa</p>
         <p>
           Pengaturan ini juga ada di kartu <Ui>Info Usaha</Ui>, di bawah Toleransi telat — menentukan berapa "hari"
           yang dihitung untuk harga sewa, struk, nota, dan denda telat bertingkat (bagian 3 &amp; 5) di SELURUH
-          aplikasi, termasuk Etalase &amp; Pesanan (bagian 8/8b).
+          aplikasi, termasuk Etalase &amp; Pesanan Online (bagian 8/8b).
         </p>
         <FieldsTable
           rows={[
@@ -467,7 +473,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         kicker="Pelanggan bisa kirim formulir pesanan langsung dari Etalase — tetap kamu yang Konfirmasi lewat Catat Transaksi biasa, bukan checkout otomatis."
       >
         <p>
-          Semua pengaturan ada di tab <Ui>Etalase &amp; Pesanan</Ui>, di kartu "Pesanan Online" (di bawah kartu
+          Semua pengaturan ada di tab <Ui>Etalase &amp; Pesanan Online</Ui>, di kartu "Pesanan Online" (di bawah kartu
           Etalase Online). Urutan menyalakannya:
         </p>
         <Steps
@@ -553,21 +559,23 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         </p>
       </Section>
 
-      <Section id="g-9" num="9" title="Toko Online" kicker="Belum jadi fitur — halaman ini buat lihat seberapa banyak pemilik usaha yang tertarik.">
-        <p>
-          Tab ini menjelaskan rencana <strong>toko online berbayar</strong> per usaha (mis.{' '}
-          <span className="font-mono text-xs">app.sewalog.com/nama-tokomu</span>) supaya pelanggan bisa lihat
-          ketersediaan dan transaksi <strong>sekaligus bayar online</strong> sendiri tanpa chat WhatsApp dulu.
-          Fiturnya <strong>belum dibangun</strong> — tab ini sengaja ditampilkan lebih dulu buat lihat seberapa
-          banyak pemilik usaha yang tertarik, lewat tombol <Ui>Tertarik? Kasih Tahu Kami</Ui> yang membuka WhatsApp.
-        </p>
-        <Note>
-          Beda dari <Ui>Etalase Online</Ui> (bagian 8) yang murni etalase informasi dan sudah bisa dipakai sekarang
-          — tab ini soal transaksi/pembayaran online sungguhan, yang butuh evaluasi lebih dulu (lisensi, kesiapan
-          pilot) sebelum dibangun.
-        </Note>
-        <Note>Sama seperti Kelola Usaha, tab ini cuma terlihat dan bisa diakses oleh pemilik.</Note>
-      </Section>
+      {SHOW_TOKO_ONLINE_TAB && (
+        <Section id="g-9" num="9" title="Toko Online" kicker="Belum jadi fitur — halaman ini buat lihat seberapa banyak pemilik usaha yang tertarik.">
+          <p>
+            Tab ini menjelaskan rencana <strong>toko online berbayar</strong> per usaha (mis.{' '}
+            <span className="font-mono text-xs">app.sewalog.com/nama-tokomu</span>) supaya pelanggan bisa lihat
+            ketersediaan dan transaksi <strong>sekaligus bayar online</strong> sendiri tanpa chat WhatsApp dulu.
+            Fiturnya <strong>belum dibangun</strong> — tab ini sengaja ditampilkan lebih dulu buat lihat seberapa
+            banyak pemilik usaha yang tertarik, lewat tombol <Ui>Tertarik? Kasih Tahu Kami</Ui> yang membuka WhatsApp.
+          </p>
+          <Note>
+            Beda dari <Ui>Etalase Online</Ui> (bagian 8) yang murni etalase informasi dan sudah bisa dipakai sekarang
+            — tab ini soal transaksi/pembayaran online sungguhan, yang butuh evaluasi lebih dulu (lisensi, kesiapan
+            pilot) sebelum dibangun.
+          </Note>
+          <Note>Sama seperti Kelola Usaha, tab ini cuma terlihat dan bisa diakses oleh pemilik.</Note>
+        </Section>
+      )}
 
       <Section id="g-a" num="A." title="Catatan Penting">
         <ul className="list-disc pl-5 space-y-1.5 text-xs text-[#26302B]">
