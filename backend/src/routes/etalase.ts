@@ -1194,32 +1194,63 @@ document.addEventListener('keydown', function (e) {
     var listEl = document.getElementById('cart-items-list');
     var totalPrice = 0;
     var days = orderDates.start && orderDates.end ? rentalDaysCount(orderDates.start, orderDates.end) : 1;
-    listEl.innerHTML = cart.map(function (c, idx) {
+
+    // Review -c1 (security): c.name datang dari btn.dataset.itemName, yang
+    // SUDAH DI-DECODE browser dari atribut HTML yang di-escape SSR — kalau
+    // dibangun lewat string concat + innerHTML seperti sebelumnya, nama
+    // alat berisi markup (mis. diketik vendor sendiri, atau lolos dari
+    // Impor Excel) akan DIEKSEKUSI ULANG sebagai HTML/script di halaman
+    // ini (stored XSS lintas-tenant, dijalankan di domain Sewalog sendiri
+    // ke pelanggan vendor lain). Dibangun lewat createElement+textContent
+    // di sini — textContent TIDAK PERNAH mem-parsing isinya sebagai HTML,
+    // apa pun isinya (termasuk "<img onerror=...>") tampil sebagai teks
+    // literal apa adanya. Listener qty +/- juga dipasang LANGSUNG ke
+    // tombol yang baru dibuat (closure atas idx), bukan event delegation
+    // lewat data-idx seperti sebelumnya — sama amannya, cuma lebih
+    // sederhana sekarang sudah tidak ada string HTML yang disusun manual.
+    listEl.innerHTML = '';
+    cart.forEach(function (c, idx) {
       var subtotal = computeItemRentalPrice(c.rates, days) * c.quantity;
       totalPrice += subtotal;
-      return '<div class="cart-row">' +
-        '<span>' + c.name + '</span>' +
-        '<div class="qty-stepper">' +
-          '<button type="button" data-action="dec" data-idx="' + idx + '">&minus;</button>' +
-          '<span>' + c.quantity + '</span>' +
-          '<button type="button" data-action="inc" data-idx="' + idx + '">+</button>' +
-        '</div>' +
-      '</div>';
-    }).join('');
-    document.getElementById('cart-total-price').textContent = formatIDRClient(totalPrice);
 
-    listEl.querySelectorAll('button[data-action]').forEach(function (b) {
-      b.addEventListener('click', function () {
-        var idx = Number(b.getAttribute('data-idx'));
-        var action = b.getAttribute('data-action');
-        if (action === 'inc' && cart[idx].quantity < cart[idx].remaining) cart[idx].quantity++;
-        if (action === 'dec') {
-          cart[idx].quantity--;
-          if (cart[idx].quantity <= 0) cart.splice(idx, 1);
-        }
+      var row = document.createElement('div');
+      row.className = 'cart-row';
+
+      var nameSpan = document.createElement('span');
+      nameSpan.textContent = c.name;
+      row.appendChild(nameSpan);
+
+      var stepper = document.createElement('div');
+      stepper.className = 'qty-stepper';
+
+      var decBtn = document.createElement('button');
+      decBtn.type = 'button';
+      decBtn.textContent = '−';
+      decBtn.addEventListener('click', function () {
+        cart[idx].quantity--;
+        if (cart[idx].quantity <= 0) cart.splice(idx, 1);
         renderCart();
       });
+      stepper.appendChild(decBtn);
+
+      var qtySpan = document.createElement('span');
+      qtySpan.textContent = String(c.quantity);
+      stepper.appendChild(qtySpan);
+
+      var incBtn = document.createElement('button');
+      incBtn.type = 'button';
+      incBtn.textContent = '+';
+      incBtn.addEventListener('click', function () {
+        if (cart[idx].quantity < cart[idx].remaining) cart[idx].quantity++;
+        renderCart();
+      });
+      stepper.appendChild(incBtn);
+
+      row.appendChild(stepper);
+      listEl.appendChild(row);
     });
+
+    document.getElementById('cart-total-price').textContent = formatIDRClient(totalPrice);
   }
 
   document.querySelectorAll('.pesan-btn').forEach(function (btn) {
