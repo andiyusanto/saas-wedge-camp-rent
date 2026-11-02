@@ -88,6 +88,30 @@ router.post('/bookings', async (req, res) => {
     return;
   }
 
+  // Cara hitung durasi sewa (migration 049) — SELALU dibaca dari
+  // businesses SERVER-SIDE (tidak pernah dipercaya dari body request),
+  // dipakai dua hal: (1) tolak ambil=kembali hari sama kalau per_malam
+  // (sama seperti Bilbo — frontend NewBookingModal juga sudah mencegah
+  // ini di date picker, ini jaring pengaman server), (2) disimpan
+  // sebagai SNAPSHOT di baris bookings yang dibuat, supaya kalau vendor
+  // ganti pengaturan ini belakangan, transaksi yang SUDAH dibuat (nota,
+  // struk WA, denda telat bertingkat) tidak pernah ikut berubah.
+  const { data: bizRow, error: bizError } = await supabase
+    .from('businesses')
+    .select('rental_day_mode')
+    .eq('id', businessId)
+    .maybeSingle();
+
+  if (bizError || !bizRow) {
+    res.status(400).json({ error: bizError?.message ?? 'Business tidak ditemukan' });
+    return;
+  }
+
+  if (bizRow.rental_day_mode === 'per_malam' && end_date === start_date) {
+    res.status(400).json({ error: 'Tanggal ambil dan kembali tidak boleh di hari yang sama.' });
+    return;
+  }
+
   const { data: itemRows, error: itemsError } = await supabase
     .from('items')
     .select('id, name, total_units, price_per_day, readiness_hours, day2_rate, day3_rate, day4_rate, day5_rate, extra_day_rate')
@@ -187,6 +211,7 @@ router.post('/bookings', async (req, res) => {
       picked_up_at: pickedUpAt,
       total_price: Number(total_price) || 0,
       dp_paid: Number(dp_paid) || 0,
+      rental_day_mode: bizRow.rental_day_mode,
     })
     .select('id, booking_number, status')
     .single();

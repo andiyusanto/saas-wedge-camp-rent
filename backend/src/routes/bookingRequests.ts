@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { createAnonClient } from '../lib/supabaseClient.js';
-import { todayInWIB } from '../lib/dates.js';
+import { todayInWIB, rentalDuration } from '../lib/dates.js';
 import { computeItemRentalPrice } from '../lib/pricing.js';
 
 const router = Router();
@@ -233,7 +233,18 @@ router.post('/public/booking-requests/:slug', perIpLimiter, async (req, res) => 
     pay_qris_enabled: boolean;
     pay_cash_enabled: boolean;
     confirmation_deadline_hours: number;
+    rental_day_mode: 'per_malam' | 'per_hari_kalender';
   };
+
+  // Cara hitung durasi sewa (migration 049) — tolak ambil=kembali hari
+  // sama kalau per_malam, SEBELUM dihitung apa pun (estimasi harga,
+  // expiresAt, dsb) — pesan ramah di sini, create_booking_request
+  // sendiri juga menolak dengan pesan server mentah sebagai jaring
+  // pengaman defense-in-depth (lihat migration 049).
+  if (page.rental_day_mode === 'per_malam' && start_date === end_date) {
+    res.status(400).json({ error: 'Tanggal ambil dan kembali tidak boleh di hari yang sama.' });
+    return;
+  }
 
   if (
     (payment_method === 'transfer' && !page.pay_transfer_enabled) ||
@@ -279,11 +290,11 @@ router.post('/public/booking-requests/:slug', perIpLimiter, async (req, res) => 
   }
   const availability = availabilityRaw as unknown as PublicAvailabilityItem[];
 
-  // rentalDays() inclusive (ambil=kembali hari sama = 1 hari) — dihitung
-  // ulang di sini (bukan reuse dateRange, yang sekarang tidak diimpor)
-  // karena hanya butuh COUNT hari, bukan daftar tanggalnya satu-satu.
-  const rentalDaysCount =
-    (new Date(`${end_date}T00:00:00Z`).getTime() - new Date(`${start_date}T00:00:00Z`).getTime()) / 86_400_000 + 1;
+  // Cara hitung durasi sewa (migration 049) — pakai setting LIVE toko
+  // ini (page.rental_day_mode), karena pesanan ini BARU DIBUAT sekarang
+  // (belum ada baris bookings untuk disnapshot — itu baru terjadi saat
+  // vendor Konfirmasi lewat Catat Transaksi biasa, lihat routes/bookings.ts).
+  const rentalDaysCount = rentalDuration(start_date, end_date, page.rental_day_mode);
   let estimatedPrice = 0;
 
   for (const requested of requestedItems) {

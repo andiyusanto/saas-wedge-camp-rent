@@ -20,7 +20,7 @@ export function InvoiceModal({
 }) {
   if (!isOpen || !data) return null;
 
-  const days = rentalDays(data.startDate, data.endDate);
+  const days = rentalDays(data.startDate, data.endDate, data.rentalDayMode);
   const remaining = Math.max(0, data.totalPrice - data.dpPaid);
   const totalFines = data.fines.reduce((sum, f) => sum + f.amount, 0);
 

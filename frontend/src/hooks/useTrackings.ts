@@ -1,7 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import { apiFetch } from '../lib/api';
 import { useApiResource } from './useApiResource';
-import type { ReceiptData } from '../utils/formatters';
+import type { ReceiptData, RentalDayMode } from '../utils/formatters';
 
 export type TrackingBooking = {
   id: string;
@@ -32,6 +32,9 @@ export type TrackingBooking = {
   history: { status: string; changed_by_name: string; created_at: string }[];
   total_price: number;
   dp_paid: number;
+  // Snapshot (migration 049) — mode saat booking ini DIBUAT, null untuk
+  // baris dari sebelum fitur ini (ditafsirkan 'per_hari_kalender').
+  rental_day_mode: RentalDayMode | null;
 };
 
 type TrackingsResponse = { bookings: TrackingBooking[]; tolerance_hours: number };
@@ -62,6 +65,7 @@ export function buildReceiptData(
     businessName,
     businessAddress,
     businessLogoUrl,
+    rentalDayMode: b.rental_day_mode,
   };
 }
 

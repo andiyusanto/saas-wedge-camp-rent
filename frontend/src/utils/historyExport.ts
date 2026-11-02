@@ -77,7 +77,7 @@ function buildPerAlatRows(bookingsExcludingCancelled: HistoryBooking[]): PerAlat
   const map = new Map<string, PerAlatRow & { bookingIds: Set<string> }>();
 
   for (const b of bookingsExcludingCancelled) {
-    const days = rentalDays(b.start_date, b.end_date);
+    const days = rentalDays(b.start_date, b.end_date, b.rental_day_mode);
     for (const item of b.items) {
       const key = item.item_id ?? item.name;
       const existing = map.get(key);

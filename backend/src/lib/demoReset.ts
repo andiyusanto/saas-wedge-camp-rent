@@ -55,11 +55,23 @@ function nextWeekend(): { saturday: string; sunday: string } {
   return { saturday, sunday: addDays(saturday, 1) };
 }
 
-// Sama persis dengan rentalDays() di frontend/src/utils/formatters.ts.
-function rentalDays(start: string, end: string): number {
+// Sama persis dengan rentalDays() di frontend/src/utils/formatters.ts —
+// mode HARUS cocok dengan businesses.rental_day_mode toko demo (lihat
+// DEMO_RENTAL_DAY_MODE di bawah), supaya total_price yang dihitung di
+// sini (lalu dikirim ke POST /bookings sungguhan) konsisten dengan
+// snapshot yang backend simpan di baris bookings yang dibuat.
+function rentalDays(start: string, end: string, mode: 'per_malam' | 'per_hari_kalender'): number {
   const ms = new Date(`${end}T00:00:00`).getTime() - new Date(`${start}T00:00:00`).getTime();
-  return Math.max(1, Math.round(ms / 86_400_000) + 1);
+  const nights = Math.round(ms / 86_400_000);
+  return mode === 'per_malam' ? Math.max(1, nights) : Math.max(1, nights + 1);
 }
+
+// Cara hitung durasi sewa (migration 049) — toko demo SENGAJA dibiarkan
+// pakai DEFAULT 'per_malam' (tidak diatur eksplisit lewat PATCH apa
+// pun di sini, kolom businesses.rental_day_mode sudah default ke ini),
+// jadi seed data di sini juga dihitung dengan mode yang sama supaya
+// total_price yang dikirim konsisten dengan snapshot yang backend buat.
+const DEMO_RENTAL_DAY_MODE: 'per_malam' | 'per_hari_kalender' = 'per_malam';
 
 type AuthSession = { access_token: string; user: { id: string; email: string } };
 
@@ -465,7 +477,7 @@ export async function resetDemoData(): Promise<DemoResetResult> {
     deposit: { type: string; amount?: number; note?: string };
     entries: [string, number][];
   }) {
-    const days = rentalDays(params.start_date, params.end_date);
+    const days = rentalDays(params.start_date, params.end_date, DEMO_RENTAL_DAY_MODE);
     const subtotalFor = (code: string, qty: number) => qty * computeItemRentalPrice(items[code], days);
     const total_price = params.entries.reduce((sum, [code, qty]) => sum + subtotalFor(code, qty), 0);
 

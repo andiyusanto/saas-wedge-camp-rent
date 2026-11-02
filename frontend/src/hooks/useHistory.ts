@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { todayStr } from '../utils/formatters';
+import type { RentalDayMode } from '../utils/formatters';
 
 export type HistoryBookingItem = {
   item_id: string | null;
@@ -25,6 +26,9 @@ export type HistoryBooking = {
   customer: { name: string; phone: string | null } | null;
   items: HistoryBookingItem[];
   penalties: { type: string; amount: number; item_id: string | null }[];
+  // Snapshot (migration 049) — mode saat booking ini DIBUAT, null untuk
+  // baris dari sebelum fitur ini (ditafsirkan 'per_hari_kalender').
+  rental_day_mode: RentalDayMode | null;
 };
 
 // subtotal/price_at_booking (migration 034) dan penalties.item_id (migration
@@ -32,7 +36,7 @@ export type HistoryBooking = {
 // utils/historyExport.ts. Pola fallback subtotal null sama persis
 // InvoiceModal.tsx (baris lama sebelum migration 034, tidak di-backfill).
 const SELECT_FIELDS =
-  'id, booking_number, status, start_date, end_date, total_price, dp_paid, customers(name, phone), booking_items(quantity, subtotal, price_at_booking, items(id, name, category, variant, size, color)), penalties(type, amount, item_id)';
+  'id, booking_number, status, start_date, end_date, total_price, dp_paid, rental_day_mode, customers(name, phone), booking_items(quantity, subtotal, price_at_booking, items(id, name, category, variant, size, color)), penalties(type, amount, item_id)';
 
 type RawBooking = {
   id: string;
@@ -42,6 +46,7 @@ type RawBooking = {
   end_date: string;
   total_price: number;
   dp_paid: number;
+  rental_day_mode: RentalDayMode | null;
   customers: { name: string; phone: string | null } | null;
   booking_items:
     | {
@@ -70,6 +75,7 @@ function mapBooking(row: RawBooking): HistoryBooking {
     end_date: row.end_date,
     total_price: row.total_price,
     dp_paid: row.dp_paid,
+    rental_day_mode: row.rental_day_mode,
     customer: row.customers,
     items: (row.booking_items ?? []).map((bi) => ({
       item_id: bi.items?.id ?? null,

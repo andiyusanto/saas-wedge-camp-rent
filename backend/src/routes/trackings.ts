@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { createRequestClient } from '../lib/supabaseClient.js';
 import { computeDueAt, hoursLate, computeLateFee, computeTieredLateFee, lateDaysEquivalent } from '../lib/penalty.js';
-import { dateRange } from '../lib/dates.js';
+import { rentalDuration } from '../lib/dates.js';
 import { logBookingStatus } from '../lib/audit.js';
 
 const router = Router();
@@ -76,7 +76,7 @@ router.get('/trackings', async (req, res) => {
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select(
-      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_url, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_status_history(status, changed_by_name, created_at)',
+      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_url, rental_day_mode, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_status_history(status, changed_by_name, created_at)',
     )
     .in('status', ['dipesan', 'aktif'])
     .order('end_date');
@@ -91,7 +91,11 @@ router.get('/trackings', async (req, res) => {
   const result = (bookings ?? []).map((b) => {
     const bookingItems = (b.booking_items ?? []) as unknown as BookingItemJoin[];
     const dailyRate = bookingItems.reduce((sum, bi) => sum + bi.quantity * bi.price_at_booking, 0);
-    const rentDuration = dateRange(b.start_date, b.end_date).length;
+    // Snapshot (migration 049) — b.rental_day_mode TETAP seperti saat
+    // booking ini DIBUAT, bukan setting businesses.rental_day_mode yang
+    // mungkin sudah vendor ubah sesudahnya. null (baris sebelum fitur
+    // ini) ditafsirkan 'per_hari_kalender' oleh rentalDuration() sendiri.
+    const rentDuration = rentalDuration(b.start_date, b.end_date, b.rental_day_mode);
 
     // 'dipesan' belum diambil fisik — belum relevan hitung telat.
     const isPendingPickup = b.status === 'dipesan';
@@ -160,6 +164,7 @@ router.get('/trackings', async (req, res) => {
         .sort((x, y) => x.created_at.localeCompare(y.created_at)),
       total_price: b.total_price,
       dp_paid: b.dp_paid,
+      rental_day_mode: b.rental_day_mode,
     };
   });
 

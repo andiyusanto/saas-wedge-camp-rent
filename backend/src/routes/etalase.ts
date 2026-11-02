@@ -192,6 +192,7 @@ router.get('/api/public/etalase/:slug/ordering-config', async (req, res) => {
     pay_cash_enabled: boolean;
     terms_content: string | null;
     terms_version_id: string | null;
+    rental_day_mode: 'per_malam' | 'per_hari_kalender';
   };
   res.json({
     enabled: true,
@@ -209,6 +210,11 @@ router.get('/api/public/etalase/:slug/ordering-config', async (req, res) => {
     // "terlambat" itu jarang terjadi di awal.
     terms_content: page.terms_content,
     terms_version_id: page.terms_version_id,
+    // Cara hitung durasi sewa (migration 049) — mode LIVE toko ini,
+    // dipakai form pesanan untuk batas minimum tanggal kembali + hitung
+    // perkiraan harga yang sama persis dengan yang dihitung ulang server
+    // (bookingRequests.ts) saat submit.
+    rental_day_mode: page.rental_day_mode,
   });
 });
 
@@ -969,13 +975,23 @@ document.addEventListener('keydown', function (e) {
   var btn = document.getElementById('avail-check');
   var status = document.getElementById('avail-status');
 
-  // Begitu tanggal ambil diisi, default-kan tanggal kembali ke hari yang
-  // sama kalau belum diisi/masih lebih awal — kebanyakan pengunjung cuma
-  // mau isi satu tanggal dulu buat cek sewa 1 hari.
+  function addOneDayStr(dateStr) {
+    var d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() + 1);
+    return localDateStr(d);
+  }
+
+  // Begitu tanggal ambil diisi, default-kan tanggal kembali — hari yang
+  // sama kalau mode per hari kalender (kebanyakan pengunjung cuma mau
+  // isi satu tanggal dulu buat cek sewa 1 hari), atau BESOKNYA kalau
+  // per malam (ambil=kembali hari sama tidak valid di mode itu, sama
+  // seperti Bilbo — lihat rentalDayMode, migration 049).
   startInput.addEventListener('change', function () {
-    if (!endInput.value || endInput.value < startInput.value) {
-      endInput.value = startInput.value;
+    var minEnd = rentalDayMode === 'per_malam' ? addOneDayStr(startInput.value) : startInput.value;
+    if (!endInput.value || endInput.value < minEnd) {
+      endInput.value = minEnd;
     }
+    endInput.min = minEnd;
   });
 
   // Threshold "sisa sedikit" ini SENGAJA disalin dari LOW_STOCK_RATIO di
@@ -1000,6 +1016,15 @@ document.addEventListener('keydown', function (e) {
     }
     if (end < start) {
       status.textContent = 'Tanggal kembali tidak boleh sebelum tanggal ambil.';
+      return;
+    }
+    // Cara hitung durasi sewa (migration 049) — kalau toko ini pakai
+    // per malam, tanggal ambil & kembali TIDAK BOLEH sama (beda dari
+    // per hari kalender yang menganggap itu sewa 1 hari). Pesan jelas
+    // di sini, bukan dibiarkan lolos ke submit lalu gagal dengan pesan
+    // server mentah (instruksi review -c1: jangan gagal diam-diam).
+    if (rentalDayMode === 'per_malam' && end === start) {
+      status.textContent = 'Tanggal ambil dan kembali tidak boleh di hari yang sama — pilih tanggal kembali minimal besoknya.';
       return;
     }
     status.textContent = 'Memuat ketersediaan...';
@@ -1064,6 +1089,11 @@ document.addEventListener('keydown', function (e) {
 
   var orderingEnabled = false;
   var paymentMethods = { transfer: false, qris: false, cash: false };
+  // Cara hitung durasi sewa (migration 049) — default aman SEBELUM
+  // ordering-config selesai dimuat adalah 'per_hari_kalender' (perilaku
+  // lama, paling longgar — tidak menolak apa pun sebelum nilai
+  // sebenarnya diketahui).
+  var rentalDayMode = 'per_hari_kalender';
   var cart = []; // [{item_id, name, quantity, remaining, rates: {...}}]
   var orderDates = { start: null, end: null };
   // Syarat & Ketentuan (migration 047/048) — diisi ulang tiap fetch
@@ -1079,6 +1109,7 @@ document.addEventListener('keydown', function (e) {
       .then(function (cfg) {
         orderingEnabled = !!(cfg && cfg.enabled);
         paymentMethods = (cfg && cfg.payment_methods) || paymentMethods;
+        rentalDayMode = (cfg && cfg.rental_day_mode) || 'per_hari_kalender';
         termsContent = (cfg && cfg.terms_content) || null;
         termsVersionId = (cfg && cfg.terms_version_id) || null;
         var termsSection = document.getElementById('order-terms-section');
@@ -1117,8 +1148,14 @@ document.addEventListener('keydown', function (e) {
     orderDates = { start: start, end: end };
   }
 
+  // Cara hitung durasi sewa (migration 049) — HARUS sama persis dengan
+  // rentalDuration() backend (backend/src/lib/dates.ts) yang dipakai
+  // bookingRequests.ts menghitung ulang p_estimated_price saat submit,
+  // supaya perkiraan yang dilihat pelanggan di sini tidak pernah beda
+  // dari yang benar-benar tersimpan di server.
   function rentalDaysCount(start, end) {
-    return Math.round((new Date(end + 'T00:00:00') - new Date(start + 'T00:00:00')) / 86400000) + 1;
+    var nights = Math.round((new Date(end + 'T00:00:00') - new Date(start + 'T00:00:00')) / 86400000);
+    return rentalDayMode === 'per_malam' ? nights : nights + 1;
   }
 
   // Review -c1: rentang tanggal di header keranjang sebelumnya tampil

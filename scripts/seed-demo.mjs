@@ -96,11 +96,16 @@ function computeItemRentalPrice(rates, days) {
 }
 
 // Sama persis dengan rentalDays() di frontend/src/utils/formatters.ts —
-// jaga tetap sinkron kalau formulanya berubah di sana.
-function rentalDays(start, end) {
+// jaga tetap sinkron kalau formulanya berubah di sana. mode HARUS cocok
+// dengan businesses.rental_day_mode toko demo (DEMO_RENTAL_DAY_MODE di
+// bawah, lihat catatan sama di backend/src/lib/demoReset.ts).
+function rentalDays(start, end, mode) {
   const ms = new Date(`${end}T00:00:00`).getTime() - new Date(`${start}T00:00:00`).getTime();
-  return Math.max(1, Math.round(ms / 86_400_000) + 1);
+  const nights = Math.round(ms / 86_400_000);
+  return mode === 'per_malam' ? Math.max(1, nights) : Math.max(1, nights + 1);
 }
+
+const DEMO_RENTAL_DAY_MODE = 'per_malam';
 
 async function authRequest(path, body) {
   const res = await fetch(`${SUPABASE_URL}/auth/v1/${path}`, {
@@ -474,7 +479,7 @@ async function main() {
   console.log('-- Membuat transaksi contoh --');
 
   async function createBooking({ customer, customer_id, start_date, end_date, deposit, entries }) {
-    const days = rentalDays(start_date, end_date);
+    const days = rentalDays(start_date, end_date, DEMO_RENTAL_DAY_MODE);
     const subtotalFor = (code, qty) => qty * computeItemRentalPrice(items[code], days);
     const total_price = entries.reduce((sum, [code, qty]) => sum + subtotalFor(code, qty), 0);
 

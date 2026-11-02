@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { Store, CheckCircle2, Upload, X } from 'lucide-react';
 import type { Business, BusinessUpdateInput } from '../hooks/useBusiness';
+import type { RentalDayMode } from '../utils/formatters';
 import { useRegencies } from '../hooks/useRegencies';
 import { RegencySelect } from './RegencySelect';
 import { apiFetch } from '../lib/api';
@@ -28,11 +29,17 @@ export function BusinessInfoSection({
   const [regencyId, setRegencyId] = useState(business.regency_id ?? '');
   const { provinces, regencies } = useRegencies();
   const [toleranceHours, setToleranceHours] = useState(String(business.late_tolerance_hours));
+  const [rentalDayMode, setRentalDayMode] = useState<RentalDayMode>(business.rental_day_mode);
   const [logoUrl, setLogoUrl] = useState(business.logo_url ?? '');
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  // Review -c1: begitu vendor GANTI pengaturan ini, wajib ditegaskan
+  // bahwa transaksi LAMA tidak ikut berubah (snapshot per-transaksi,
+  // migration 049) — supaya tidak ada yang mengira mengubah setting ini
+  // akan mengubah ulang nota/denda transaksi yang sudah ada.
+  const [rentalDayModeJustChanged, setRentalDayModeJustChanged] = useState(false);
 
   // business bisa berubah dari luar (refresh setelah tab lain aktif) —
   // sinkronkan field kalau belum ada perubahan yang sedang diketik.
@@ -43,6 +50,7 @@ export function BusinessInfoSection({
     setAddress(business.address ?? '');
     setRegencyId(business.regency_id ?? '');
     setToleranceHours(String(business.late_tolerance_hours));
+    setRentalDayMode(business.rental_day_mode);
     setLogoUrl(business.logo_url ?? '');
   }, [business]);
 
@@ -86,6 +94,7 @@ export function BusinessInfoSection({
       regency_id: regencyId || null,
       late_tolerance_hours: Math.max(0, Number(toleranceHours) || 0),
       logo_url: logoUrl.trim() || null,
+      rental_day_mode: rentalDayMode,
     });
 
     setSubmitting(false);
@@ -94,6 +103,7 @@ export function BusinessInfoSection({
       return;
     }
     setSaved(true);
+    setRentalDayModeJustChanged(rentalDayMode !== business.rental_day_mode);
     setTimeout(() => setSaved(false), 2500);
   }
 
@@ -218,6 +228,41 @@ export function BusinessInfoSection({
         <p className="text-[11px] text-[#6E6853]">
           Toleransi telat: berapa jam setelah janji kembali sebelum transaksi dianggap terlambat dan mulai kena denda.
         </p>
+
+        <div className="flex flex-col gap-2 pt-2 border-t border-[#E6E1D2]">
+          <p className="text-sm font-semibold text-[#26302B]">Cara Hitung Durasi Sewa</p>
+          <label className="flex items-start gap-2 text-sm text-[#26302B]">
+            <input
+              type="radio"
+              checked={rentalDayMode === 'per_malam'}
+              onChange={() => setRentalDayMode('per_malam')}
+              className="mt-0.5 accent-[#2B4739]"
+            />
+            <span>
+              <strong>Per malam</strong> — ambil Sabtu, kembali Minggu = <strong>1 hari</strong>.
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-sm text-[#26302B]">
+            <input
+              type="radio"
+              checked={rentalDayMode === 'per_hari_kalender'}
+              onChange={() => setRentalDayMode('per_hari_kalender')}
+              className="mt-0.5 accent-[#2B4739]"
+            />
+            <span>
+              <strong>Per hari kalender</strong> — ambil Sabtu, kembali Minggu = <strong>2 hari</strong>.
+            </span>
+          </label>
+          <p className="text-[11px] text-[#6E6853]">
+            Tampilan di aplikasi selalu memakai kata "hari", apa pun pilihannya di sini. Cara ini dipakai untuk
+            menghitung harga sewa, struk, nota, dan denda telat bertingkat.
+          </p>
+          {rentalDayModeJustChanged && (
+            <p className="text-xs font-semibold text-[#A65C2A]">
+              Berlaku untuk transaksi baru. Transaksi lama tetap dihitung seperti saat dibuat.
+            </p>
+          )}
+        </div>
 
         {error && <p className="text-xs font-semibold text-[#A8412E]">{error}</p>}
 

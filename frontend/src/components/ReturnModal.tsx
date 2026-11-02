@@ -133,6 +133,7 @@ export function ReturnModal({
         status: body.status,
         fines: allFines,
         businessName,
+        rentalDayMode: booking.rental_day_mode,
       });
       window.open(getWhatsAppShareUrl(booking.customer.phone, receiptText), '_blank');
     }

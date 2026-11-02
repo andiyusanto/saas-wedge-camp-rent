@@ -51,13 +51,47 @@ export function todayStr(): string {
   return `${y}-${m}-${day}`;
 }
 
-// Durasi sewa inklusif hari ambil & kembali (ambil & kembali hari yang
-// sama = 1 hari sewa). Pakai Date lokal browser (perangkat vendor sudah
-// WIB), bukan toISOString/UTC — lihat catatan di backend/src/lib/dates.ts
-// soal jebakan pergeseran tanggal serupa.
-export function rentalDays(start: string, end: string): number {
+// Pakai Date lokal browser, pola sama seperti todayStr() — device vendor
+// fisik ada di WIB, jadi tidak perlu offset manual seperti versi backend
+// (backend/src/lib/dates.ts) yang jalan di server, mungkin beda zona.
+export function addDaysStr(dateStr: string, amount: number): string {
+  const d = new Date(`${dateStr}T00:00:00`);
+  d.setDate(d.getDate() + amount);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+export type RentalDayMode = 'per_malam' | 'per_hari_kalender';
+
+// Cara hitung durasi sewa jadi pengaturan per rental (migration 049,
+// keputusan Andi 2 Nov 2026) — `mode` WAJIB diisi eksplisit oleh
+// pemanggil (tidak ada default diam-diam), supaya tidak ada pemanggil
+// baru yang lupa dan diam-diam memakai perilaku lama.
+//
+// 'per_hari_kalender' = perilaku lama (inklusif, ambil & kembali hari
+// sama = 1 hari). 'per_malam' = jumlah malam murni (ambil=kembali hari
+// sama TIDAK VALID — dicegah di level form/API sebelum sampai sini,
+// fungsi ini tidak menolak, cuma menghitung).
+//
+// `mode` yang dipakai HARUS snapshot yang tersimpan di baris transaksi
+// (bookings.rental_day_mode, null untuk baris lama = diperlakukan
+// 'per_hari_kalender'), BUKAN pengaturan businesses.rental_day_mode
+// yang SEDANG berlaku — supaya nota/struk/denda transaksi lama tidak
+// pernah berubah kalau vendor ganti pengaturan ini belakangan. Satu-
+// satunya pengecualian: transaksi BARU yang sedang diisi di Catat
+// Transaksi (NewBookingModal) belum punya snapshot sama sekali, jadi
+// memakai pengaturan LIVE business saat itu (itu snapshot yang akan
+// dibuat begitu disimpan).
+//
+// Pakai Date lokal browser (perangkat vendor sudah WIB), bukan
+// toISOString/UTC — lihat catatan di backend/src/lib/dates.ts soal
+// jebakan pergeseran tanggal serupa.
+export function rentalDays(start: string, end: string, mode: RentalDayMode | null): number {
   const ms = new Date(`${end}T00:00:00`).getTime() - new Date(`${start}T00:00:00`).getTime();
-  return Math.max(1, Math.round(ms / 86_400_000) + 1);
+  const nights = Math.round(ms / 86_400_000);
+  return mode === 'per_malam' ? Math.max(1, nights) : Math.max(1, nights + 1);
 }
 
 // Harga bertingkat per-hari (migration 034, diadaptasi dari Bilbo-Outdoors
@@ -161,6 +195,10 @@ export type ReceiptData = {
   businessName: string;
   businessAddress?: string | null;
   businessLogoUrl?: string | null;
+  // Snapshot (migration 049) — null = transaksi dari sebelum fitur ini,
+  // ditafsirkan 'per_hari_kalender' oleh rentalDays(). Jangan pernah
+  // diisi dari businesses.rental_day_mode yang SEDANG berlaku.
+  rentalDayMode: RentalDayMode | null;
 };
 
 const BOOKING_STATUS_LABEL: Record<string, string> = {
@@ -176,7 +214,7 @@ export function bookingStatusLabel(status: string): string {
 }
 
 export function generateWhatsAppReceipt(data: ReceiptData): string {
-  const days = rentalDays(data.startDate, data.endDate);
+  const days = rentalDays(data.startDate, data.endDate, data.rentalDayMode);
   const itemsText = data.items
     .map((i) => `• ${i.name} (${i.quantity}x) = ${formatIDR(i.subtotal ?? i.price_per_day * i.quantity * days)}`)
     .join('\n');

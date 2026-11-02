@@ -14,6 +14,7 @@ import {
   formatIDR,
   formatDateIndo,
   rentalDays,
+  addDaysStr,
   todayStr,
   generateWhatsAppReceipt,
   getWhatsAppShareUrl,
@@ -178,8 +179,9 @@ export function NewBookingModal({
           : requestPrefill.customerPhone,
       );
     } else {
-      setStartDate(preselectedStartDate || todayStr());
-      setEndDate(preselectedStartDate || todayStr());
+      const initialStart = preselectedStartDate || todayStr();
+      setStartDate(initialStart);
+      setEndDate(business.rental_day_mode === 'per_malam' ? addDaysStr(initialStart, 1) : initialStart);
       setQuantities(preselectedItemId ? { [preselectedItemId]: 1 } : {});
       setCustomerName('');
       setCustomerPhone('');
@@ -196,7 +198,7 @@ export function NewBookingModal({
     setDepositAmount('');
     setDpPaid('0');
     setError(null);
-  }, [isOpen, preselectedItemId, preselectedStartDate, requestPrefill]);
+  }, [isOpen, preselectedItemId, preselectedStartDate, requestPrefill, business.rental_day_mode]);
 
   useEffect(() => {
     return () => {
@@ -204,7 +206,10 @@ export function NewBookingModal({
     };
   }, []);
 
-  const days = useMemo(() => rentalDays(startDate, endDate), [startDate, endDate]);
+  const days = useMemo(
+    () => rentalDays(startDate, endDate, business.rental_day_mode),
+    [startDate, endDate, business.rental_day_mode],
+  );
 
   const selectedEntries = useMemo(
     () => Object.entries(quantities).filter(([, qty]) => qty > 0),
@@ -363,6 +368,7 @@ export function NewBookingModal({
           status: body.status,
           fines: [],
           businessName: business.name,
+          rentalDayMode: business.rental_day_mode,
         });
         window.open(getWhatsAppShareUrl(customerPhone, receiptText), '_blank');
       } catch {
@@ -527,8 +533,10 @@ export function NewBookingModal({
                   required
                   value={startDate}
                   onChange={(e) => {
-                    setStartDate(e.target.value);
-                    if (e.target.value > endDate) setEndDate(e.target.value);
+                    const newStart = e.target.value;
+                    setStartDate(newStart);
+                    const minEnd = business.rental_day_mode === 'per_malam' ? addDaysStr(newStart, 1) : newStart;
+                    if (endDate < minEnd) setEndDate(minEnd);
                   }}
                   className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] font-semibold focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
                 />
@@ -538,7 +546,7 @@ export function NewBookingModal({
                 <input
                   type="date"
                   required
-                  min={startDate}
+                  min={business.rental_day_mode === 'per_malam' ? addDaysStr(startDate, 1) : startDate}
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] font-semibold focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
