@@ -261,6 +261,13 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           Aktif (bagian 5) — tidak perlu ketik ulang rincian secara manual. Ada juga tombol <Ui>Cetak Nota</Ui> di
           sebelahnya untuk versi cetak/PDF (lihat bagian 5).
         </Note>
+        <Note>
+          Cara tanggal ambil &amp; kembali dihitung jadi "berapa hari" tergantung pengaturan{' '}
+          <Ui>Cara Hitung Durasi Sewa</Ui> di tab Kelola Usaha (bagian 6) — default <strong>per malam</strong> (ambil
+          Sabtu, kembali Minggu = 1 hari, tanggal ambil &amp; kembali tidak boleh sama). Kalau usahamu pakai{' '}
+          <strong>per hari kalender</strong>, tanggal ambil &amp; kembali boleh sama (dihitung 1 hari) dan Sabtu-Minggu
+          jadi 2 hari.
+        </Note>
       </Section>
 
       <Section id="g-5" num="5" title="Transaksi Aktif" kicker="Daftar transaksi aktif — status pengambilan barang, jaminan yang ditahan, dan dua jenis denda dipisah eksplisit.">
@@ -313,15 +320,40 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           Bagian <Ui>Info Usaha</Ui> di paling atas tab ini untuk ubah nama usaha, nama pemilik, no. telepon, alamat
           usaha, dan toleransi telat (lihat bagian 1). Alamat di sini ikut tercetak otomatis di struk WhatsApp dan
           Nota Sewa cetak/PDF kalau diisi — beda dari alamat di tab <Ui>Etalase &amp; Pesanan</Ui> (bagian 8) yang tampil
-          publik ke siapa saja, alamat di sini murni buat kebutuhan internal/struk. Di bawahnya ada bagian{' '}
-          <Ui>Kelola Karyawan</Ui> untuk undang staf lewat link, tanpa perlu bikin username/password dari sisi
-          pemilik:
+          publik ke siapa saja, alamat di sini murni buat kebutuhan internal/struk.
+        </p>
+        <p className="font-bold text-xs mt-2">Cara Hitung Durasi Sewa</p>
+        <p>
+          Pengaturan ini juga ada di kartu <Ui>Info Usaha</Ui>, di bawah Toleransi telat — menentukan berapa "hari"
+          yang dihitung untuk harga sewa, struk, nota, dan denda telat bertingkat (bagian 3 &amp; 5) di SELURUH
+          aplikasi, termasuk Etalase &amp; Pesanan (bagian 8/8b).
+        </p>
+        <FieldsTable
+          rows={[
+            {
+              label: 'Per malam',
+              desc: 'DEFAULT untuk semua usaha. Ambil Sabtu, kembali Minggu = 1 hari. Tanggal ambil dan kembali TIDAK BOLEH sama (minimal beda 1 hari) — berlaku di Catat Transaksi maupun formulir Pesanan Online di Etalase.',
+            },
+            {
+              label: 'Per hari kalender',
+              desc: 'Cara lama. Ambil Sabtu, kembali Minggu = 2 hari. Ambil dan kembali di hari yang sama tetap boleh (dihitung 1 hari).',
+            },
+          ]}
+        />
+        <Note>
+          Tampilan di aplikasi selalu memakai kata "hari" (tidak pernah "malam"), apa pun pilihan di sini. Mengganti
+          pengaturan ini CUMA berlaku untuk transaksi BARU — transaksi yang sudah dicatat sebelumnya tetap dihitung
+          persis seperti saat dibuat, tidak ikut berubah.
+        </Note>
+        <p className="pt-1">
+          Di bawahnya ada bagian <Ui>Kelola Karyawan</Ui> untuk undang staf lewat link, tanpa perlu bikin
+          username/password dari sisi pemilik:
         </p>
         <Steps
           items={[
             <>Pilih peran (<Ui>Karyawan</Ui> atau <Ui>Pemilik (co-owner)</Ui>), lalu tekan <Ui>Buat Link Undangan</Ui>.</>,
             <>Salin link (ikon salin di samping kode) dan kirim ke calon karyawan lewat WhatsApp.</>,
-            <>Karyawan membuka link tersebut, daftar/masuk dengan akunnya sendiri, lalu menekan <Ui>Gabung Sekarang</Ui> — otomatis masuk ke usaha yang sama, tanpa isi form Setup Usaha lagi.</>,
+            <>Karyawan membuka link tersebut, daftar/masuk dengan akunnya sendiri, lalu menekan <Ui>Gabung</Ui> — otomatis masuk ke usaha yang sama, tanpa isi form Setup Usaha lagi.</>,
           ]}
         />
         <Note>
