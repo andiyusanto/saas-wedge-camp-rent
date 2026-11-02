@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import type { Business } from '../hooks/useBusiness';
 import { useBookingRequests } from '../hooks/useBookingRequests';
 import type { BookingRequest } from '../hooks/useBookingRequests';
 import { NewBookingModal } from './NewBookingModal';
+import { apiFetch } from '../lib/api';
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import {
   ShieldAlert,
@@ -395,6 +396,7 @@ export function TrackingScreen({
           filtered.map((b) => (
             <BookingCard
               key={b.id}
+              session={session}
               booking={b}
               onShareWA={() => handleShareWA(b)}
               onPrintInvoice={() => handlePrintInvoice(b)}
@@ -533,7 +535,41 @@ function FilterButton({
   );
 }
 
+// Audit privasi 2 Nov 2026 — foto penyewa tidak lagi di bucket publik,
+// jadi tidak ada URL tetap untuk ditaruh langsung di <img src>. Komponen
+// ini minta link presigned (umur 5 menit) SETIAP KALI dipasang ke layar
+// (mount), tidak pernah menyimpan/memakai ulang link lama — sesuai
+// instruksi audit (frontend selalu fetch link baru, tidak caching).
+function CustomerPhotoThumbnail({ session, bookingId }: { session: Session; bookingId: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<{ url: string }>(session, `/api/bookings/${bookingId}/customer-photo`)
+      .then((body) => {
+        if (!cancelled) setUrl(body.url);
+      })
+      .catch(() => {
+        // Tidak ada foto, atau link gagal dibuat — diam saja, thumbnail
+        // cuma tidak tampil (bukan error blocking, foto ini opsional).
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session, bookingId]);
+
+  if (!url) return null;
+  return (
+    <img
+      src={url}
+      alt="Foto penyewa"
+      className="w-9 h-9 rounded-full object-cover border border-[#DBD5C1] shrink-0"
+    />
+  );
+}
+
 function BookingCard({
+  session,
   booking: b,
   onShareWA,
   onPrintInvoice,
@@ -542,6 +578,7 @@ function BookingCard({
   onReturn,
   onCancel,
 }: {
+  session: Session;
   booking: TrackingBooking;
   onShareWA: () => void;
   onPrintInvoice: () => void;
@@ -586,13 +623,7 @@ function BookingCard({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 pt-4 text-xs">
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            {b.customer_photo_url && (
-              <img
-                src={b.customer_photo_url}
-                alt="Foto penyewa"
-                className="w-9 h-9 rounded-full object-cover border border-[#DBD5C1] shrink-0"
-              />
-            )}
+            {b.has_customer_photo && <CustomerPhotoThumbnail session={session} bookingId={b.id} />}
             <h4 className="font-bold text-sm text-[#26302B]">{b.customer?.name}</h4>
           </div>
           {b.customer?.phone && (

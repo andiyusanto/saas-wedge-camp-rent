@@ -7,7 +7,12 @@ export type TrackingBooking = {
   id: string;
   booking_number: string | null;
   customer: { name: string; phone: string | null; address: string | null } | null;
-  customer_photo_url: string | null;
+  // Audit privasi 2 Nov 2026 — bukan URL lagi, cuma penanda ada/tidaknya
+  // foto. URL sungguhan (presigned, umur 5 menit) diminta terpisah lewat
+  // GET /api/bookings/:id/customer-photo, cuma saat benar-benar mau
+  // ditampilkan (lihat TrackingScreen.tsx) — tidak pernah disimpan di
+  // sini supaya tidak ikut lewat daftar transaksi tiap kali dimuat.
+  has_customer_photo: boolean;
   start_date: string;
   end_date: string;
   picked_up_at: string | null;

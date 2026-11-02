@@ -4,6 +4,7 @@ import { fetchActiveBookingItems, usedUnitsOn } from '../lib/availability.js';
 import { dateRange, todayInWIB } from '../lib/dates.js';
 import { logBookingStatus } from '../lib/audit.js';
 import { isBusinessWritable, SUBSCRIPTION_LOCKED_MESSAGE } from '../lib/subscription.js';
+import { getCustomerPhotoSignedUrl } from '../lib/r2.js';
 
 const router = Router();
 
@@ -49,7 +50,7 @@ router.post('/bookings', async (req, res) => {
     businessId,
     customer,
     customer_id,
-    customer_photo_url,
+    customer_photo_key,
     start_date,
     end_date,
     items,
@@ -198,12 +199,26 @@ router.post('/bookings', async (req, res) => {
   // jalur (langsung di sini, atau belakangan lewat POST .../pickup).
   const pickedUpAt = status === 'aktif' ? new Date().toISOString() : null;
 
+  // Audit privasi 2 Nov 2026 — validasi pola key SEBELUM insert, jangan
+  // cuma percaya migration 050's check constraint sebagai satu-satunya
+  // penjaga (defense in depth, sama instruksi review -c1 untuk endpoint
+  // presign di bawah). Key yang tidak cocok pola diam-diam dibuang jadi
+  // null, bukan membuat seluruh transaksi gagal — foto penyewa cuma
+  // opsional.
+  const customerPhotoKeyPrefix = `customers/${businessId}/`;
+  const safeCustomerPhotoKey =
+    typeof customer_photo_key === 'string' &&
+    customer_photo_key.startsWith(customerPhotoKeyPrefix) &&
+    !customer_photo_key.includes('..')
+      ? customer_photo_key
+      : null;
+
   const { data: bookingRow, error: bookingError } = await supabase
     .from('bookings')
     .insert({
       business_id: businessId,
       customer_id: customerId,
-      customer_photo_url: typeof customer_photo_url === 'string' ? customer_photo_url : null,
+      customer_photo_key: safeCustomerPhotoKey,
       booking_number: bookingNumber,
       start_date,
       end_date,
@@ -275,6 +290,76 @@ router.post('/bookings', async (req, res) => {
   }
 
   res.status(201).json({ id: bookingRow.id, booking_number: bookingRow.booking_number, status: bookingRow.status });
+});
+
+// Audit privasi 2 Nov 2026 — satu-satunya jalur baca foto penyewa.
+// bookings.customer_photo_key (migration 050) BUKAN url yang bisa
+// langsung dipakai — klien SELALU minta link baru lewat endpoint ini
+// tiap kali mau menampilkan foto (TrackingScreen.tsx), tidak pernah
+// menyimpan/memakai ulang link lama. RLS (createRequestClient, scoped
+// ke JWT pemanggil) sudah otomatis membatasi .select() di bawah ke
+// booking milik business caller sendiri — booking milik business lain
+// tidak akan pernah kelihatan sama sekali (bukan "ditolak", tapi
+// "tidak ada" dari sudut pandang caller), pola yang sama seperti
+// endpoint pickup di atas. Validasi pola key diulang eksplisit di sini
+// (bukan cuma percaya check constraint migration 050) sebelum
+// menandatangani — review -c1: defense in depth, jangan andalkan satu
+// lapis saja.
+router.get('/bookings/:id/customer-photo', async (req, res) => {
+  if (!req.headers.authorization) {
+    res.status(401).json({ error: 'Belum login' });
+    return;
+  }
+
+  const { id } = req.params;
+  const supabase = createRequestClient(req);
+
+  const { data: booking, error: bookingError } = await supabase
+    .from('bookings')
+    .select('id, business_id, customer_photo_key, customer_photo_url')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (bookingError || !booking) {
+    res.status(404).json({ error: 'Transaksi tidak ditemukan' });
+    return;
+  }
+
+  // TODO(migrasi foto lama selesai): hapus blok customer_photo_url ini.
+  // Baris LAMA (sebelum migration 050) cuma punya customer_photo_url
+  // (URL publik lama) dan belum punya customer_photo_key sama sekali —
+  // review -c1: selama masa transisi (skrip migrasi foto lama belum
+  // jalan), baris begini TETAP harus bisa menampilkan fotonya, bukan
+  // mendadak hilang dari layar Transaksi Aktif. Balas URL lama apa
+  // adanya (bukan presigned — itu sudah publik permanen, menandatangani
+  // ulang tidak menambah proteksi apa pun). Begitu baris ini juga sudah
+  // punya customer_photo_key (lewat skrip migrasi), masuk ke cabang
+  // presigned di bawah dan blok ini tidak pernah tercapai lagi.
+  if (!booking.customer_photo_key) {
+    if (booking.customer_photo_url) {
+      res.json({ url: booking.customer_photo_url });
+      return;
+    }
+    res.status(404).json({ error: 'Transaksi ini tidak punya foto penyewa' });
+    return;
+  }
+
+  const expectedPrefix = `customers/${booking.business_id}/`;
+  if (!booking.customer_photo_key.startsWith(expectedPrefix) || booking.customer_photo_key.includes('..')) {
+    // Seharusnya tidak pernah terjadi (migration 050's check constraint
+    // + validasi saat insert di POST /bookings di atas) — kalau sampai
+    // terjadi, JANGAN tandatangani, lebih baik gagal daripada menyajikan
+    // foto yang mungkin bukan milik business ini.
+    res.status(500).json({ error: 'Data foto tidak valid, hubungi dukungan Sewalog.' });
+    return;
+  }
+
+  try {
+    const url = await getCustomerPhotoSignedUrl(booking.customer_photo_key);
+    res.json({ url });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
 });
 
 router.post('/bookings/:id/pickup', async (req, res) => {

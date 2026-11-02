@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { X, Calendar, Plus, CheckCircle2, User, ShieldCheck, History, Upload, Search } from 'lucide-react';
+import { X, Calendar, Plus, CheckCircle2, User, ShieldCheck, History, Search, Camera, Image, Trash2 } from 'lucide-react';
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import { useItems } from '../hooks/useItems';
 import type { Item } from '../hooks/useItems';
@@ -145,7 +145,13 @@ export function NewBookingModal({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [historySummary, setHistorySummary] = useState<CustomerHistorySummary | null>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [customerPhotoUrl, setCustomerPhotoUrl] = useState('');
+  // Audit privasi 2 Nov 2026 — dipisah jadi dua: `customerPhotoKey` (key
+  // R2 privat, dikirim ke server saat Simpan) dan `customerPhotoPreview`
+  // (data URL LOKAL dari browser, cuma buat pratinjau di form ini sendiri
+  // — tidak pernah fetch ulang dari server untuk preview, supaya tidak
+  // perlu minta signed URL sebelum transaksinya bahkan tersimpan).
+  const [customerPhotoKey, setCustomerPhotoKey] = useState('');
+  const [customerPhotoPreview, setCustomerPhotoPreview] = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [startDate, setStartDate] = useState(todayStr());
   const [endDate, setEndDate] = useState(todayStr());
@@ -192,7 +198,8 @@ export function NewBookingModal({
     setShowSuggestions(false);
     setHistorySummary(null);
     clearCustomerSuggestions();
-    setCustomerPhotoUrl('');
+    setCustomerPhotoKey('');
+    setCustomerPhotoPreview('');
     setDepositType('ktp');
     setDepositNote('');
     setDepositAmount('');
@@ -281,11 +288,12 @@ export function NewBookingModal({
     setError(null);
     try {
       const dataUrl = await resizeImageToDataUrl(file);
-      const body = await apiFetch<{ url: string }>(session, '/api/uploads/customer-photo', {
+      const body = await apiFetch<{ key: string }>(session, '/api/uploads/customer-photo', {
         method: 'POST',
         body: JSON.stringify({ businessId: business.id, image: dataUrl }),
       });
-      setCustomerPhotoUrl(body.url);
+      setCustomerPhotoKey(body.key);
+      setCustomerPhotoPreview(dataUrl);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal mengunggah foto.');
     } finally {
@@ -321,7 +329,7 @@ export function NewBookingModal({
           ...(selectedCustomerId
             ? { customer_id: selectedCustomerId }
             : { customer: { name: customerName, phone: customerPhone || null, address: customerAddress || null } }),
-          customer_photo_url: customerPhotoUrl || null,
+          customer_photo_key: customerPhotoKey || null,
           start_date: startDate,
           end_date: endDate,
           items: selectedItems,
@@ -487,31 +495,78 @@ export function NewBookingModal({
               </div>
               <div className="sm:col-span-2">
                 <label className="block font-semibold text-[#26302B] mb-1">Foto Penyewa (opsional)</label>
-                <div className="flex items-center gap-2">
-                  {customerPhotoUrl && (
+                {customerPhotoPreview ? (
+                  <div className="flex items-center gap-3">
                     <img
-                      src={customerPhotoUrl}
+                      src={customerPhotoPreview}
                       alt="Foto penyewa"
-                      className="h-14 w-14 shrink-0 object-cover rounded-lg border border-[#DBD5C1]"
+                      className="h-16 w-16 shrink-0 object-cover rounded-lg border border-[#DBD5C1]"
                     />
-                  )}
-                  <label className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-dashed border-[#DBD5C1] px-3 py-2.5 text-xs font-semibold text-[#6E6853] hover:bg-[#F1EEE2] cursor-pointer transition">
-                    <Upload className="w-4 h-4" />
-                    {uploadingPhoto ? 'Mengunggah...' : 'Foto Wajah / Setengah Badan'}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      disabled={uploadingPhoto}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) handleUploadCustomerPhoto(file);
-                        e.target.value = '';
-                      }}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
+                    <div className="flex-1 flex flex-col gap-2">
+                      <label className="flex items-center justify-center gap-1.5 min-h-[44px] rounded-lg border border-[#2B4739] text-[#2B4739] font-semibold text-xs hover:bg-[#F1EEE2] cursor-pointer transition">
+                        <Camera className="w-4 h-4" />
+                        {uploadingPhoto ? 'Mengunggah...' : 'Ganti'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          disabled={uploadingPhoto}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleUploadCustomerPhoto(file);
+                            e.target.value = '';
+                          }}
+                          className="hidden"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomerPhotoKey('');
+                          setCustomerPhotoPreview('');
+                        }}
+                        className="flex items-center justify-center gap-1.5 min-h-[44px] rounded-lg border border-[#A8412E]/40 text-[#A8412E] font-semibold text-xs hover:bg-[#FAF0EE] transition"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Hapus
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="flex flex-col items-center justify-center gap-1 min-h-[44px] py-3 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-semibold text-xs shadow-sm cursor-pointer transition active:scale-95">
+                      <Camera className="w-5 h-5" />
+                      {uploadingPhoto ? 'Mengunggah...' : 'Ambil Foto'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        disabled={uploadingPhoto}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleUploadCustomerPhoto(file);
+                          e.target.value = '';
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                    <label className="flex flex-col items-center justify-center gap-1 min-h-[44px] py-3 rounded-xl border-2 border-[#2B4739] text-[#2B4739] font-semibold text-xs hover:bg-[#F1EEE2] cursor-pointer transition active:scale-95">
+                      <Image className="w-5 h-5" />
+                      {uploadingPhoto ? 'Mengunggah...' : 'Pilih dari Galeri'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        disabled={uploadingPhoto}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleUploadCustomerPhoto(file);
+                          e.target.value = '';
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                )}
                 <p className="mt-1 text-[10px] text-[#6E6853]">
                   Bukan foto KTP/dokumen — cukup foto orangnya, buat bukti siapa yang mengambil barang kalau ada
                   sengketa jaminan nanti.

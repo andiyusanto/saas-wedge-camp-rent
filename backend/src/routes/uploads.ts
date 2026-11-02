@@ -2,7 +2,7 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import sharp from 'sharp';
 import { createRequestClient } from '../lib/supabaseClient.js';
-import { uploadToR2 } from '../lib/r2.js';
+import { uploadToR2, uploadToR2Private } from '../lib/r2.js';
 
 const router = Router();
 
@@ -110,6 +110,18 @@ router.post('/uploads/item-image', async (req, res) => {
 // siapa yang mengambil barang, terpisah dari foto KTP/dokumen jaminan
 // (sengaja tidak menyimpan foto dokumen identitas, lihat diskusi produk:
 // foto orang lebih rendah risiko privasi/UU PDP dibanding scan KTP/NIK).
+//
+// Audit privasi 2 Nov 2026 — DULU diunggah ke bucket PUBLIK yang sama
+// seperti item-image (lihat uploadToR2 di atas), URL-nya bisa diakses
+// siapa pun selamanya tanpa login begitu diketahui (dikonfirmasi lewat
+// curl langsung). Sekarang diunggah ke bucket PRIVAT terpisah
+// (uploadToR2Private, lib/r2.ts) yang tidak terhubung custom domain
+// publik apa pun — respons di sini cuma mengembalikan KEY (`key`),
+// BUKAN url yang bisa langsung dipakai. Klien menyimpan key itu ke
+// bookings.customer_photo_key (migration 050) saat Simpan, lalu
+// menampilkan fotonya lewat GET /api/bookings/:id/customer-photo
+// (presigned URL umur pendek, cek keanggotaan dulu) — tidak pernah
+// langsung dari key yang disimpan di DB.
 router.post('/uploads/customer-photo', async (req, res) => {
   if (!req.headers.authorization) {
     res.status(401).json({ error: 'Belum login' });
@@ -138,8 +150,8 @@ router.post('/uploads/customer-photo', async (req, res) => {
   const key = `customers/${businessId}/${crypto.randomUUID()}.${decoded.extension}`;
 
   try {
-    const url = await uploadToR2(key, decoded.buffer, decoded.mimeType);
-    res.status(201).json({ url });
+    await uploadToR2Private(key, decoded.buffer, decoded.mimeType);
+    res.status(201).json({ key });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }

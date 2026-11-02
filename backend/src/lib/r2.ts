@@ -1,4 +1,5 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 // R2 kompatibel S3 — SDK yang sama dipakai, cuma endpoint-nya diarahkan
 // ke Cloudflare, bukan AWS. credentials ini SENGAJA hanya dipegang
@@ -50,4 +51,63 @@ export async function uploadToR2(key: string, body: Buffer, contentType: string)
   );
 
   return `${publicBaseUrl.replace(/\/$/, '')}/${key}`;
+}
+
+// Audit privasi 2 Nov 2026 — foto penyewa (customer-photo) TIDAK LAGI
+// masuk bucket publik di atas (URL-nya bisa diakses siapa pun selamanya
+// tanpa login begitu diketahui, dikonfirmasi lewat curl langsung).
+// Bucket TERPISAH ini sengaja TIDAK terhubung custom domain publik apa
+// pun — satu-satunya jalur baca adalah getCustomerPhotoSignedUrl() di
+// bawah (presigned GET, umur pendek), dipanggil dari endpoint backend
+// yang mengecek keanggotaan business dulu (routes/bookings.ts).
+//
+// SENGAJA tidak fallback ke bucket publik kalau env ini belum diisi —
+// gagal keras (error eksplisit) jauh lebih aman daripada diam-diam
+// menulis foto baru ke bucket publik lagi tanpa disadari siapa pun.
+let privateBucketName: string | undefined;
+
+function getPrivateBucketName(): string {
+  if (privateBucketName === undefined) {
+    privateBucketName = process.env.R2_PRIVATE_BUCKET_NAME ?? '';
+  }
+  if (!privateBucketName) {
+    throw new Error(
+      'Upload foto penyewa belum dikonfigurasi (R2_PRIVATE_BUCKET_NAME belum diisi di .env) — TIDAK akan fallback ke bucket publik.',
+    );
+  }
+  return privateBucketName;
+}
+
+// Mengembalikan KEY saja (bukan URL) — bucket privat tidak punya URL
+// publik yang bisa langsung dipakai. Pemanggil (routes/uploads.ts)
+// menyimpan key ini ke bookings.customer_photo_key, bukan URL.
+export async function uploadToR2Private(key: string, body: Buffer, contentType: string): Promise<string> {
+  const s3 = getClient();
+  const bucket = getPrivateBucketName();
+
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    }),
+  );
+
+  return key;
+}
+
+// 5 menit — cukup untuk satu kali tampil di layar Transaksi Aktif,
+// cukup pendek supaya link yang kebetulan bocor (screenshot, history
+// browser, dsb) tidak berguna lama-lama. Frontend SELALU minta link
+// baru tiap kali foto ditampilkan, tidak pernah menyimpan/memakai ulang
+// link lama (lihat TrackingScreen.tsx).
+const SIGNED_URL_EXPIRY_SECONDS = 5 * 60;
+
+export async function getCustomerPhotoSignedUrl(key: string): Promise<string> {
+  const s3 = getClient();
+  const bucket = getPrivateBucketName();
+
+  const command = new GetObjectCommand({ Bucket: bucket, Key: key });
+  return getSignedUrl(s3, command, { expiresIn: SIGNED_URL_EXPIRY_SECONDS });
 }
