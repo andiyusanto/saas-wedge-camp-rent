@@ -100,6 +100,7 @@ const TOC: { id: string; num: string; title: string }[] = [
   { id: 'g-6', num: '6', title: 'Kelola Usaha' },
   { id: 'g-7', num: '7', title: 'Riwayat Transaksi' },
   { id: 'g-8', num: '8', title: 'Etalase Online' },
+  { id: 'g-8b', num: '8b', title: 'Pesanan Online' },
   { id: 'g-9', num: '9', title: 'Toko Online' },
   { id: 'g-a', num: 'A', title: 'Catatan Penting' },
 ];
@@ -409,10 +410,11 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           bukan cuma hari pertama.
         </p>
         <Note>
-          <strong>Ini murni etalase informasi + pencarian ketersediaan, bukan toko online</strong> — tidak ada
-          keranjang, pemesanan, atau checkout di halaman publiknya. Calon penyewa yang tertarik tetap diarahkan chat
-          WhatsApp untuk transaksi, sama seperti alur manual yang sudah berjalan sekarang — bedanya sekarang mereka
-          bisa cek dulu sisa unitnya sebelum chat.
+          <strong>Ini bukan toko online/checkout</strong> — tidak ada pembayaran online sungguhan di halaman
+          publiknya. Secara default calon penyewa cuma bisa cek ketersediaan lalu diarahkan chat WhatsApp, sama
+          seperti alur manual yang sudah berjalan sekarang. Kalau fitur <Ui>Pesanan Online</Ui> (bagian 8b) kamu
+          nyalakan, pengunjung bisa kirim formulir pesanan langsung dari halaman ini juga — tapi itu cuma formulir,
+          bukan pembayaran, pesanannya tetap kamu yang Konfirmasi manual.
         </Note>
         <p>
           Slug (bagian akhir link) otomatis terisi dari nama usaha saat pertama diaktifkan — bisa diedit manual,
@@ -424,6 +426,99 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           internal di struk).
         </p>
         <Note>Sama seperti Kelola Usaha, tab ini cuma terlihat dan bisa diakses oleh pemilik.</Note>
+      </Section>
+
+      <Section
+        id="g-8b"
+        num="8b"
+        title="Pesanan Online"
+        kicker="Pelanggan bisa kirim formulir pesanan langsung dari Etalase — tetap kamu yang Konfirmasi lewat Catat Transaksi biasa, bukan checkout otomatis."
+      >
+        <p>
+          Semua pengaturan ada di tab <Ui>Etalase &amp; Pesanan</Ui>, di kartu "Pesanan Online" (di bawah kartu
+          Etalase Online). Urutan menyalakannya:
+        </p>
+        <Steps
+          items={[
+            <>
+              Aktifkan dulu <Ui>Etalase Online</Ui> (bagian 8) — Pesanan Online tidak bisa dinyalakan kalau Etalase-nya
+              masih mati.
+            </>,
+            <>
+              Pilih minimal satu <strong>cara bayar</strong> (Transfer Bank/QRIS/Tunai saat ambil) dan isi detailnya
+              (nomor rekening, gambar QRIS, dsb) — tombol <Ui>Terima pesanan online</Ui> cuma bisa dinyalakan kalau
+              sudah ada minimal satu cara bayar aktif.
+            </>,
+            <>
+              Atur <strong>DP (uang muka)</strong> kalau mau (opsional) — "Tidak wajib", persen dari total, atau
+              nominal tetap. Pelanggan lihat angka DP-nya setelah pesanannya kamu Konfirmasi (lihat bagian "Apa yang
+              pelanggan lihat" di bawah).
+            </>,
+            <>
+              Isi <strong>Syarat &amp; Ketentuan</strong> sewa kalau mau (opsional, lihat penjelasan lengkap di bawah)
+              — bisa pakai tombol <Ui>Pakai contoh</Ui> sebagai titik awal, lalu diedit sesuai usahamu.
+            </>,
+            <>
+              Atur <strong>Batas konfirmasi (jam)</strong> — berapa lama pesanan menunggu sebelum otomatis
+              kedaluwarsa kalau belum sempat kamu tanggapi (2-72 jam, default 24). Pesanan yang kedaluwarsa tidak
+              bisa dikonfirmasi lagi — pelanggan diarahkan pesan ulang atau chat WA langsung.
+            </>,
+            <>
+              Terakhir, nyalakan toggle <Ui>Terima pesanan online</Ui> lalu <Ui>Simpan</Ui>. Begitu aktif, tombol
+              "Pesan Sekarang" muncul di halaman Etalase publikmu.
+            </>,
+          ]}
+        />
+
+        <p className="font-bold text-[#26302B] text-sm pt-1">Menangani pesanan yang masuk</p>
+        <p>
+          Pesanan baru muncul di tab <Ui>Transaksi Aktif</Ui>, bagian "Pesanan masuk" (dengan badge angka di tab
+          navigasi) — bukan langsung jadi transaksi, cuma permintaan yang menunggu kamu tanggapi. Dua tombol:
+        </p>
+        <FieldsTable
+          rows={[
+            {
+              label: 'Konfirmasi',
+              desc: 'Membuka form Catat Transaksi yang SUDAH TERISI dari data pesanan (nama, nomor WA, tanggal, alat) — tinggal dicek/dilengkapi (jaminan, dsb) lalu Simpan seperti transaksi biasa. Begitu disimpan, pesanan ini resmi jadi transaksi aktif dan hilang dari daftar "Pesanan masuk".',
+            },
+            {
+              label: 'Tolak',
+              desc: 'Isi alasan (opsional, akan terlihat pelanggan di halaman status mereka) lalu Tolak — tidak ada transaksi yang dibuat. Pelanggan bisa lihat alasannya dan diarahkan chat WA atau pesan ulang.',
+            },
+          ]}
+        />
+        <p>
+          Kalau dibiarkan sampai lewat <Ui>Batas konfirmasi</Ui>, pesanan otomatis berubah status jadi kedaluwarsa
+          (dicek ulang tiap kali kamu buka tab Transaksi Aktif) — hilang dari "Pesanan masuk", tidak bisa dikonfirmasi
+          lagi, dan pelanggan lihat status "Kedaluwarsa" di halaman mereka.
+        </p>
+
+        <p className="font-bold text-[#26302B] text-sm pt-1">Apa yang pelanggan lihat</p>
+        <p>
+          Setelah kirim pesanan, pelanggan diarahkan ke halaman status pribadi (link unik, bukan untuk dibagikan
+          sembarangan) yang menunjukkan status pesanannya (Menunggu konfirmasi, Dikonfirmasi, Ditolak, atau
+          Kedaluwarsa).
+          Informasi cara bayar (nomor rekening, QRIS, atau nominal DP/total yang harus dibayar) <strong>cuma muncul
+          setelah kamu Konfirmasi</strong> — sebelum itu pelanggan cuma lihat ringkasan pesanannya dan perkiraan
+          harga, belum ada instruksi bayar apa pun.
+        </p>
+        <Note>
+          <strong>Sewalog tidak pernah menerima atau menyimpan dana dari pelanggan.</strong> Transfer/QRIS/tunai
+          langsung ke rekening atau tangan usahamu sendiri — Sewalog cuma menampilkan info pembayaran yang kamu isi
+          sendiri, tidak ikut proses transaksi uangnya sama sekali.
+        </Note>
+
+        <p className="font-bold text-[#26302B] text-sm pt-1">Syarat &amp; Ketentuan sewa</p>
+        <p>
+          Kalau diisi, pelanggan WAJIB centang setuju sebelum bisa kirim pesanan — teksnya juga muncul di halaman
+          Etalase (bagian "Syarat Sewa", terlihat siapa saja meski Pesanan Online sedang mati) supaya calon penyewa
+          bisa baca duluan sebelum datang. Tiap kali kamu ubah teksnya, Sewalog menyimpan <strong>versi mana yang
+          disetujui pelanggan saat itu</strong> sebagai bukti — kalau nanti kamu edit lagi teksnya, pesanan-pesanan
+          lama tetap menunjukkan versi yang benar-benar mereka setujui waktu itu, bukan ikut berubah ke versi
+          terbaru. Kalau kamu sempat ubah teksnya SETELAH pelanggan buka form tapi SEBELUM mereka kirim, sistem
+          otomatis minta mereka baca ulang versi terbaru dan centang lagi — supaya tidak ada yang tercatat setuju ke
+          sesuatu yang tidak pernah mereka baca.
+        </p>
       </Section>
 
       <Section id="g-9" num="9" title="Toko Online" kicker="Belum jadi fitur — halaman ini buat lihat seberapa banyak pemilik usaha yang tertarik.">
