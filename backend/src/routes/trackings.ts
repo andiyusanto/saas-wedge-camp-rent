@@ -76,7 +76,7 @@ router.get('/trackings', async (req, res) => {
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select(
-      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_key, customer_photo_url, rental_day_mode, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_status_history(status, changed_by_name, created_at)',
+      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_key, rental_day_mode, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_status_history(status, changed_by_name, created_at)',
     )
     .in('status', ['dipesan', 'aktif'])
     .order('end_date');
@@ -137,16 +137,7 @@ router.get('/trackings', async (req, res) => {
       // klien minta link signed-nya sendiri lewat GET /bookings/:id/
       // customer-photo (routes/bookings.ts) cuma SAAT benar-benar mau
       // menampilkan foto itu, bukan setiap kali daftar transaksi dimuat.
-      //
-      // TODO(migrasi foto lama selesai): hapus `|| b.customer_photo_url`
-      // di bawah — baris lama (sebelum migration 050, URL publik di
-      // customer_photo_url) sengaja TETAP dianggap "ada foto" selama
-      // masa transisi (review -c1), supaya tidak mendadak hilang dari
-      // layar sebelum skrip migrasi foto lama sempat jalan. Begitu
-      // skrip migrasi itu selesai (memindahkan semua foto lama ke
-      // bucket privat + mengisi customer_photo_key + mengosongkan
-      // customer_photo_url), baris ini tinggal `Boolean(b.customer_photo_key)` lagi.
-      has_customer_photo: Boolean(b.customer_photo_key || b.customer_photo_url),
+      has_customer_photo: Boolean(b.customer_photo_key),
       start_date: b.start_date,
       end_date: b.end_date,
       picked_up_at: b.picked_up_at,

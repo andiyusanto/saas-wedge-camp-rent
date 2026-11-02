@@ -316,7 +316,7 @@ router.get('/bookings/:id/customer-photo', async (req, res) => {
 
   const { data: booking, error: bookingError } = await supabase
     .from('bookings')
-    .select('id, business_id, customer_photo_key, customer_photo_url')
+    .select('id, business_id, customer_photo_key')
     .eq('id', id)
     .maybeSingle();
 
@@ -325,21 +325,7 @@ router.get('/bookings/:id/customer-photo', async (req, res) => {
     return;
   }
 
-  // TODO(migrasi foto lama selesai): hapus blok customer_photo_url ini.
-  // Baris LAMA (sebelum migration 050) cuma punya customer_photo_url
-  // (URL publik lama) dan belum punya customer_photo_key sama sekali —
-  // review -c1: selama masa transisi (skrip migrasi foto lama belum
-  // jalan), baris begini TETAP harus bisa menampilkan fotonya, bukan
-  // mendadak hilang dari layar Transaksi Aktif. Balas URL lama apa
-  // adanya (bukan presigned — itu sudah publik permanen, menandatangani
-  // ulang tidak menambah proteksi apa pun). Begitu baris ini juga sudah
-  // punya customer_photo_key (lewat skrip migrasi), masuk ke cabang
-  // presigned di bawah dan blok ini tidak pernah tercapai lagi.
   if (!booking.customer_photo_key) {
-    if (booking.customer_photo_url) {
-      res.json({ url: booking.customer_photo_url });
-      return;
-    }
     res.status(404).json({ error: 'Transaksi ini tidak punya foto penyewa' });
     return;
   }
