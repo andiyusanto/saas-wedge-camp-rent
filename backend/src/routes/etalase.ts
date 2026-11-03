@@ -659,6 +659,7 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
     <span data-avail="${escapeHtml(item.id)}" style="display:none;margin-top:6px;padding:2px 8px;border-radius:999px;font-size:0.7rem;font-weight:700;"></span>
     <div data-action="${escapeHtml(item.id)}" style="display:none;margin-top:8px;">
       <button type="button" class="pesan-btn" data-item-id="${escapeHtml(item.id)}" data-item-name="${escapeHtml(item.name)}"
+        data-item-detail="${escapeHtml(details)}"
         data-price-per-day="${item.price_per_day}" data-day2-rate="${item.day2_rate}" data-day3-rate="${item.day3_rate}"
         data-day4-rate="${item.day4_rate}" data-day5-rate="${item.day5_rate}" data-extra-day-rate="${item.extra_day_rate}"
         disabled
@@ -753,24 +754,54 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
     #avail-check { width: 100%; }
   }
   /* Rencana tahap 3: keranjang pesanan sederhana (vanilla JS, tanpa
-     React — lihat larangan route React di komentar atas file ini). */
+     React — lihat larangan route React di komentar atas file ini).
+     flex-direction column (bukan row seperti sebelumnya) — baris
+     tombol tetap satu baris (#cart-bar-row), tapi panel rincian alat
+     (poin "isi pesanan terlihat di bar", permintaan Andi) nampung di
+     bawahnya kalau dibuka (HP saja, lihat #cart-bar-panel). */
   #cart-bar {
-    display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    display: none; flex-direction: column; position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
     background: #2B4739; color: #fff; padding: 12px 16px;
-    align-items: center; justify-content: space-between; gap: 12px;
     box-shadow: 0 -4px 12px rgba(0,0,0,0.15);
   }
   /* JS men-set style.display = 'flex' langsung saat keranjang terisi —
      aturan di atas cuma menyediakan default TERSEMBUNYI (none). */
+  #cart-bar-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; }
   #cart-bar button { min-height: 44px; padding: 10px 16px; border-radius: 10px; border: none; background: #fff; color: #2B4739; font-weight: 700; font-size: 0.85rem; cursor: pointer; }
-  /* Review -c1: tanpa ini, baris terakhir kartu + section Syarat Sewa/
-     footer ketutupan #cart-bar yang fixed di bawah layar begitu
-     keranjang terisi dan halaman di-scroll sampai bawah. Class ini
-     ditoggle JS bareng cartBar.style.display (lihat renderCart()) —
-     ~tinggi bar (kira-kira 12px padding atas+bawah + konten ~24px) + 16px
-     jarak aman, bukan angka pas-pasan supaya tetap longgar di berbagai
-     ukuran font/perangkat. */
-  body.cart-bar-visible .wrap { padding-bottom: 96px; }
+  /* Tombol ringkasan (kiri) — flex-shrink supaya TIDAK PERNAH mendorong
+     keluar tombol "Lanjut pesan →" (flex-shrink:0, poin krusial dari
+     permintaan Andi) kalau teksnya panjang (banyak alat berbeda di
+     keranjang); overflow dipotong elipsis, bukan meluber/membungkus. */
+  #cart-bar-toggle {
+    flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px;
+    background: none; border: none; color: #fff; font: inherit; text-align: left; padding: 0; cursor: pointer;
+  }
+  #cart-open-btn { flex-shrink: 0; }
+  .cart-summary-desktop, .cart-summary-mobile {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  /* Default mobile: tampilkan ringkasan singkat + panah, sembunyikan
+     ringkasan panjang ala desktop (nama tiap alat). Dibalik di breakpoint
+     768px (sama dengan breakpoint md Tailwind yang dipakai di tempat
+     lain). Review -c1: panel rincian (#cart-bar-panel) SENGAJA selalu
+     none di desktop lewat !important (bukan cuma lewat JS) — nama alat
+     sudah terlihat langsung di ringkasan desktop, tidak perlu buka apa
+     pun; defense-in-depth kalau breakpoint berubah sementara panel
+     kebetulan lagi kebuka dari sesi mobile sebelumnya. */
+  .cart-summary-mobile { display: block; }
+  .cart-summary-desktop { display: none; }
+  #cart-bar-panel { display: none; width: 100%; max-height: 40vh; overflow-y: auto; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.15); }
+  @media (min-width: 768px) {
+    .cart-summary-mobile { display: none; }
+    .cart-summary-desktop { display: block; }
+    #cart-bar-panel { display: none !important; }
+  }
+  .cart-panel-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.12); font-size: 0.8rem; }
+  .cart-panel-row:last-child { border-bottom: none; }
+  .cart-panel-name { font-weight: 700; }
+  .cart-panel-detail { color: #DBD5C1; font-size: 0.7rem; margin-top: 1px; }
+  .cart-panel-qty { color: #DBD5C1; flex-shrink: 0; }
+  .cart-panel-subtotal { font-weight: 700; flex-shrink: 0; }
   .modal-overlay {
     display: none; position: fixed; inset: 0; background: rgba(38,48,43,0.55); z-index: 50;
     align-items: flex-end; justify-content: center; padding: 0;
@@ -847,7 +878,6 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
     </div>
     <p id="avail-status" style="margin:4px 0 0;font-size:0.75rem;color:#6E6853;min-height:1em;"></p>
     <div id="avail-chip" style="display:none;margin-top:6px;padding:6px 12px;border-radius:999px;background:#F1EEE2;border:1px solid #DBD5C1;font-size:0.8rem;font-weight:700;color:#26302B;width:fit-content;"></div>
-    <p id="avail-chip-note" style="display:none;margin:4px 0 0;font-size:0.7rem;color:#6E6853;">Stok dihitung untuk seluruh periode</p>
     <p id="cart-date-notice" class="cart-notice"></p>`
         : // Review -c1 (rencana langganan): business hanya-baca — cek
           // ketersediaan+tombol pesan DIHILANGKAN SELURUHNYA (bukan
@@ -885,8 +915,15 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
 </div>
 
 <div id="cart-bar">
-  <span id="cart-summary">0 alat</span>
-  <button type="button" id="cart-open-btn">Lanjut pesan →</button>
+  <div id="cart-bar-row">
+    <button type="button" id="cart-bar-toggle">
+      <span id="cart-summary-desktop" class="cart-summary-desktop"></span>
+      <span id="cart-summary-mobile" class="cart-summary-mobile"></span>
+      <span id="cart-toggle-arrow" class="cart-summary-mobile">&#9650;</span>
+    </button>
+    <button type="button" id="cart-open-btn">Lanjut pesan →</button>
+  </div>
+  <div id="cart-bar-panel"></div>
 </div>
 
 <div id="order-modal" class="modal-overlay">
@@ -1034,14 +1071,11 @@ document.addEventListener('keydown', function (e) {
 
   function showChip(start, end) {
     var chip = document.getElementById('avail-chip');
-    var note = document.getElementById('avail-chip-note');
     chip.textContent = formatDateRangeID(start, end) + ' · ' + rentalDaysCount(start, end) + ' hari';
     chip.style.display = 'inline-block';
-    note.style.display = 'block';
   }
   function hideChip() {
     document.getElementById('avail-chip').style.display = 'none';
-    document.getElementById('avail-chip-note').style.display = 'none';
   }
 
   btn.addEventListener('click', function () {
@@ -1311,24 +1345,101 @@ document.addEventListener('keydown', function (e) {
   }
 
   var cartBar = document.getElementById('cart-bar');
-  var cartSummary = document.getElementById('cart-summary');
+  var cartSummaryDesktop = document.getElementById('cart-summary-desktop');
+  var cartSummaryMobile = document.getElementById('cart-summary-mobile');
+  var cartToggleArrow = document.getElementById('cart-toggle-arrow');
+  var cartBarPanel = document.getElementById('cart-bar-panel');
+  var wrapEl = document.querySelector('.wrap');
   var orderModal = document.getElementById('order-modal');
+  var MOBILE_BREAKPOINT = 768; // sama dengan breakpoint md di CSS #cart-bar-panel di atas.
 
   function cartTotalPrice() {
     var days = orderDates.start && orderDates.end ? rentalDaysCount(orderDates.start, orderDates.end) : 1;
     return cart.reduce(function (sum, c) { return sum + computeItemRentalPrice(c.rates, days) * c.quantity; }, 0);
   }
 
+  // Tinggi bar (+panel kalau terbuka) berubah-ubah — padding bawah
+  // halaman disesuaikan ke tinggi SUNGGUHAN tiap kali, bukan angka tetap
+  // (permintaan Andi: "Page bottom padding needs to adjust to the
+  // bar/panel's actual height"), supaya baris kartu terakhir & footer
+  // tidak pernah ketutupan di kombinasi state manapun (bar tertutup,
+  // bar ringkas, bar+panel terbuka).
+  function syncCartBarPadding() {
+    if (cartBar.style.display === 'flex') {
+      wrapEl.style.paddingBottom = (cartBar.offsetHeight + 16) + 'px';
+    } else {
+      wrapEl.style.paddingBottom = '';
+    }
+  }
+
+  function closeCartPanel() {
+    cartBarPanel.style.display = 'none';
+    cartToggleArrow.textContent = '▲'; // ▲ tertutup — bisa dibuka
+    syncCartBarPadding();
+  }
+
+  // Panel rincian isi keranjang (poin Andi: nama+varian, ×qty, subtotal
+  // per alat) — HP saja (lihat guard innerWidth di bawah dan CSS
+  // #cart-bar-panel yang di-none-kan paksa di >=768px). Dibangun lewat
+  // createElement/textContent, bukan innerHTML dengan nilai dari data
+  // (nama/varian alat bisa diisi bebas oleh vendor) — pola sama seperti
+  // perbaikan XSS keranjang modal sebelumnya.
+  function renderCartPanel(days) {
+    cartBarPanel.innerHTML = '';
+    cart.forEach(function (c) {
+      var row = document.createElement('div');
+      row.className = 'cart-panel-row';
+
+      var left = document.createElement('div');
+      var nameEl = document.createElement('div');
+      nameEl.className = 'cart-panel-name';
+      nameEl.textContent = c.name;
+      left.appendChild(nameEl);
+      if (c.detail) {
+        var detailEl = document.createElement('div');
+        detailEl.className = 'cart-panel-detail';
+        detailEl.textContent = c.detail;
+        left.appendChild(detailEl);
+      }
+      row.appendChild(left);
+
+      var qtyEl = document.createElement('span');
+      qtyEl.className = 'cart-panel-qty';
+      qtyEl.textContent = '×' + c.quantity;
+      row.appendChild(qtyEl);
+
+      var subtotalEl = document.createElement('span');
+      subtotalEl.className = 'cart-panel-subtotal';
+      subtotalEl.textContent = formatIDRClient(computeItemRentalPrice(c.rates, days) * c.quantity);
+      row.appendChild(subtotalEl);
+
+      cartBarPanel.appendChild(row);
+    });
+  }
+
   function renderCart() {
     var totalQty = cart.reduce(function (sum, c) { return sum + c.quantity; }, 0);
     if (totalQty > 0) {
       cartBar.style.display = 'flex';
-      cartSummary.textContent = totalQty + ' alat · ' + formatIDRClient(cartTotalPrice());
-      document.body.classList.add('cart-bar-visible');
+      var totalLabel = totalQty + ' alat · ' + formatIDRClient(cartTotalPrice());
+      // Ringkasan desktop: nama tiap alat (maks 3, sisanya "+N lainnya")
+      // + ringkasan total — permintaan Andi, beda dari HP yang cuma
+      // ringkas (nama-nama alat ada di panel yang baru dibuka, bukan di
+      // bar). CSS yang memutuskan mana yang TAMPIL di breakpoint mana
+      // (lihat .cart-summary-desktop/.cart-summary-mobile) — dua-duanya
+      // selalu diisi, supaya tidak ada teks basi kalau viewport di-resize.
+      var shown = cart.slice(0, 3).map(function (c) { return c.name + ' ×' + c.quantity; }).join(', ');
+      var extra = cart.length > 3 ? ', +' + (cart.length - 3) + ' lainnya' : '';
+      cartSummaryDesktop.textContent = shown + extra + ' · ' + totalLabel;
+      cartSummaryMobile.textContent = totalLabel;
+      var days = orderDates.start && orderDates.end ? rentalDaysCount(orderDates.start, orderDates.end) : 1;
+      renderCartPanel(days);
+      if (cartBarPanel.style.display !== 'block') cartToggleArrow.textContent = '▲';
     } else {
       cartBar.style.display = 'none';
-      document.body.classList.remove('cart-bar-visible');
+      closeCartPanel();
     }
+    syncCartBarPadding();
 
     // Review -c1 (poin 5): tampilkan rentang tanggal di atas daftar
     // alat di modal, supaya pelanggan bisa cek ulang tanggalnya benar
@@ -1419,7 +1530,7 @@ document.addEventListener('keydown', function (e) {
       if (existing) {
         if (existing.quantity < remaining) existing.quantity++;
       } else {
-        cart.push({ item_id: itemId, name: btn.dataset.itemName, quantity: 1, remaining: remaining, rates: getItemRates(itemId) });
+        cart.push({ item_id: itemId, name: btn.dataset.itemName, detail: btn.dataset.itemDetail || '', quantity: 1, remaining: remaining, rates: getItemRates(itemId) });
       }
       renderCart();
       updateCardAction(itemId);
@@ -1465,6 +1576,36 @@ document.addEventListener('keydown', function (e) {
     renderPaymentMethods();
     renderCart();
     orderModal.style.display = 'flex';
+  });
+
+  // Tap bagian kiri bar (ringkasan) buka/tutup panel rincian — HP saja.
+  // Di desktop ini no-op (nama alat sudah kelihatan langsung di
+  // ringkasan, lihat renderCart()) — guard innerWidth, bukan cuma andalan
+  // CSS, supaya state JS (display panel) tidak pernah "terbuka" diam-diam
+  // kalau breakpoint berubah (lihat listener resize di bawah juga).
+  document.getElementById('cart-bar-toggle').addEventListener('click', function () {
+    if (window.innerWidth >= MOBILE_BREAKPOINT) return;
+    if (cartBarPanel.style.display === 'block') {
+      closeCartPanel();
+    } else {
+      cartBarPanel.style.display = 'block';
+      cartToggleArrow.textContent = '▼'; // ▼ terbuka — tap lagi untuk tutup
+      syncCartBarPadding();
+    }
+  });
+
+  // Resize lintas breakpoint (rotasi HP/tablet, window di-resize) —
+  // tutup paksa panel kalau sudah masuk ukuran desktop (CSS sendiri
+  // sudah menyembunyikannya paksa, ini cuma supaya tap balik ke ukuran
+  // HP tidak mewarisi panah "▼ terbuka" yang sebenarnya sudah force-
+  // closed oleh CSS) dan selalu sinkronkan ulang padding (tinggi bar
+  // beda antara layout mobile/desktop).
+  window.addEventListener('resize', function () {
+    if (window.innerWidth >= MOBILE_BREAKPOINT && cartBarPanel.style.display === 'block') {
+      closeCartPanel();
+    } else {
+      syncCartBarPadding();
+    }
   });
   document.getElementById('order-modal-close').addEventListener('click', function () {
     orderModal.style.display = 'none';
