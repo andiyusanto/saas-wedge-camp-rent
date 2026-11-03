@@ -581,8 +581,8 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           sembarangan) yang menunjukkan status pesanannya (Menunggu konfirmasi, Dikonfirmasi, Ditolak, atau
           Kedaluwarsa).
           Informasi cara bayar (nomor rekening, QRIS, atau nominal DP/total yang harus dibayar) <strong>cuma muncul
-          setelah kamu Konfirmasi</strong> — sebelum itu pelanggan cuma lihat ringkasan pesanannya dan perkiraan
-          harga, belum ada instruksi bayar apa pun.
+          setelah kamu Konfirmasi</strong> — sebelum itu pelanggan cuma lihat ringkasan pesanannya dan Total sewa
+          (harga katalog), belum ada instruksi bayar apa pun.
         </p>
         <Note>
           <strong>Sewalog tidak pernah menerima atau menyimpan dana dari pelanggan.</strong> Transfer/QRIS/tunai

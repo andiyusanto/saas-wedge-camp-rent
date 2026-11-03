@@ -416,7 +416,7 @@ export function NewBookingModal({
             <div className="bg-[#F9EFE7] border border-[#A65C2A]/40 rounded-xl p-3 text-xs">
               <p className="font-bold text-[#A65C2A]">Dari pesanan online</p>
               <p className="text-[#6E6853]">
-                Perkiraan harga saat pelanggan pesan: <strong className="text-[#26302B]">{formatIDR(requestPrefill.estimatedPrice)}</strong> —
+                Total sewa (harga katalog) saat pelanggan pesan: <strong className="text-[#26302B]">{formatIDR(requestPrefill.estimatedPrice)}</strong> —
                 harga final tetap ditentukan di bawah dari katalog saat ini.
               </p>
             </div>

@@ -475,14 +475,19 @@ function renderStatusPage(data: BookingRequestStatus, req: import('express').Req
     <p style="margin:10px 0 0;font-size:0.8rem;color:#6E6853;">Alat</p>
     <ul style="margin:4px 0 0;padding-left:18px;">${itemsListHtml}</ul>
     ${
-      // Review -c1 (poin 2): setelah dikonfirmasi, "Perkiraan harga" di
+      // Review -c1 (poin 2): setelah dikonfirmasi, "Total sewa" di
       // sini DISEMBUNYIKAN — membingungkan berdampingan dengan total
       // final sungguhan yang sudah tampil di bodyExtraHtml (mis.
       // Rp50.000 vs Rp120.000, padahal yang Rp120.000 itu yang benar).
+      // Label+teks penjelasan ini SENGAJA sama persis dengan yang di
+      // form pesanan Etalase (lihat cart-total-price di renderPage())
+      // — satu istilah konsisten "Total sewa" (bukan "Perkiraan total")
+      // dipakai di kedua tempat, keputusan Andi 3 Nov 2026.
       data.status === 'dikonfirmasi'
         ? ''
-        : `<p style="margin:10px 0 0;font-size:0.8rem;color:#6E6853;">Perkiraan harga (saat pesan, bisa beda dari harga final rental)</p>
-    <p style="margin:2px 0 0;font-weight:700;">${formatIDR(data.estimated_price)}</p>`
+        : `<p style="margin:10px 0 0;font-size:0.8rem;color:#6E6853;">Total sewa</p>
+    <p style="margin:2px 0 0;font-weight:700;">${formatIDR(data.estimated_price)}</p>
+    <p style="margin:2px 0 0;font-size:0.75rem;color:#6E6853;">Harga sesuai katalog. Total final tertera setelah rental mengonfirmasi pesanan.</p>`
     }
     ${data.confirmation_message && data.status === 'menunggu' ? `<p style="margin:10px 0 0;font-size:0.85rem;color:#26302B;">${escapeHtml(data.confirmation_message)}</p>` : ''}
     ${bodyExtraHtml}
@@ -815,6 +820,11 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
     .modal-panel { border-radius: 20px; max-height: 85vh; }
   }
   .cart-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 0; border-bottom: 1px solid #DBD5C1; }
+  .cart-row-info { min-width: 0; }
+  .cart-row-name { display: block; font-weight: 600; color: #26302B; }
+  .cart-row-detail { display: block; font-size: 0.7rem; color: #6E6853; margin-top: 1px; }
+  .cart-row-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+  .cart-row-subtotal { font-weight: 700; font-size: 0.8rem; color: #26302B; }
   .qty-stepper { display: flex; align-items: center; gap: 8px; }
   .qty-stepper button { width: 32px; height: 32px; border-radius: 8px; border: 1px solid #DBD5C1; background: #FBFAF4; font-weight: 700; cursor: pointer; }
   .field-label { display: block; font-size: 0.8rem; font-weight: 700; color: #6E6853; margin: 14px 0 4px; }
@@ -932,8 +942,8 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
     <h2 style="font-size:1.1rem;margin:0 0 4px;">Pesanan Anda</h2>
     <p id="cart-date-range" style="margin:0 0 10px;font-size:0.85rem;color:#6E6853;"></p>
     <div id="cart-items-list"></div>
-    <p style="margin:10px 0 0;font-weight:700;">Perkiraan total: <span id="cart-total-price"></span></p>
-    <p style="margin:2px 0 0;font-size:0.75rem;color:#6E6853;">Perkiraan, harga final dikonfirmasi rental.</p>
+    <p style="margin:10px 0 0;font-weight:700;">Total sewa: <span id="cart-total-price"></span></p>
+    <p style="margin:2px 0 0;font-size:0.75rem;color:#6E6853;">Harga sesuai katalog. Total final tertera setelah rental mengonfirmasi pesanan.</p>
 
     <label class="field-label" for="order-name">Nama</label>
     <input type="text" id="order-name" class="field-input" maxlength="100" autocomplete="name" />
@@ -1428,7 +1438,19 @@ document.addEventListener('keydown', function (e) {
       // bar). CSS yang memutuskan mana yang TAMPIL di breakpoint mana
       // (lihat .cart-summary-desktop/.cart-summary-mobile) — dua-duanya
       // selalu diisi, supaya tidak ada teks basi kalau viewport di-resize.
-      var shown = cart.slice(0, 3).map(function (c) { return c.name + ' ×' + c.quantity; }).join(', ');
+      // Nama alat bisa duplikat (dua varian "Carrier 60L" berbeda) —
+      // begitu nama yang sama muncul lebih dari sekali, tempelkan
+      // varian/ukuran/warnanya di kurung supaya tetap bisa dibedakan di
+      // ringkasan desktop (panel HP sudah selalu tampilkan varian di
+      // baris sendiri, jadi ini cuma masalah di ringkasan satu-baris
+      // ini). Alat dengan nama unik TETAP tanpa kurung, tidak perlu.
+      var nameCounts = {};
+      cart.forEach(function (c) { nameCounts[c.name] = (nameCounts[c.name] || 0) + 1; });
+      var shown = cart.slice(0, 3).map(function (c) {
+        var label = c.name;
+        if (nameCounts[c.name] > 1 && c.detail) label += ' (' + c.detail + ')';
+        return label + ' ×' + c.quantity;
+      }).join(', ');
       var extra = cart.length > 3 ? ', +' + (cart.length - 3) + ' lainnya' : '';
       cartSummaryDesktop.textContent = shown + extra + ' · ' + totalLabel;
       cartSummaryMobile.textContent = totalLabel;
@@ -1479,9 +1501,28 @@ document.addEventListener('keydown', function (e) {
       var row = document.createElement('div');
       row.className = 'cart-row';
 
+      // Review -c1 (3 Nov 2026): dua "Carrier 60L" beda varian di modal
+      // ini sebelumnya sama-sama cuma tampil "Carrier 60L" tanpa cara
+      // bedakan — sama persis masalah yang sudah diperbaiki di ringkasan
+      // desktop cart-bar. Di sini SELALU tampilkan varian (bukan cuma
+      // saat nama duplikat) karena ruang per-baris cukup lega, konsisten
+      // dengan panel rincian HP yang juga selalu menampilkannya.
+      var info = document.createElement('div');
+      info.className = 'cart-row-info';
       var nameSpan = document.createElement('span');
+      nameSpan.className = 'cart-row-name';
       nameSpan.textContent = c.name;
-      row.appendChild(nameSpan);
+      info.appendChild(nameSpan);
+      if (c.detail) {
+        var detailSpan = document.createElement('span');
+        detailSpan.className = 'cart-row-detail';
+        detailSpan.textContent = c.detail;
+        info.appendChild(detailSpan);
+      }
+      row.appendChild(info);
+
+      var right = document.createElement('div');
+      right.className = 'cart-row-right';
 
       var stepper = document.createElement('div');
       stepper.className = 'qty-stepper';
@@ -1512,8 +1553,14 @@ document.addEventListener('keydown', function (e) {
         updateCardAction(itemId);
       });
       stepper.appendChild(incBtn);
+      right.appendChild(stepper);
 
-      row.appendChild(stepper);
+      var subtotalSpan = document.createElement('span');
+      subtotalSpan.className = 'cart-row-subtotal';
+      subtotalSpan.textContent = formatIDRClient(subtotal);
+      right.appendChild(subtotalSpan);
+
+      row.appendChild(right);
       listEl.appendChild(row);
     });
 
