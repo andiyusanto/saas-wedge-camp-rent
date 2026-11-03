@@ -628,6 +628,13 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
   </div>`
       : '';
 
+  // Ikon placeholder "tanpa foto" (point 5, keputusan Andi) — glyph gunung
+  // sederhana, dipakai sama persis buat semua item tanpa foto (bukan kotak
+  // abu-abu kosong seperti sebelumnya).
+  const NO_PHOTO_ICON = `<div style="width:100%;height:160px;background:#F1EEE2;display:flex;align-items:center;justify-content:center;">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#B5AF95" stroke-width="1.5" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8" cy="9.5" r="1.4"/><path d="M4.5 16.5l4.8-5.5 3 3.3 2.4-2.7L19.5 16.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </div>`;
+
   const itemsHtml = page.items.length
     ? page.items
         .map((item) => {
@@ -636,23 +643,32 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
   ${
     item.image_url
       ? `<img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name)}" class="zoomable" style="width:100%;height:160px;object-fit:cover;display:block;" loading="lazy" onclick="openZoom(this)" />`
-      : `<div style="width:100%;height:160px;background:#E6E1D2;"></div>`
+      : NO_PHOTO_ICON
   }
   <div style="padding:12px;">
     <p style="margin:0;font-weight:700;color:#26302B;">${escapeHtml(item.name)}</p>
     ${item.category ? `<p style="margin:2px 0 0;font-size:0.8rem;color:#6E6853;">${escapeHtml(item.category)}</p>` : ''}
-    ${details ? `<p style="margin:2px 0 0;font-size:0.75rem;color:#6E6853;">${escapeHtml(details)}</p>` : ''}
-    <p style="margin:6px 0 0;font-weight:700;color:#2B4739;">${formatIDR(item.price_per_day)} <span style="font-weight:400;color:#6E6853;font-size:0.75rem;">/hari</span></p>
+    ${details ? `<p style="margin:3px 0 0;font-size:0.75rem;color:#6E6853;font-weight:600;">${escapeHtml(details)}</p>` : ''}
+    <p style="margin:8px 0 0;font-weight:700;color:#2B4739;">${formatIDR(item.price_per_day)} <span style="font-weight:400;color:#6E6853;font-size:0.75rem;">/hari</span></p>
     ${
       item.extra_day_rate < item.price_per_day
         ? `<p style="margin:2px 0 0;font-size:0.75rem;color:#6E6853;">Mulai ${formatIDR(item.extra_day_rate)}/hari untuk sewa panjang</p>`
         : ''
     }
+    <p data-total="${escapeHtml(item.id)}" style="display:none;margin:4px 0 0;font-size:0.8rem;font-weight:700;color:#26302B;"></p>
     <span data-avail="${escapeHtml(item.id)}" style="display:none;margin-top:6px;padding:2px 8px;border-radius:999px;font-size:0.7rem;font-weight:700;"></span>
-    <button type="button" class="pesan-btn" data-item-id="${escapeHtml(item.id)}" data-item-name="${escapeHtml(item.name)}"
-      data-price-per-day="${item.price_per_day}" data-day2-rate="${item.day2_rate}" data-day3-rate="${item.day3_rate}"
-      data-day4-rate="${item.day4_rate}" data-day5-rate="${item.day5_rate}" data-extra-day-rate="${item.extra_day_rate}"
-      style="display:none;margin-top:8px;width:100%;min-height:36px;padding:8px 10px;border-radius:10px;border:none;background:#2B4739;color:#fff;font-weight:700;font-size:0.75rem;cursor:pointer;">Pesan Sekarang</button>
+    <div data-action="${escapeHtml(item.id)}" style="display:none;margin-top:8px;">
+      <button type="button" class="pesan-btn" data-item-id="${escapeHtml(item.id)}" data-item-name="${escapeHtml(item.name)}"
+        data-price-per-day="${item.price_per_day}" data-day2-rate="${item.day2_rate}" data-day3-rate="${item.day3_rate}"
+        data-day4-rate="${item.day4_rate}" data-day5-rate="${item.day5_rate}" data-extra-day-rate="${item.extra_day_rate}"
+        disabled
+        style="width:100%;min-height:36px;padding:8px 10px;border-radius:10px;border:none;background:#2B4739;color:#fff;font-weight:700;font-size:0.75rem;cursor:pointer;">Pilih</button>
+      <div class="qty-stepper-card" data-stepper="${escapeHtml(item.id)}" style="display:none;align-items:center;justify-content:space-between;gap:6px;border:1px solid #DBD5C1;border-radius:10px;padding:4px;background:#F1EEE2;">
+        <button type="button" class="step-dec" data-item-id="${escapeHtml(item.id)}" style="width:30px;height:30px;border-radius:8px;border:1px solid #DBD5C1;background:#fff;font-weight:700;cursor:pointer;">&minus;</button>
+        <span class="step-qty" data-qty="${escapeHtml(item.id)}" style="font-weight:700;color:#26302B;">0</span>
+        <button type="button" class="step-inc" data-item-id="${escapeHtml(item.id)}" style="width:30px;height:30px;border-radius:8px;border:1px solid #DBD5C1;background:#fff;font-weight:700;cursor:pointer;">+</button>
+      </div>
+    </div>
   </div>
 </div>`;
         })
@@ -723,6 +739,7 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
   }
   .avail-sep { color: #6E6853; font-size: 0.8rem; padding-bottom: 9px; }
   #avail-check { padding: 8px 14px; border-radius: 10px; border: none; background: #2B4739; color: #fff; font-weight: 700; font-size: 0.8rem; cursor: pointer; flex-shrink: 0; }
+  .pesan-btn:disabled { opacity: 0.5; cursor: not-allowed; }
   @media (max-width: 420px) {
     .avail-controls { flex-direction: column; align-items: stretch; }
     /* flex-basis 130px di .avail-field (atas) dimaksudkan sebagai
@@ -746,6 +763,14 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
   /* JS men-set style.display = 'flex' langsung saat keranjang terisi —
      aturan di atas cuma menyediakan default TERSEMBUNYI (none). */
   #cart-bar button { min-height: 44px; padding: 10px 16px; border-radius: 10px; border: none; background: #fff; color: #2B4739; font-weight: 700; font-size: 0.85rem; cursor: pointer; }
+  /* Review -c1: tanpa ini, baris terakhir kartu + section Syarat Sewa/
+     footer ketutupan #cart-bar yang fixed di bawah layar begitu
+     keranjang terisi dan halaman di-scroll sampai bawah. Class ini
+     ditoggle JS bareng cartBar.style.display (lihat renderCart()) —
+     ~tinggi bar (kira-kira 12px padding atas+bawah + konten ~24px) + 16px
+     jarak aman, bukan angka pas-pasan supaya tetap longgar di berbagai
+     ukuran font/perangkat. */
+  body.cart-bar-visible .wrap { padding-bottom: 96px; }
   .modal-overlay {
     display: none; position: fixed; inset: 0; background: rgba(38,48,43,0.55); z-index: 50;
     align-items: flex-end; justify-content: center; padding: 0;
@@ -807,7 +832,7 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
     <h2 style="font-size:1rem;margin:0 0 4px;color:#26302B;">Katalog Alat</h2>
     ${
       page.writable
-        ? `<p style="margin:0 0 10px;font-size:0.8rem;color:#6E6853;">Pilih tanggal ambil &amp; kembali untuk cek sisa unit tersedia per alat sepanjang periode itu (butuh JavaScript aktif) — atau langsung hubungi kami lewat WhatsApp.</p>
+        ? `<p style="margin:0 0 10px;font-size:0.8rem;color:#6E6853;">Pilih tanggal ambil &amp; kembali untuk melihat sisa unit dan harga total — atau langsung hubungi kami lewat WhatsApp.</p>
     <div class="avail-controls">
       <label class="avail-field">
         <span>Tanggal ambil</span>
@@ -821,6 +846,8 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
       <button type="button" id="avail-check">Cek Ketersediaan</button>
     </div>
     <p id="avail-status" style="margin:4px 0 0;font-size:0.75rem;color:#6E6853;min-height:1em;"></p>
+    <div id="avail-chip" style="display:none;margin-top:6px;padding:6px 12px;border-radius:999px;background:#F1EEE2;border:1px solid #DBD5C1;font-size:0.8rem;font-weight:700;color:#26302B;width:fit-content;"></div>
+    <p id="avail-chip-note" style="display:none;margin:4px 0 0;font-size:0.7rem;color:#6E6853;">Stok dihitung untuk seluruh periode</p>
     <p id="cart-date-notice" class="cart-notice"></p>`
         : // Review -c1 (rencana langganan): business hanya-baca — cek
           // ketersediaan+tombol pesan DIHILANGKAN SELURUHNYA (bukan
@@ -998,13 +1025,23 @@ document.addEventListener('keydown', function (e) {
   // backend/src/lib/availability.ts (0.2) — cuma dipakai buat warna badge
   // di sini, bukan sumber angka (angka remaining tetap dari server, jadi
   // tidak bisa dimanipulasi lewat sisi klien walau threshold-nya beda).
-  function badgeFor(remaining, total) {
-    if (remaining <= 0) return { text: 'Penuh', color: '#A8412E', bg: 'rgba(168,65,46,0.12)' };
-    var threshold = Math.max(1, Math.floor(total * 0.2));
-    if (remaining <= threshold) {
-      return { text: 'Sisa ' + remaining + ' dari ' + total, color: '#A65C2A', bg: 'rgba(166,92,42,0.12)' };
-    }
-    return { text: 'Tersedia ' + remaining + ' dari ' + total, color: '#2B4739', bg: 'rgba(43,71,57,0.12)' };
+  function badgeFor(remaining) {
+    if (remaining <= 0) return { text: 'Habis', color: '#A8412E', bg: 'rgba(168,65,46,0.12)' };
+    var threshold = Math.max(1, Math.floor(remaining * 0.2));
+    if (remaining <= threshold) return { text: 'Sisa ' + remaining + ' unit', color: '#A65C2A', bg: 'rgba(166,92,42,0.12)' };
+    return { text: 'Sisa ' + remaining + ' unit', color: '#2B4739', bg: 'rgba(43,71,57,0.12)' };
+  }
+
+  function showChip(start, end) {
+    var chip = document.getElementById('avail-chip');
+    var note = document.getElementById('avail-chip-note');
+    chip.textContent = formatDateRangeID(start, end) + ' · ' + rentalDaysCount(start, end) + ' hari';
+    chip.style.display = 'inline-block';
+    note.style.display = 'block';
+  }
+  function hideChip() {
+    document.getElementById('avail-chip').style.display = 'none';
+    document.getElementById('avail-chip-note').style.display = 'none';
   }
 
   btn.addEventListener('click', function () {
@@ -1012,10 +1049,12 @@ document.addEventListener('keydown', function (e) {
     var end = endInput.value || start;
     if (!start) {
       status.textContent = 'Pilih tanggal ambil dulu.';
+      hideChip();
       return;
     }
     if (end < start) {
       status.textContent = 'Tanggal kembali tidak boleh sebelum tanggal ambil.';
+      hideChip();
       return;
     }
     // Cara hitung durasi sewa (migration 049) — kalau toko ini pakai
@@ -1025,9 +1064,11 @@ document.addEventListener('keydown', function (e) {
     // server mentah (instruksi review -c1: jangan gagal diam-diam).
     if (rentalDayMode === 'per_malam' && end === start) {
       status.textContent = 'Tanggal ambil dan kembali tidak boleh di hari yang sama — pilih tanggal kembali minimal besoknya.';
+      hideChip();
       return;
     }
     status.textContent = 'Memuat ketersediaan...';
+    hideChip();
     fetch(
       '/api/public/etalase/' + encodeURIComponent(slug) + '/availability?start_date=' + encodeURIComponent(start) +
         '&end_date=' + encodeURIComponent(end)
@@ -1038,33 +1079,41 @@ document.addEventListener('keydown', function (e) {
           status.textContent = 'Gagal memuat ketersediaan.';
           return;
         }
-        status.textContent = start === end
-          ? 'Ketersediaan untuk tanggal ' + start + ':'
-          : 'Ketersediaan untuk ' + start + ' s/d ' + end + ' (sisa unit terendah sepanjang periode ini):';
-        data.items.forEach(function (it) {
-          var el = document.querySelector('[data-avail="' + it.id + '"]');
-          if (el) {
-            var b = badgeFor(it.remaining, it.total_units);
-            el.textContent = b.text;
-            el.style.color = b.color;
-            el.style.background = b.bg;
-            el.style.display = 'inline-block';
-          }
-          // Rencana tahap 3: tombol "Pesan Sekarang" cuma muncul kalau
-          // pesanan online aktif untuk toko ini DAN alat itu masih
-          // tersedia (remaining > 0) di rentang yang baru dicek —
-          // remaining-nya disimpan di dataset tombol supaya qty stepper
-          // di keranjang tahu batas atasnya tanpa fetch ulang.
-          var pesanBtn = document.querySelector('.pesan-btn[data-item-id="' + it.id + '"]');
-          if (pesanBtn) {
-            pesanBtn.dataset.remaining = it.remaining;
-            pesanBtn.style.display = orderingEnabled && it.remaining > 0 ? 'block' : 'none';
-          }
-        });
+        status.textContent = '';
+        // setOrderDates() dulu SEBELUM loop di bawah — kalau tanggal
+        // berubah dari pengecekan sebelumnya, ini mengosongkan keranjang.
+        // Loop update kartu di bawah lalu jalan terhadap keranjang yang
+        // SUDAH kosong, jadi setiap kartu otomatis balik ke tombol
+        // "Tambah" (bukan stepper basi) — review -c1 (poin 2): reset
+        // stepper per-kartu ikut reset tanggal, bukan cuma keranjang.
         setOrderDates(start, end);
+        showChip(start, end);
+        data.items.forEach(function (it) {
+          var badgeEl = document.querySelector('[data-avail="' + it.id + '"]');
+          if (badgeEl) {
+            var b = badgeFor(it.remaining);
+            badgeEl.textContent = b.text;
+            badgeEl.style.color = b.color;
+            badgeEl.style.background = b.bg;
+            badgeEl.style.display = 'inline-block';
+          }
+          // Review -c1 (poin 3): total harga per periode & badge stok
+          // SELALU dihitung/ditampilkan di sini terlepas dari
+          // orderingEnabled — berguna buat pelanggan walau toko belum
+          // aktifkan Pesanan Online (cuma tombol/stepper pesan yang
+          // digerbangi orderingEnabled, lihat updateCardAction()).
+          var totalEl = document.querySelector('[data-total="' + it.id + '"]');
+          var rates = getItemRates(it.id);
+          if (totalEl && rates) {
+            totalEl.textContent = 'Total ' + rentalDaysCount(start, end) + ' hari: ' + formatIDRClient(computeItemRentalPrice(rates, rentalDaysCount(start, end)));
+            totalEl.style.display = 'block';
+          }
+          updateCardAction(it.id, it.remaining);
+        });
       })
       .catch(function () {
         status.textContent = 'Gagal memuat ketersediaan.';
+        hideChip();
       });
   });
 
@@ -1114,6 +1163,12 @@ document.addEventListener('keydown', function (e) {
         termsVersionId = (cfg && cfg.terms_version_id) || null;
         var termsSection = document.getElementById('order-terms-section');
         if (termsSection) termsSection.style.display = termsContent ? 'flex' : 'none';
+        // Review -c1 (poin 3): kontainer tombol/stepper pesan per-kartu
+        // cuma ditampilkan kalau Pesanan Online aktif — badge stok & total
+        // harga (di luar kontainer ini) TETAP tampil terlepas dari ini.
+        document.querySelectorAll('[data-action]').forEach(function (el) {
+          el.style.display = orderingEnabled ? 'block' : 'none';
+        });
       })
       .catch(function () { orderingEnabled = false; });
   }
@@ -1202,17 +1257,77 @@ document.addEventListener('keydown', function (e) {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n);
   }
 
+  // Tarif per-alat dibaca dari dataset tombol pesan-btn (sudah di-render
+  // SSR, di-escape lewat atribut HTML biasa) — satu sumber dipakai baik
+  // buat isi keranjang (pesan-btn click) maupun hitung "Total X hari" di
+  // kartu (avail-check), supaya tidak ada salinan ketiga nilai yang sama.
+  function getItemRates(itemId) {
+    var btnEl = document.querySelector('.pesan-btn[data-item-id="' + itemId + '"]');
+    if (!btnEl) return null;
+    return {
+      price_per_day: Number(btnEl.dataset.pricePerDay),
+      day2_rate: Number(btnEl.dataset.day2Rate),
+      day3_rate: Number(btnEl.dataset.day3Rate),
+      day4_rate: Number(btnEl.dataset.day4Rate),
+      day5_rate: Number(btnEl.dataset.day5Rate),
+      extra_day_rate: Number(btnEl.dataset.extraDayRate),
+    };
+  }
+
+  // Satu fungsi dipanggil tiap kali kartu suatu alat perlu disinkronkan ke
+  // state terbaru (hasil cek ketersediaan baru, atau keranjang berubah
+  // lewat +/-/klik tombol) — satu-satunya tempat yang memutuskan kartu ini
+  // menampilkan tombol "Tambah"/"Habis" atau stepper, supaya kartu dan
+  // modal keranjang tidak pernah berbeda cerita (review -c1 poin 2).
+  function updateCardAction(itemId, remainingOverride) {
+    var actionEl = document.querySelector('[data-action="' + itemId + '"]');
+    if (!actionEl) return;
+    if (typeof remainingOverride === 'number') actionEl.dataset.remaining = String(remainingOverride);
+    var remaining = Number(actionEl.dataset.remaining || 0);
+    actionEl.style.display = orderingEnabled ? 'block' : 'none';
+    if (!orderingEnabled) return;
+
+    var btnEl = actionEl.querySelector('.pesan-btn');
+    var stepperEl = actionEl.querySelector('.qty-stepper-card');
+    var cartEntry = cart.find(function (c) { return c.item_id === itemId; });
+
+    if (cartEntry && cartEntry.quantity > 0) {
+      btnEl.style.display = 'none';
+      stepperEl.style.display = 'flex';
+      stepperEl.querySelector('.step-qty').textContent = String(cartEntry.quantity);
+      stepperEl.querySelector('.step-inc').disabled = cartEntry.quantity >= remaining;
+      return;
+    }
+
+    stepperEl.style.display = 'none';
+    btnEl.style.display = 'block';
+    if (remaining <= 0) {
+      btnEl.disabled = true;
+      btnEl.textContent = 'Habis';
+    } else {
+      btnEl.disabled = false;
+      btnEl.textContent = 'Tambah';
+    }
+  }
+
   var cartBar = document.getElementById('cart-bar');
   var cartSummary = document.getElementById('cart-summary');
   var orderModal = document.getElementById('order-modal');
+
+  function cartTotalPrice() {
+    var days = orderDates.start && orderDates.end ? rentalDaysCount(orderDates.start, orderDates.end) : 1;
+    return cart.reduce(function (sum, c) { return sum + computeItemRentalPrice(c.rates, days) * c.quantity; }, 0);
+  }
 
   function renderCart() {
     var totalQty = cart.reduce(function (sum, c) { return sum + c.quantity; }, 0);
     if (totalQty > 0) {
       cartBar.style.display = 'flex';
-      cartSummary.textContent = totalQty + ' alat dipilih';
+      cartSummary.textContent = totalQty + ' alat · ' + formatIDRClient(cartTotalPrice());
+      document.body.classList.add('cart-bar-visible');
     } else {
       cartBar.style.display = 'none';
+      document.body.classList.remove('cart-bar-visible');
     }
 
     // Review -c1 (poin 5): tampilkan rentang tanggal di atas daftar
@@ -1264,9 +1379,11 @@ document.addEventListener('keydown', function (e) {
       decBtn.type = 'button';
       decBtn.textContent = '−';
       decBtn.addEventListener('click', function () {
+        var itemId = cart[idx].item_id;
         cart[idx].quantity--;
         if (cart[idx].quantity <= 0) cart.splice(idx, 1);
         renderCart();
+        updateCardAction(itemId);
       });
       stepper.appendChild(decBtn);
 
@@ -1278,8 +1395,10 @@ document.addEventListener('keydown', function (e) {
       incBtn.type = 'button';
       incBtn.textContent = '+';
       incBtn.addEventListener('click', function () {
+        var itemId = cart[idx].item_id;
         if (cart[idx].quantity < cart[idx].remaining) cart[idx].quantity++;
         renderCart();
+        updateCardAction(itemId);
       });
       stepper.appendChild(incBtn);
 
@@ -1292,28 +1411,42 @@ document.addEventListener('keydown', function (e) {
 
   document.querySelectorAll('.pesan-btn').forEach(function (btn) {
     btn.addEventListener('click', function () {
+      if (btn.disabled) return;
       var itemId = btn.dataset.itemId;
-      var remaining = Number(btn.dataset.remaining || 0);
-      var existing = cart.find ? cart.find(function (c) { return c.item_id === itemId; }) : null;
+      var actionEl = document.querySelector('[data-action="' + itemId + '"]');
+      var remaining = Number(actionEl ? actionEl.dataset.remaining : 0) || 0;
+      var existing = cart.find(function (c) { return c.item_id === itemId; });
       if (existing) {
         if (existing.quantity < remaining) existing.quantity++;
       } else {
-        cart.push({
-          item_id: itemId,
-          name: btn.dataset.itemName,
-          quantity: 1,
-          remaining: remaining,
-          rates: {
-            price_per_day: Number(btn.dataset.pricePerDay),
-            day2_rate: Number(btn.dataset.day2Rate),
-            day3_rate: Number(btn.dataset.day3Rate),
-            day4_rate: Number(btn.dataset.day4Rate),
-            day5_rate: Number(btn.dataset.day5Rate),
-            extra_day_rate: Number(btn.dataset.extraDayRate),
-          },
-        });
+        cart.push({ item_id: itemId, name: btn.dataset.itemName, quantity: 1, remaining: remaining, rates: getItemRates(itemId) });
       }
       renderCart();
+      updateCardAction(itemId);
+    });
+  });
+
+  // Stepper langsung di kartu (poin 1) — elemen .step-dec/.step-inc sudah
+  // di-render SSR (hidden) di setiap kartu, dipasangi listener sekali di
+  // sini (bukan dibuat lewat innerHTML) sama seperti .pesan-btn di atas.
+  document.querySelectorAll('.step-inc').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var itemId = btn.dataset.itemId;
+      var entry = cart.find(function (c) { return c.item_id === itemId; });
+      if (entry && entry.quantity < entry.remaining) entry.quantity++;
+      renderCart();
+      updateCardAction(itemId);
+    });
+  });
+  document.querySelectorAll('.step-dec').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var itemId = btn.dataset.itemId;
+      var idx = cart.findIndex(function (c) { return c.item_id === itemId; });
+      if (idx === -1) return;
+      cart[idx].quantity--;
+      if (cart[idx].quantity <= 0) cart.splice(idx, 1);
+      renderCart();
+      updateCardAction(itemId);
     });
   });
 
