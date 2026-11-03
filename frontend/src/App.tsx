@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { LogOut } from 'lucide-react';
 import { supabase } from './lib/supabaseClient';
 import { useAuth } from './hooks/useAuth';
 import { useBusiness } from './hooks/useBusiness';
@@ -86,6 +87,51 @@ function clearInviteCode() {
   }
 }
 
+// Bug nyata ditemukan Andi 3 Nov 2026: akun admin (app_admins, migration
+// 044) yang SENGAJA tidak punya business (mis. sewalogdotcomcorp@gmail.com,
+// akun admin murni buat pakai Alat Admin, bukan vendor) jatuh ke
+// OnboardingScreen seperti akun biasa tanpa business — tab Alat Admin
+// sendiri cuma ada di Navbar, yang cuma dirender setelah punya business,
+// jadi admin begini tidak akan PERNAH bisa mencapainya. Layar ini
+// SENGAJA bukan app penuh (tanpa Navbar/tab lain — tidak ada business
+// untuk ditampilkan) — cuma header Sewalog minimal + AdminScreen + tombol
+// keluar. TIDAK membuat business otomatis untuk akun admin (instruksi
+// Andi) — kalau admin ini KEBETULAN juga owner business sendiri, dia
+// tetap jatuh ke app biasa dengan tab Alat Admin seperti sebelumnya
+// (lihat guard `!business` di App() di bawah, cuma berlaku kalau business
+// benar-benar null).
+function AdminOnlyView({ onLogout }: { onLogout: () => void }) {
+  return (
+    <div className="min-h-screen bg-[#F1EEE2] text-[#26302B] flex flex-col">
+      <header className="sticky top-0 z-30 bg-[#2B4739] text-white shadow-md border-b border-[#1E3429]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center space-x-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-[#F1EEE2] flex items-center justify-center p-1.5 shadow-sm border border-[#DBD5C1] shrink-0">
+                <img src="/logo.svg" alt="" className="w-full h-full" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-xl font-bold tracking-tight text-[#F1EEE2]">Sewalog</span>
+                <p className="text-xs text-[#E6E1D2]/80 font-medium truncate">Akun Admin</p>
+              </div>
+            </div>
+            <button
+              onClick={onLogout}
+              title="Keluar"
+              className="p-2 rounded-xl bg-[#1E3429] hover:bg-[#15251D] border border-[#3A5C4A] text-[#DBD5C1] transition"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </header>
+      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
+        <AdminScreen />
+      </main>
+    </div>
+  );
+}
+
 function App() {
   const { session, loading: authLoading, isPasswordRecovery, clearPasswordRecovery } = useAuth();
   const {
@@ -105,7 +151,7 @@ function App() {
   // Aktif sama sekali.
   const { pendingCount: pendingRequestCount } = useBookingRequests(business?.id ?? null);
   const { subscription } = useSubscription(business?.id ?? null);
-  const { isAdmin: isAppAdmin } = useIsAppAdmin(session);
+  const { isAdmin: isAppAdmin, loading: isAppAdminLoading } = useIsAppAdmin(session);
   const isDemoAccount = isDemoAccountEmail(session?.user.email);
 
   // Jaring pengaman kalau karyawan sempat berada di tab owner-only (mis.
@@ -213,6 +259,14 @@ function App() {
   }
 
   if (!business) {
+    // Tunggu status admin selesai dicek dulu sebelum memutuskan — tanpa
+    // ini, admin tanpa business akan sempat kelihatan OnboardingScreen
+    // sekejap lalu "lompat" ke AdminOnlyView begitu RPC is_app_admin()
+    // selesai (race dua loading independen, lihat useIsAppAdmin.ts).
+    if (isAppAdminLoading) return null;
+    if (isAppAdmin) {
+      return <AdminOnlyView onLogout={() => supabase?.auth.signOut()} />;
+    }
     return <OnboardingScreen onCreated={refreshBusiness} />;
   }
 
