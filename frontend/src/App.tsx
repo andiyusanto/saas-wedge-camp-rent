@@ -106,7 +106,7 @@ function AdminOnlyView({ onLogout }: { onLogout: () => void }) {
       <header className="sticky top-0 z-30 bg-[#2B4739] text-white shadow-md border-b border-[#1E3429]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-3 min-w-0">
+            <div className="flex items-center space-x-3 min-w-0 flex-1">
               <div className="w-10 h-10 rounded-xl bg-[#F1EEE2] flex items-center justify-center p-1.5 shadow-sm border border-[#DBD5C1] shrink-0">
                 <img src="/logo.svg" alt="" className="w-full h-full" />
               </div>
@@ -115,13 +115,24 @@ function AdminOnlyView({ onLogout }: { onLogout: () => void }) {
                 <p className="text-xs text-[#E6E1D2]/80 font-medium truncate">Akun Admin</p>
               </div>
             </div>
-            <button
-              onClick={onLogout}
-              title="Keluar"
-              className="p-2 rounded-xl bg-[#1E3429] hover:bg-[#15251D] border border-[#3A5C4A] text-[#DBD5C1] transition"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
+            {/* Review 3 Nov 2026: Andi melaporkan logo/tombol keluar
+                terpotong di 390px — wrapper di sini SEBELUMNYA tidak
+                punya shrink-0, beda dari grup tombol kanan Navbar.tsx
+                (lihat "flex items-center gap-2 shrink-0" di sana) yang
+                jadi acuan pola header ini. Tanpa shrink-0, flex-shrink
+                default (1) bisa memampatkan tombol begitu kolom kiri
+                (yang sekarang flex-1, SENGAJA mengambil sisa ruang
+                supaya tombol ini tidak perlu ikut berebut ruang sama
+                sekali) melebihi lebar tersedia. */}
+            <div className="flex items-center shrink-0">
+              <button
+                onClick={onLogout}
+                title="Keluar"
+                className="p-2 rounded-xl bg-[#1E3429] hover:bg-[#15251D] border border-[#3A5C4A] text-[#DBD5C1] transition"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       </header>

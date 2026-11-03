@@ -5,6 +5,40 @@ import { useAdminBusinesses } from '../hooks/useAdminBusinesses';
 import type { AdminBusinessRow } from '../hooks/useAdminBusinesses';
 import { AdminPaymentModal } from './AdminPaymentModal';
 import { formatDateIndo } from '../utils/formatters';
+import { FOUNDER_CUTOFF_ISO } from '../lib/subscriptionConfig';
+
+// Paket final (keputusan Andi 3 Nov 2026) — ganti nama lama "Trial"/
+// "Dasar" yang tidak pernah jadi harga sungguhan (lihat subscriptionConfig.ts:
+// PRICING). "Pro" (rencana multi-cabang, CLAUDE.md bagian 8 non-goal)
+// BELUM ada tier-nya — SENGAJA tidak di-list di bawah ini supaya tidak
+// bisa dipilih sebelum fiturnya sungguhan siap; tambah satu baris di
+// sini kapan pun sudah siap, select di bawah otomatis ikut tanpa
+// perubahan lain.
+const PLAN_OPTIONS: { value: string; label: string }[] = [
+  { value: 'pendiri', label: 'Pendiri' },
+  { value: 'standar', label: 'Standar' },
+];
+
+// PENTING — ini CUMA label tampilan dropdown admin, BUKAN sumber harga.
+// Harga yang sungguhan ditampilkan ke vendor (halaman Langganan) dan
+// disarankan Admin Tools tetap dihitung dari businesses.created_at +
+// logika mulai-periode (lihat subscriptionConfig.ts: isFounderPricing(),
+// pricingAnnounced()) — TIDAK PERNAH dari kolom subscriptions.plan ini.
+// Kolom plan murni label administratif (riwayat/pelaporan), jangan
+// bingung keduanya kalau nanti ada perbedaan.
+function defaultPlanFor(createdAt: string): 'pendiri' | 'standar' {
+  return new Date(createdAt).getTime() < new Date(FOUNDER_CUTOFF_ISO).getTime() ? 'pendiri' : 'standar';
+}
+
+// Baris lama (plan null, atau nilai lama 'trial'/'dasar' dari sebelum
+// paket final diputuskan) belum pernah di-backfill di DB — tampilkan
+// default yang masuk akal di SINI (klien) berdasarkan created_at,
+// TANPA menulis apa pun ke DB diam-diam. Andi punya skrip SQL
+// normalisasi satu-kali terpisah buat backfill sungguhan kalau mau.
+function displayPlan(row: AdminBusinessRow): string {
+  if (row.plan === 'pendiri' || row.plan === 'standar') return row.plan;
+  return defaultPlanFor(row.signed_up_at);
+}
 
 const STATUS_LABEL: Record<AdminBusinessRow['status'], string> = {
   aktif: 'Aktif',
@@ -89,27 +123,47 @@ export function AdminScreen() {
           >
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <p className="font-bold text-[#26302B] truncate">{row.name}</p>
+                {/* Review -c1 3 Nov 2026: owner_email (dan nama usaha)
+                    bisa jadi satu token panjang tanpa spasi (mis. alamat
+                    Gmail "+tag") — `truncate` (white-space:nowrap)
+                    sendirian butuh min-width:0 EKSPLISIT di elemen flex
+                    ITU SENDIRI untuk benar-benar terpotong, bukan cuma
+                    di parent-nya (min-width default flex item adalah
+                    content-based, bukan 0). Di Safari/WebKit lama ini
+                    pernah tidak konsisten, jadi dipakai `break-all`
+                    (ganti ke baris baru per-karakter kalau perlu) +
+                    `min-w-0` di elemen teksnya sendiri sebagai jalan
+                    paling pasti lintas-browser, bukan cuma andalan
+                    truncate+ellipsis satu baris. */}
+                <p className="font-bold text-[#26302B] break-all min-w-0">{row.name}</p>
                 <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${STATUS_CLASS[row.status]}`}>
                   {STATUS_LABEL[row.status]}
                 </span>
               </div>
-              <p className="text-xs text-[#6E6853] truncate">{row.owner_email}</p>
+              <p className="text-xs text-[#6E6853] break-all min-w-0">{row.owner_email}</p>
               <p className="text-xs text-[#6E6853]">
                 Aktif sampai {row.active_until ? formatDateIndo(row.active_until) : '-'} · sejak {formatDateIndo(row.signed_up_at.slice(0, 10))}
               </p>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            {/* shrink-0 lama diganti flex-wrap — select+tombol dulu
+                dipaksa satu baris (shrink-0 mencegah dua-duanya
+                menyusut), yang di layar sempit bisa ikut mendorong
+                lebar kartu melebihi viewport kalau ruang kiri sudah
+                habis dipakai nama/email panjang. flex-wrap membiarkan
+                tombol turun ke baris sendiri kalau memang tidak muat. */}
+            <div className="flex items-center gap-2 flex-wrap">
               <select
-                value={row.plan ?? ''}
+                value={displayPlan(row)}
                 disabled={planSavingId === row.business_id}
                 onChange={(e) => handlePlanChange(row.business_id, e.target.value)}
                 className="px-2.5 py-2 rounded-lg bg-white border border-[#DBD5C1] text-xs"
               >
-                <option value="trial">Trial</option>
-                <option value="dasar">Dasar</option>
-                <option value="pro">Pro</option>
+                {PLAN_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
               </select>
               <button
                 onClick={() => setPaymentTarget(row)}
