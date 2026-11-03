@@ -317,6 +317,15 @@ export function NewBookingModal({
       setError('Pilih minimal satu alat.');
       return;
     }
+    // Jaminan uang tanpa jumlah tidak masuk akal sebagai jaminan (beda
+    // dari KTP/SIM/dsb yang memang cuma catatan identitas, tanpa angka)
+    // — wajibkan di sini, DIPERKUAT lagi server-side (POST /bookings)
+    // supaya jalur lain yang mungkin memanggil endpoint ini langsung
+    // tidak bisa melewati validasi ini.
+    if (depositType === 'uang' && !(Number(depositAmount) > 0)) {
+      setError('Jumlah Deposit Uang wajib diisi (lebih dari 0) untuk jenis jaminan Uang.');
+      return;
+    }
 
     setSubmitting(true);
 
@@ -756,11 +765,14 @@ export function NewBookingModal({
                   disabled={!depositType}
                   className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739] disabled:opacity-50"
                 />
+                <p className="text-[11px] text-[#6E6853] mt-1">
+                  Cukup tulis jenis &amp; nama (mis. KTP a.n. Budi) — tidak perlu menulis nomor KTP/SIM.
+                </p>
               </div>
 
               {depositType === 'uang' && (
                 <div className="sm:col-span-2">
-                  <label className="block font-semibold text-[#26302B] mb-1">Jumlah Deposit Uang (Rp)</label>
+                  <label className="block font-semibold text-[#26302B] mb-1">Jumlah Deposit Uang (Rp) *</label>
                   <input
                     type="number"
                     min={0}

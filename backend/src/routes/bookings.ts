@@ -78,6 +78,19 @@ router.post('/bookings', async (req, res) => {
     return;
   }
 
+  // Jaminan uang tanpa jumlah bukan jaminan sungguhan — divalidasi di
+  // sini (SEBELUM insert bookings/booking_items apa pun, supaya tidak
+  // perlu rollback kalau gagal) sebagai penegak SERVER-SIDE, bukan cuma
+  // andalan validasi form NewBookingModal.tsx — endpoint ini bisa saja
+  // dipanggil langsung (mis. alur konfirmasi Pesanan Online lewat form
+  // yang sama, lihat TrackingScreen.tsx, otomatis ikut tercakup karena
+  // satu-satunya jalur POST /bookings). Jenis jaminan lain (KTP/SIM/dsb)
+  // tidak disentuh — catatan identitas tetap opsional.
+  if (deposit?.type === 'uang' && !(Number(deposit.amount) > 0)) {
+    res.status(400).json({ error: 'Jumlah Deposit Uang wajib diisi (lebih dari 0) untuk jenis jaminan Uang.' });
+    return;
+  }
+
   const supabase = createRequestClient(req);
 
   // Catat Transaksi baru = "kerja baru" (DIKUNCI, rencana langganan) —

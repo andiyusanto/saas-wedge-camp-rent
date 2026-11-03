@@ -293,13 +293,18 @@ export function GuideScreen({ businessName }: { businessName: string }) {
             <>Isi nomor WhatsApp penyewa (kalau belum otomatis terisi). Opsional: tekan <Ui>Foto Wajah / Setengah Badan</Ui> untuk ambil foto singkat penyewa dari kamera.</>,
             <>Cari alat lewat kotak pencarian (nama, varian, ukuran, atau warna) kalau katalog sudah banyak, lalu centang satu atau lebih alat — bisa multi-item dalam satu transaksi. Varian/ukuran/warna alat (kalau diisi) ditampilkan di bawah nama alat supaya tidak salah pilih antar varian yang mirip.</>,
             <>Pilih tanggal ambil &amp; kembali. Total harga terhitung otomatis, termasuk harga per hari kalau alatnya punya tarif lebih murah untuk sewa lama (lihat <SectionLink id="g-3">bagian 3</SectionLink>).</>,
-            <>Pilih jenis jaminan (KTP/SIM/STNK/Paspor/Uang/Lainnya), lalu tekan <Ui>Simpan &amp; Terbitkan Nota</Ui>.</>,
+            <>Pilih jenis jaminan (KTP/SIM/STNK/Paspor/Uang/Lainnya) — kalau pilih <Ui>Uang</Ui>, jumlah deposit WAJIB diisi lebih dari
+            Rp0 (ditolak kalau kosong, di form maupun server). Jenis jaminan lain tidak wajib isi jumlah. Lalu tekan <Ui>Simpan &amp; Terbitkan Nota</Ui>.</>,
           ]}
         />
         <Note>
           Memilih pelanggan lama dari daftar saran menautkan transaksi baru ke data pelanggan yang sama (bukan bikin
           baris baru) — muncul catatan kecil "Pernah sewa Nx" sebagai konfirmasi. Kalau salah satu field diedit manual
           setelah memilih, pilihan itu otomatis dilepas dan dianggap pelanggan baru saat disimpan.
+        </Note>
+        <Note>
+          Catatan Identitas Jaminan (opsional) cukup jenis &amp; nama saja, mis. "KTP a.n. Budi" — JANGAN tulis nomor
+          KTP/SIM/dokumen lain. Sewalog sengaja tidak pernah menyimpan nomor identitas semacam itu.
         </Note>
         <Note>
           Foto penyewa sengaja bukan foto KTP/dokumen — cukup wajah/setengah badan, untuk bukti siapa yang mengambil
