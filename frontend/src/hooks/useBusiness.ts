@@ -17,6 +17,7 @@ export type Business = {
   // punya snapshot sendiri di bookings.rental_day_mode, tidak ikut
   // berubah kalau ini diganti (lihat utils/formatters.ts).
   rental_day_mode: RentalDayMode;
+  created_at: string;
 };
 
 export type BusinessUpdateInput = {
@@ -51,7 +52,7 @@ export function useBusiness(session: Session | null) {
     // RLS (members_select_own_business) sudah membatasi ke baris milik user ini.
     const { data, error: queryError } = await supabase
       .from('businesses')
-      .select('id, name, owner_name, phone, address, regency_id, late_tolerance_hours, logo_url, rental_day_mode')
+      .select('id, name, owner_name, phone, address, regency_id, late_tolerance_hours, logo_url, rental_day_mode, created_at')
       .maybeSingle();
 
     // PENTING: error di sini (mis. PGRST116 "multiple rows" kalau akun ini

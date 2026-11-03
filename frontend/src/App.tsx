@@ -282,6 +282,7 @@ function App() {
           <LanggananScreen
             businessId={business.id}
             businessName={business.name}
+            businessCreatedAt={business.created_at}
             subscription={subscription}
             isDemoAccount={isDemoAccount}
           />

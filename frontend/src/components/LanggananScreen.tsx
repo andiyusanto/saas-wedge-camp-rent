@@ -4,8 +4,16 @@ import type { Subscription, SubscriptionStatus } from '../hooks/useSubscription'
 import { useSubscriptionPayments } from '../hooks/useSubscriptionPayments';
 import type { SubscriptionPayment } from '../hooks/useSubscriptionPayments';
 import { SubscriptionReceiptModal } from './SubscriptionReceiptModal';
-import { SUBSCRIPTION_CONFIG } from '../lib/subscriptionConfig';
-import { getWhatsAppShareUrl, formatIDR, formatDateIndo } from '../utils/formatters';
+import {
+  SUBSCRIPTION_CONFIG,
+  PRICING,
+  pricingAnnounced,
+  isFounderPricing,
+  type BillingPeriod,
+} from '../lib/subscriptionConfig';
+import { getWhatsAppShareUrl, formatIDR, formatDateIndo, todayStr, addDaysStr } from '../utils/formatters';
+
+const PERIOD_LABEL: Record<BillingPeriod, string> = { monthly: 'Bulanan', yearly: 'Tahunan' };
 
 const STATUS_LABEL: Record<SubscriptionStatus, string> = {
   aktif: 'Aktif',
@@ -29,18 +37,22 @@ const METHOD_LABEL: Record<string, string> = {
 // Halaman "Langganan" owner-only — status, tanggal aktif, info rekening
 // pembayaran, tombol konfirmasi via WA, dan riwayat pembayaran (baca-saja,
 // satu-satunya jalur tulis adalah RPC admin record_subscription_payment).
-// Harga/plan FINAL belum ditentukan (CLAUDE.md: gratis sampai 31 Des 2026,
-// harga setelahnya belum diputuskan) — halaman ini TIDAK BOLEH menjanjikan
-// angka harga pasti, cuma status & cara konfirmasi pembayaran saat sudah
-// diminta admin.
+// Harga final sudah diputuskan (Rp49rb/bulan, Rp490rb/tahun, harga Pendiri
+// Rp39rb/Rp390rb untuk vendor daftar sebelum 2027 — berlaku sepanjang 2027
+// saja, lihat lib/subscriptionConfig.ts) tapi TIDAK BOLEH ditampilkan sama
+// sekali (angka ATAU status Pendiri) sebelum PRICING_ANNOUNCE_AT_ISO (9
+// Des 2026) — keputusan -c1, supaya tidak membocorkan skema sebelum
+// pengumuman resmi. Sebelum itu tetap tampilkan teks "harga diumumkan".
 export function LanggananScreen({
   businessId,
   businessName,
+  businessCreatedAt,
   subscription,
   isDemoAccount = false,
 }: {
   businessId: string;
   businessName: string;
+  businessCreatedAt: string;
   subscription: Subscription | null;
   // Akun demo publik (landing page) — review -c1: pengunjung tidak boleh
   // bisa tidak sengaja kirim WA konfirmasi-bayar ke nomor resmi Sewalog
@@ -49,10 +61,27 @@ export function LanggananScreen({
 }) {
   const { payments, loading } = useSubscriptionPayments(businessId);
   const [receiptTarget, setReceiptTarget] = useState<SubscriptionPayment | null>(null);
+  const [period, setPeriod] = useState<BillingPeriod>('monthly');
+
+  // Gate pengumuman harga (keputusan -c1 2 Nov 2026) — sebelum tanggalnya
+  // tidak boleh tampil angka ATAU status Pendiri sama sekali, supaya
+  // tidak membocorkan skema harga sebelum pengumuman resmi 9 Des 2026.
+  const announced = pricingAnnounced();
+
+  // Periode yang SEDANG dibayar mulai dari hari setelah active_until
+  // kalau masih di masa depan, atau hari ini kalau sudah lewat/tenggang
+  // — eligibility Pendiri ditentukan dari tanggal MULAI periode ini,
+  // bukan hari ini (review -c1).
+  const today = todayStr();
+  const periodStart = subscription && subscription.activeUntil > today ? addDaysStr(subscription.activeUntil, 1) : today;
+  const isFounder = announced && isFounderPricing(businessCreatedAt, periodStart);
+  const price = announced ? PRICING[isFounder ? 'founder' : 'normal'][period] : null;
 
   const waUrl = getWhatsAppShareUrl(
     SUBSCRIPTION_CONFIG.supportWhatsApp,
-    `Halo Sewalog, saya mau konfirmasi pembayaran langganan untuk usaha "${businessName}".`,
+    announced && price !== null
+      ? `Halo Sewalog, saya mau konfirmasi pembayaran langganan untuk usaha "${businessName}" — paket ${PERIOD_LABEL[period]} (${formatIDR(price)}).`
+      : `Halo Sewalog, saya mau konfirmasi pembayaran langganan untuk usaha "${businessName}".`,
   );
 
   const hasBankInfo = SUBSCRIPTION_CONFIG.bankName && SUBSCRIPTION_CONFIG.bankAccountNumber;
@@ -99,10 +128,43 @@ export function LanggananScreen({
           <p className="text-sm text-[#6E6853]">Memuat status langganan...</p>
         )}
 
-        <p className="text-xs text-[#6E6853] leading-relaxed border-t border-[#E6E1D2] pt-3">
-          Sewalog gratis sampai 31 Desember 2026. Harga setelahnya belum diputuskan — akan diumumkan sebelum tanggal
-          itu. Pembayaran dikonfirmasi manual lewat WhatsApp, bukan otomatis.
-        </p>
+        {announced ? (
+          <div className="border-t border-[#E6E1D2] pt-3 space-y-2">
+            <div className="flex items-center gap-1.5 bg-[#F1EEE2] border border-[#DBD5C1] rounded-xl p-1 w-fit">
+              {(['monthly', 'yearly'] as const).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPeriod(p)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                    period === p ? 'bg-[#2B4739] text-white shadow-sm' : 'text-[#6E6853]'
+                  }`}
+                >
+                  {PERIOD_LABEL[p]}
+                </button>
+              ))}
+            </div>
+            <div>
+              <p className="text-xs text-[#6E6853]">Harga untukmu{isFounder && <span className="font-semibold text-[#2B4739]"> (Pendiri)</span>}</p>
+              <p className="text-2xl font-extrabold text-[#2B4739] leading-tight">
+                {formatIDR(price as number)}
+                <span className="text-sm font-semibold text-[#6E6853]">/{period === 'monthly' ? 'bulan' : 'tahun'}</span>
+              </p>
+              {isFounder && (
+                <p className="text-xs text-[#6E6853] mt-0.5">
+                  Berlaku sepanjang 2027, mulai 2028 {formatIDR(PRICING.normal[period])}/{period === 'monthly' ? 'bulan' : 'tahun'}.
+                </p>
+              )}
+            </div>
+            <p className="text-xs text-[#6E6853] leading-relaxed">
+              Pembayaran dikonfirmasi manual lewat WhatsApp, bukan otomatis.
+            </p>
+          </div>
+        ) : (
+          <p className="text-xs text-[#6E6853] leading-relaxed border-t border-[#E6E1D2] pt-3">
+            Sewalog gratis sampai 31 Desember 2026. Harga setelahnya belum diputuskan — akan diumumkan sebelum
+            tanggal itu. Pembayaran dikonfirmasi manual lewat WhatsApp, bukan otomatis.
+          </p>
+        )}
       </div>
 
       <div className="bg-[#FBFAF4] p-4 sm:p-5 rounded-2xl border border-[#DBD5C1] shadow-xs space-y-3">

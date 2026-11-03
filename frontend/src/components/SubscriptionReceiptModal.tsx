@@ -27,6 +27,12 @@ export function SubscriptionReceiptModal({
   onClose: () => void;
 }) {
   const receiptNumber = payment.id.slice(0, 8).toUpperCase();
+  const planLabel =
+    payment.period_days === 30
+      ? 'Langganan Bulanan'
+      : payment.period_days === 365
+        ? 'Langganan Tahunan'
+        : `Langganan (${payment.period_days} hari)`;
 
   return (
     <ModalBackdrop>
@@ -59,6 +65,10 @@ export function SubscriptionReceiptModal({
             <div className="flex justify-between">
               <span className="text-[#6E6853]">Usaha</span>
               <span className="font-semibold">{businessName}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[#6E6853]">Paket</span>
+              <span className="font-semibold">{planLabel}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-[#6E6853]">Masa aktif</span>

@@ -2,6 +2,10 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import type { AdminBusinessRow } from '../hooks/useAdminBusinesses';
+import { PRICING, PERIOD_DAYS, pricingAnnounced, isFounderPricing, type BillingPeriod } from '../lib/subscriptionConfig';
+import { todayStr, addDaysStr } from '../utils/formatters';
+
+const PERIOD_LABEL: Record<BillingPeriod, string> = { monthly: 'Bulanan (30 hari)', yearly: 'Tahunan (365 hari)' };
 
 // Form "Catat Pembayaran" — satu-satunya jalur tulis ke subscription_payments
 // + subscriptions.active_until, lewat RPC record_subscription_payment
@@ -22,6 +26,17 @@ export function AdminPaymentModal({
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const announced = pricingAnnounced();
+  const today = todayStr();
+  const periodStart =
+    business.active_until && business.active_until > today ? addDaysStr(business.active_until, 1) : today;
+  const founder = announced && isFounderPricing(business.signed_up_at, periodStart);
+
+  function applySuggestion(period: BillingPeriod) {
+    setAmount(String(PRICING[founder ? 'founder' : 'normal'][period]));
+    setPeriodDays(String(PERIOD_DAYS[period]));
+  }
 
   async function handleSubmit() {
     if (!supabase) return;
@@ -60,6 +75,22 @@ export function AdminPaymentModal({
           <h2 className="text-lg font-bold text-[#26302B]">Catat Pembayaran</h2>
           <p className="text-xs text-[#6E6853] truncate">{business.name} · {business.owner_email}</p>
         </div>
+
+        {announced && (
+          <div className="flex gap-2">
+            {(['monthly', 'yearly'] as const).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => applySuggestion(p)}
+                className="flex-1 px-2 py-2 rounded-lg border border-[#2B4739]/30 bg-[#2B4739]/5 text-[#2B4739] text-xs font-semibold"
+              >
+                Saran {PERIOD_LABEL[p]}
+                {founder && ' · Pendiri'}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="space-y-3">
           <div>
