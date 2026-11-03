@@ -81,7 +81,7 @@ interface SectionProps {
 
 function Section({ id, num, title, kicker, children }: SectionProps) {
   return (
-    <section id={id} className="bg-[#FBFAF4] border border-[#DBD5C1] rounded-2xl shadow-sm p-5 scroll-mt-20">
+    <section id={id} className="bg-[#FBFAF4] border border-[#DBD5C1] rounded-2xl shadow-sm p-5">
       <h3 className="text-base font-bold text-[#26302B] flex items-baseline gap-2">
         <span className="text-[#A65C2A] font-mono text-sm">{num}</span>
         {title}
@@ -89,6 +89,42 @@ function Section({ id, num, title, kicker, children }: SectionProps) {
       {kicker && <p className="text-xs text-[#6E6853] mt-1 mb-3">{kicker}</p>}
       <div className="space-y-3">{children}</div>
     </section>
+  );
+}
+
+// Navbar (Navbar.tsx) adalah satu-satunya <header> sticky di halaman ini
+// (logo+tombol + baris tab, keduanya ikut sticky sebagai satu blok) —
+// tingginya beda signifikan antara HP (baris tab bisa wrap/scroll) dan
+// desktop, jadi offset scroll TIDAK BOLEH angka tetap (class scroll-mt-*
+// lama cuma menebak satu angka, ketinggalan di satu ukuran layar). Ukur
+// tinggi sungguhan header lewat getBoundingClientRect() tiap kali diklik
+// (permintaan Andi) — dipakai bareng TOC maupun link rujukan di dalam
+// teks (SectionLink di bawah), supaya dua-duanya konsisten.
+function scrollToGuideSection(id: string) {
+  const target = document.getElementById(id);
+  if (!target) return;
+  const header = document.querySelector('header');
+  const headerBottom = header ? header.getBoundingClientRect().bottom : 0;
+  const top = target.getBoundingClientRect().top + window.scrollY - headerBottom - 12;
+  window.scrollTo({ top, behavior: 'smooth' });
+}
+
+// Link rujukan di dalam teks ("...lihat bagian 3") — sebelumnya cuma
+// teks polos tidak bisa diklik. Pakai handler scroll yang sama dengan
+// TOC (scrollToGuideSection) supaya offset header dihormati di sini
+// juga, bukan cuma dari daftar isi di atas.
+function SectionLink({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <a
+      href={`#${id}`}
+      onClick={(e) => {
+        e.preventDefault();
+        scrollToGuideSection(id);
+      }}
+      className="text-[#2B4739] font-semibold underline decoration-[#2B4739]/40 hover:decoration-[#2B4739] underline-offset-2"
+    >
+      {children}
+    </a>
   );
 }
 
@@ -130,7 +166,15 @@ export function GuideScreen({ businessName }: { businessName: string }) {
       <div className="bg-white border border-[#DBD5C1] rounded-2xl p-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
           {TOC.filter((t) => t.id !== 'g-9' || SHOW_TOKO_ONLINE_TAB).map((t) => (
-            <a key={t.id} href={`#${t.id}`} className="text-xs font-semibold text-[#26302B] hover:text-[#2B4739] hover:underline py-0.5">
+            <a
+              key={t.id}
+              href={`#${t.id}`}
+              onClick={(e) => {
+                e.preventDefault();
+                scrollToGuideSection(t.id);
+              }}
+              className="text-xs font-semibold text-[#26302B] hover:text-[#2B4739] hover:underline py-0.5"
+            >
               <span className="font-mono text-[#A65C2A] mr-1.5">{t.num}</span>
               {t.title}
             </a>
@@ -159,18 +203,18 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         <p>
           Akun baru tanpa usaha akan diarahkan ke <Ui>Setup Usaha</Ui> — isi nama usaha, nama pemilik, dan nomor
           telepon, lalu <Ui>Simpan &amp; Lanjut</Ui>. Setelah itu langsung masuk ke Kalender Ketersediaan — kosong
-          sampai alatnya diisi lewat tab <Ui>Katalog &amp; Stok Alat</Ui> (bagian 3). Kalau alatnya banyak, lebih cepat
-          lewat <Ui>Impor dari Excel</Ui> daripada mengetik satu per satu — lihat bagian 3.
+          sampai alatnya diisi lewat tab <Ui>Katalog &amp; Stok Alat</Ui> (<SectionLink id="g-3">bagian 3</SectionLink>). Kalau alatnya banyak, lebih cepat
+          lewat <Ui>Impor dari Excel</Ui> daripada mengetik satu per satu — lihat <SectionLink id="g-3">bagian 3</SectionLink>.
         </p>
         <Note>
-          Kalau kamu membuka Sewalog lewat link undangan dari usaha lain (lihat bagian 6), kamu akan diarahkan ke
+          Kalau kamu membuka Sewalog lewat link undangan dari usaha lain (lihat <SectionLink id="g-6">bagian 6</SectionLink>), kamu akan diarahkan ke
           layar <Ui>Undangan Bergabung</Ui> alih-alih Setup Usaha — pilih <Ui>Gabung Sekarang</Ui> untuk masuk ke usaha
           yang mengundang, atau <Ui>Lewati</Ui> kalau memang mau bikin usaha sendiri. Satu akun hanya bisa terhubung
           ke satu usaha — kalau akunmu sudah terhubung ke usaha lain, pakai email lain untuk menerima undangan ini.
         </Note>
         <Note>
           Data usaha (nama, nama pemilik, no. telepon, dan toleransi telat sebelum kena denda) bisa diubah kapan saja
-          lewat bagian <Ui>Info Usaha</Ui> di tab <Ui>Kelola Usaha</Ui> (lihat bagian 6) — cuma terlihat dan bisa
+          lewat bagian <Ui>Info Usaha</Ui> di tab <Ui>Kelola Usaha</Ui> (lihat <SectionLink id="g-6">bagian 6</SectionLink>) — cuma terlihat dan bisa
           diakses oleh pemilik.
         </Note>
       </Section>
@@ -248,7 +292,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
             <>Ketik nama penyewa — kalau pernah sewa sebelumnya, daftar saran pelanggan lama muncul otomatis (dicari dari nama, HP, atau alamat, jadi bisa ketik salah satu yang paling diingat). Tiap saran menampilkan HP dan alamat sekaligus supaya mudah dibedakan kalau ada nama yang sama. Pilih salah satu untuk mengisi HP/Alamat sekaligus, atau lanjut ketik biasa untuk pelanggan baru.</>,
             <>Isi nomor WhatsApp penyewa (kalau belum otomatis terisi). Opsional: tekan <Ui>Foto Wajah / Setengah Badan</Ui> untuk ambil foto singkat penyewa dari kamera.</>,
             <>Cari alat lewat kotak pencarian (nama, varian, ukuran, atau warna) kalau katalog sudah banyak, lalu centang satu atau lebih alat — bisa multi-item dalam satu transaksi. Varian/ukuran/warna alat (kalau diisi) ditampilkan di bawah nama alat supaya tidak salah pilih antar varian yang mirip.</>,
-            <>Pilih tanggal ambil &amp; kembali. Total harga terhitung otomatis, termasuk harga per hari kalau alatnya punya tarif lebih murah untuk sewa lama (lihat bagian 3).</>,
+            <>Pilih tanggal ambil &amp; kembali. Total harga terhitung otomatis, termasuk harga per hari kalau alatnya punya tarif lebih murah untuk sewa lama (lihat <SectionLink id="g-3">bagian 3</SectionLink>).</>,
             <>Pilih jenis jaminan (KTP/SIM/STNK/Paspor/Uang/Lainnya), lalu tekan <Ui>Simpan &amp; Terbitkan Nota</Ui>.</>,
           ]}
         />
@@ -260,16 +304,16 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         <Note>
           Foto penyewa sengaja bukan foto KTP/dokumen — cukup wajah/setengah badan, untuk bukti siapa yang mengambil
           barang kalau ada sengketa jaminan nanti, tanpa menyimpan data sensitif seperti NIK. Muncul sebagai foto
-          bulat kecil di samping nama pelanggan pada kartu transaksi di layar Transaksi Aktif (bagian 5).
+          bulat kecil di samping nama pelanggan pada kartu transaksi di layar Transaksi Aktif (<SectionLink id="g-5">bagian 5</SectionLink>).
         </Note>
         <Note>
           Struk transaksi bisa langsung dikirim ke pelanggan lewat tombol <Ui>Kirim Struk WA</Ui> di layar Transaksi
-          Aktif (bagian 5) — tidak perlu ketik ulang rincian secara manual. Ada juga tombol <Ui>Cetak Nota</Ui> di
-          sebelahnya untuk versi cetak/PDF (lihat bagian 5).
+          Aktif (<SectionLink id="g-5">bagian 5</SectionLink>) — tidak perlu ketik ulang rincian secara manual. Ada juga tombol <Ui>Cetak Nota</Ui> di
+          sebelahnya untuk versi cetak/PDF (lihat <SectionLink id="g-5">bagian 5</SectionLink>).
         </Note>
         <Note>
           Cara tanggal ambil &amp; kembali dihitung jadi "berapa hari" tergantung pengaturan{' '}
-          <Ui>Cara Hitung Durasi Sewa</Ui> di tab Kelola Usaha (bagian 6) — default <strong>per malam</strong> (ambil
+          <Ui>Cara Hitung Durasi Sewa</Ui> di tab Kelola Usaha (<SectionLink id="g-6">bagian 6</SectionLink>) — default <strong>per malam</strong> (ambil
           Sabtu, kembali Minggu = 1 hari, tanggal ambil &amp; kembali tidak boleh sama). Kalau usahamu pakai{' '}
           <strong>per hari kalender</strong>, tanggal ambil &amp; kembali boleh sama (dihitung 1 hari) dan Sabtu-Minggu
           jadi 2 hari.
@@ -291,11 +335,11 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           digabung — supaya pemilik bisa langsung tahu penyebabnya tanpa membuka rincian lebih dulu.
         </Note>
         <Note>
-          Tarif denda keterlambatan mengikuti harga per hari alatnya (bagian 3), bukan cuma tarif hari pertama —
+          Tarif denda keterlambatan mengikuti harga per hari alatnya (<SectionLink id="g-3">bagian 3</SectionLink>), bukan cuma tarif hari pertama —
           kalau alatmu punya harga per hari yang lebih murah untuk sewa lama, telat dihitung pakai tarif hari
           berikutnya sesuai pola itu. Contoh: sewa 2 hari lalu telat 1 hari, dendanya pakai tarif hari ke-3 alat itu,
           bukan tarif hari ke-1. Alat dengan harga tetap tidak berubah perhitungannya. Dihitung per alat (rinciannya
-          tampil di layar <Ui>Kembalikan</Ui>), tetap menghormati toleransi telat usaha (bagian 1) sebelum mulai
+          tampil di layar <Ui>Kembalikan</Ui>), tetap menghormati toleransi telat usaha (<SectionLink id="g-1">bagian 1</SectionLink>) sebelum mulai
           dihitung, dan nominalnya tetap bisa diubah manual sebelum disimpan.
         </Note>
         <Note>
@@ -324,15 +368,15 @@ export function GuideScreen({ businessName }: { businessName: string }) {
       <Section id="g-6" num="6" title="Kelola Usaha" kicker="Info usaha dan kelola staf, digabung jadi satu tab karena sama-sama urusan admin sesekali, bukan dipakai harian.">
         <p>
           Bagian <Ui>Info Usaha</Ui> di paling atas tab ini untuk ubah nama usaha, nama pemilik, no. telepon, alamat
-          usaha, dan toleransi telat (lihat bagian 1). Alamat di sini ikut tercetak otomatis di struk WhatsApp dan
-          Nota Sewa cetak/PDF kalau diisi — beda dari alamat di tab <Ui>Etalase &amp; Pesanan Online</Ui> (bagian 8) yang tampil
+          usaha, dan toleransi telat (lihat <SectionLink id="g-1">bagian 1</SectionLink>). Alamat di sini ikut tercetak otomatis di struk WhatsApp dan
+          Nota Sewa cetak/PDF kalau diisi — beda dari alamat di tab <Ui>Etalase &amp; Pesanan Online</Ui> (<SectionLink id="g-8">bagian 8</SectionLink>) yang tampil
           publik ke siapa saja, alamat di sini murni buat kebutuhan internal/struk.
         </p>
         <p className="font-bold text-xs mt-2">Cara Hitung Durasi Sewa</p>
         <p>
           Pengaturan ini juga ada di kartu <Ui>Info Usaha</Ui>, di bawah Toleransi telat — menentukan berapa "hari"
-          yang dihitung untuk harga sewa, struk, nota, dan denda telat bertingkat (bagian 3 &amp; 5) di SELURUH
-          aplikasi, termasuk Etalase &amp; Pesanan Online (bagian 8/8b).
+          yang dihitung untuk harga sewa, struk, nota, dan denda telat bertingkat (<SectionLink id="g-3">bagian 3</SectionLink> &amp; <SectionLink id="g-5">5</SectionLink>) di SELURUH
+          aplikasi, termasuk Etalase &amp; Pesanan Online (<SectionLink id="g-8">bagian 8</SectionLink>/<SectionLink id="g-8b">8b</SectionLink>).
         </p>
         <FieldsTable
           rows={[
@@ -450,7 +494,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         <Note>
           <strong>Ini bukan toko online/checkout</strong> — tidak ada pembayaran online sungguhan di halaman
           publiknya. Secara default calon penyewa cuma bisa cek ketersediaan lalu diarahkan chat WhatsApp, sama
-          seperti alur manual yang sudah berjalan sekarang. Kalau fitur <Ui>Pesanan Online</Ui> (bagian 8b) kamu
+          seperti alur manual yang sudah berjalan sekarang. Kalau fitur <Ui>Pesanan Online</Ui> (<SectionLink id="g-8b">bagian 8b</SectionLink>) kamu
           nyalakan, pengunjung bisa kirim formulir pesanan langsung dari halaman ini juga — tapi itu cuma formulir,
           bukan pembayaran, pesanannya tetap kamu yang Konfirmasi manual.
         </Note>
@@ -459,7 +503,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           asal masih unik dan cuma huruf kecil/angka/tanda hubung. Kalau usaha lain sudah pakai slug yang sama
           (mis. nama usaha yang mirip), langsung kelihatan sambil ketik ("Slug ini sudah dipakai usaha lain") —
           tidak perlu tunggu sampai tekan Simpan. Alamat dan nomor WhatsApp publik di sini otomatis terisi awal dari{' '}
-          <Ui>Info Usaha</Ui> (bagian 6) — tapi begitu disimpan, keduanya independen, boleh diubah beda dari Info
+          <Ui>Info Usaha</Ui> (<SectionLink id="g-6">bagian 6</SectionLink>) — tapi begitu disimpan, keduanya independen, boleh diubah beda dari Info
           Usaha kapan saja (mis. usahamu punya nomor CS terpisah, atau alamat publik yang sengaja beda dari alamat
           internal di struk).
         </p>
@@ -479,7 +523,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         <Steps
           items={[
             <>
-              Aktifkan dulu <Ui>Etalase Online</Ui> (bagian 8) — Pesanan Online tidak bisa dinyalakan kalau Etalase-nya
+              Aktifkan dulu <Ui>Etalase Online</Ui> (<SectionLink id="g-8">bagian 8</SectionLink>) — Pesanan Online tidak bisa dinyalakan kalau Etalase-nya
               masih mati.
             </>,
             <>
@@ -569,7 +613,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
             banyak pemilik usaha yang tertarik, lewat tombol <Ui>Tertarik? Kasih Tahu Kami</Ui> yang membuka WhatsApp.
           </p>
           <Note>
-            Beda dari <Ui>Etalase Online</Ui> (bagian 8) yang murni etalase informasi dan sudah bisa dipakai sekarang
+            Beda dari <Ui>Etalase Online</Ui> (<SectionLink id="g-8">bagian 8</SectionLink>) yang murni etalase informasi dan sudah bisa dipakai sekarang
             — tab ini soal transaksi/pembayaran online sungguhan, yang butuh evaluasi lebih dulu (lisensi, kesiapan
             pilot) sebelum dibangun.
           </Note>
@@ -581,7 +625,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         <ul className="list-disc pl-5 space-y-1.5 text-xs text-[#26302B]">
           <li><strong>Mobile-first</strong> — semua alur inti (kalender, catat transaksi, transaksi aktif) didesain dipakai sambil berdiri di depan rak alat, bukan di depan laptop.</li>
           <li><strong>Data selalu real-time</strong> — Sewalog sengaja tidak menyimpan data offline/cache agresif, supaya stok yang tampil tidak pernah basi dan menyebabkan double-booking.</li>
-          <li><strong>Isolasi data per usaha</strong> — setiap usaha hanya bisa melihat data miliknya sendiri. Satu akun cuma bisa terhubung ke satu usaha (lihat bagian 1 &amp; 6).</li>
+          <li><strong>Isolasi data per usaha</strong> — setiap usaha hanya bisa melihat data miliknya sendiri. Satu akun cuma bisa terhubung ke satu usaha (lihat <SectionLink id="g-1">bagian 1</SectionLink> &amp; <SectionLink id="g-6">6</SectionLink>).</li>
           <li>
             <strong>Syarat &amp; kebijakan privasi</strong> — baca{' '}
             <a
