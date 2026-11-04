@@ -220,6 +220,10 @@ router.get('/api/public/etalase/:slug/ordering-config', async (req, res) => {
 
 type BookingRequestStatus = {
   status: 'menunggu' | 'dikonfirmasi' | 'ditolak' | 'kedaluwarsa';
+  // 6 karakter pertama booking_requests.id, huruf besar (migration 051)
+  // — kode pendek buat dicocokkan manual antar admin, BUKAN rahasia
+  // (beda dari token di URL ini sendiri, yang tetap jadi access-key).
+  order_code: string;
   customer_name: string;
   start_date: string;
   end_date: string;
@@ -233,6 +237,13 @@ type BookingRequestStatus = {
   logo_url: string | null;
   public_phone: string | null;
   slug: string | null;
+  // Nomor WA admin untuk Pesanan Online (migration 051) — Admin 1 SUDAH
+  // di-coalesce dengan public_phone di RPC kalau dikosongkan, jadi di
+  // sini bisa anggap "null = benar-benar tidak ada nomor sama sekali".
+  // Admin 2/3 murni opsional, tanpa fallback apa pun.
+  order_admin_phone_1: string | null;
+  order_admin_phone_2: string | null;
+  order_admin_phone_3: string | null;
   confirmation_message: string | null;
   payment_snapshot: {
     dp_mode: 'none' | 'percent' | 'fixed';
@@ -272,7 +283,7 @@ router.get('/pesanan/:token', async (req, res) => {
     return;
   }
 
-  res.type('html').send(renderStatusPage(data as BookingRequestStatus, req));
+  res.type('html').send(renderStatusPage(data as BookingRequestStatus, req, token));
 });
 
 function renderStatusNotFound(): string {
@@ -325,11 +336,23 @@ function formatDeadlineWIB(expiresAtIso: string): string {
 // pelanggan/alat/harga TIDAK PERNAH masuk og:title/og:description di
 // sini, beda dari halaman Etalase (/toko/{slug}) yang memang untuk
 // katalog publik.
-function renderStatusPage(data: BookingRequestStatus, req: import('express').Request): string {
+// URL halaman status ini sendiri — dipakai di teks pesan WA (migration
+// 051, poin "order code/link") supaya admin lain yang menerima pesan
+// bisa langsung klik untuk melihat detail pesanan yang sama. SENGAJA
+// tidak lewat TOKO_PUBLIC_HOST seperti resolvePageUrl() — /pesanan/:token
+// bukan bagian dari gerbang domain custom toko, selalu dijawab di host
+// manapun Express ini jalan.
+function resolveStatusPageUrl(req: import('express').Request, token: string): string {
+  const baseUrl = (process.env.PUBLIC_BASE_URL ?? `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+  return `${baseUrl}/pesanan/${token}`;
+}
+
+function renderStatusPage(data: BookingRequestStatus, req: import('express').Request, token: string): string {
   // reuse resolvePageUrl() (dipakai juga di renderPage Etalase) supaya
   // link "Lihat katalog" ini benar di kedua domain (toko.sewalog.com vs
   // /toko/{slug} fallback) — bukan hardcode "/toko/" di sini.
   const catalogUrl = data.slug ? resolvePageUrl(req, data.slug) : null;
+  const statusPageUrl = resolveStatusPageUrl(req, token);
   const statusLabel: Record<BookingRequestStatus['status'], { text: string; color: string; bg: string }> = {
     menunggu: { text: 'Menunggu konfirmasi', color: '#A65C2A', bg: 'rgba(166,92,42,0.12)' },
     dikonfirmasi: { text: 'Dikonfirmasi', color: '#2B4739', bg: 'rgba(43,71,57,0.12)' },
@@ -347,20 +370,89 @@ function renderStatusPage(data: BookingRequestStatus, req: import('express').Req
   // perlu dibayar), SETELAH konfirmasi berubah jadi "kirim bukti bayar"
   // dengan nominal+link ikut di pesan (vendor butuh tahu ini pesanan
   // yang mana + sudah bayar berapa), ditolak/kedaluwarsa cukup "chat".
-  let waButtonLabel = `Kirim pesanan ke WA ${data.business_name}`;
-  let waBookingText = `Halo ${data.business_name}, saya sudah kirim pesanan online untuk ${data.start_date} s/d ${data.end_date}.`;
-  if (data.status === 'dikonfirmasi' && data.payment_snapshot) {
-    const amount = data.payment_snapshot.dp_mode === 'none' ? data.payment_snapshot.total_final : data.payment_snapshot.dp_amount_computed;
-    waButtonLabel = `Kirim bukti bayar ke WA ${data.business_name}`;
-    waBookingText = `Halo ${data.business_name}, ini bukti bayar ${formatIDR(amount)} untuk pesanan saya (${data.start_date} s/d ${data.end_date}).`;
-  } else if (data.status === 'ditolak' || data.status === 'kedaluwarsa') {
-    waButtonLabel = `Chat ${data.business_name} di WA`;
+  //
+  // Migration 051: sampai 3 nomor admin, label tetap "Admin N" (bukan
+  // nama business — pelanggan perlu tahu ini admin KE BERAPA, bukan
+  // cuma "WA toko"). Setiap pesan ikut menyertakan order_code + link
+  // halaman status ini sendiri, supaya admin manapun yang menerima bisa
+  // mencocokkan ke pesanan yang sama (poin -c1: order_code dari
+  // booking_requests.id, BUKAN token — token tetap rahasia URL).
+  function waTextFor(label: string): string {
+    // Jaring pengaman sekuens deploy yang sama seperti admin1 ?? public_phone
+    // di atas — kalau kode ini ter-deploy sebelum migration 051 benar-benar
+    // jalan, order_code belum ada sama sekali (bukan string kosong,
+    // literally undefined dari RPC lama) — jangan sampai tampil harfiah
+    // "Kode pesanan: undefined" ke pelanggan, baris ini dihilangkan saja
+    // kalau belum ada, link status tetap selalu disertakan.
+    const orderRef = data.order_code ? `\n\nKode pesanan: ${data.order_code}\n${statusPageUrl}` : `\n\n${statusPageUrl}`;
+    if (data.status === 'dikonfirmasi' && data.payment_snapshot) {
+      const amount = data.payment_snapshot.dp_mode === 'none' ? data.payment_snapshot.total_final : data.payment_snapshot.dp_amount_computed;
+      return `Halo ${label}, ini bukti bayar ${formatIDR(amount)} untuk pesanan saya (${data.start_date} s/d ${data.end_date}).${orderRef}`;
+    }
+    if (data.status === 'ditolak' || data.status === 'kedaluwarsa') {
+      return `Halo ${label}, saya mau tanya soal pesanan saya.${orderRef}`;
+    }
+    return `Halo ${label}, saya sudah kirim pesanan online untuk ${data.start_date} s/d ${data.end_date}.${orderRef}`;
   }
-  const waUrl = data.public_phone ? buildWhatsAppUrl(data.public_phone, waBookingText) : null;
+  function waLabelFor(adminLabel: string): string {
+    if (data.status === 'dikonfirmasi' && data.payment_snapshot) return `Kirim bukti bayar ke WA ${adminLabel}`;
+    if (data.status === 'ditolak' || data.status === 'kedaluwarsa') return `Chat ${adminLabel} di WA`;
+    return `Kirim pesanan ke WA ${adminLabel}`;
+  }
 
-  const waButtonHtml = waUrl
-    ? `<a href="${escapeHtml(waUrl)}" target="_blank" rel="noopener noreferrer nofollow" style="display:block;text-align:center;margin-top:16px;background:#2B4739;color:#fff;font-weight:700;font-size:0.9rem;padding:13px 18px;border-radius:12px;text-decoration:none;min-height:44px;">${escapeHtml(waButtonLabel)}</a>`
-    : '';
+  // Nomor yang sama (setelah dinormalkan ke bentuk "62xxxxxxxxxx", pola
+  // sama seperti normalizePhone() di bookingRequests.ts) di slot Admin
+  // berbeda didedupe — tetap satu tombol, bukan dua tombol identik
+  // (review -c1 poin 2).
+  function normalizePhoneForCompare(raw: string): string {
+    const stripped = raw.replace(/[\s-]/g, '').replace(/^\+/, '');
+    return stripped.startsWith('0') ? `62${stripped.slice(1)}` : stripped;
+  }
+  const seenPhones = new Set<string>();
+  const adminButtons: { label: string; phone: string }[] = [];
+  // Review -c1 (risiko urutan deploy): RPC get_booking_request_status
+  // SUDAH mem-coalesce Admin 1 dengan public_phone (migration 051) —
+  // tapi kalau kode ini ter-deploy SEBELUM migration 051 benar-benar
+  // jalan (atau PostgREST masih menyajikan versi RPC lama dari cache
+  // schema), order_admin_phone_1 akan undefined sama sekali sementara
+  // public_phone tetap ada (sudah sejak migration 041). Fallback kedua
+  // di sini (?? data.public_phone) murni jaring pengaman supaya tombol
+  // WA yang SUDAH ADA hari ini tidak pernah hilang/regresi gara-gara
+  // sekuens deploy, bukan duplikasi logika coalesce RPC yang disengaja.
+  [data.order_admin_phone_1 ?? data.public_phone, data.order_admin_phone_2, data.order_admin_phone_3].forEach((phone, idx) => {
+    if (!phone) return;
+    const normalized = normalizePhoneForCompare(phone);
+    if (seenPhones.has(normalized)) return;
+    seenPhones.add(normalized);
+    adminButtons.push({ label: `Admin ${idx + 1}`, phone });
+  });
+
+  // Tidak ada nomor admin sama sekali (vendor belum isi Admin 1 ATAUPUN
+  // public_phone Etalase) — arahkan ke kontak di halaman katalog,
+  // bukan dibiarkan jadi area tombol kosong (review -c1 poin 2).
+  const waButtonHtml =
+    adminButtons.length === 0
+      ? catalogUrl
+        ? `<p style="margin-top:16px;font-size:0.85rem;color:#6E6853;text-align:center;">Hubungi rental lewat kontak di <a href="${escapeHtml(catalogUrl)}" style="color:#2B4739;font-weight:700;">halaman katalog</a>.</p>`
+        : `<p style="margin-top:16px;font-size:0.85rem;color:#6E6853;text-align:center;">Hubungi rental lewat kontak di halaman katalog.</p>`
+      : `${
+          adminButtons.length > 1
+            ? `<p style="margin-top:14px;font-size:0.75rem;color:#6E6853;text-align:center;">Cukup hubungi salah satu admin.</p>`
+            : ''
+        }${adminButtons
+          .map((admin, i) => {
+            const url = buildWhatsAppUrl(admin.phone, waTextFor(admin.label));
+            const primary = i === 0;
+            // margin-top 16px persis sama dengan tombol tunggal yang lama
+            // (review -c1: "kalau cuma satu nomor, tampil sama seperti
+            // sekarang") — tombol ke-2/3 pakai 10px, lebih rapat karena
+            // sudah ada tombol di atasnya, bukan jarak dari teks di atas.
+            const style = primary
+              ? 'display:block;text-align:center;margin-top:16px;background:#2B4739;color:#fff;font-weight:700;font-size:0.9rem;padding:13px 18px;border-radius:12px;text-decoration:none;min-height:44px;'
+              : 'display:block;text-align:center;margin-top:10px;background:#fff;color:#2B4739;font-weight:700;font-size:0.9rem;padding:13px 18px;border-radius:12px;border:1.5px solid #2B4739;text-decoration:none;min-height:44px;';
+            return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer nofollow" style="${style}">${escapeHtml(waLabelFor(admin.label))}</a>`;
+          })
+          .join('\n')}`;
 
   let bodyExtraHtml = '';
 
@@ -467,7 +559,21 @@ function renderStatusPage(data: BookingRequestStatus, req: import('express').Req
       : ''
   }
   <div class="card">
-    <span style="display:inline-block;padding:4px 10px;border-radius:999px;font-size:0.75rem;font-weight:700;color:${label.color};background:${label.bg};">${label.text}</span>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span style="display:inline-block;padding:4px 10px;border-radius:999px;font-size:0.75rem;font-weight:700;color:${label.color};background:${label.bg};">${label.text}</span>
+      <!-- Kode pendek (migration 051) — supaya pelanggan bisa sebutkan
+           ke admin mana pun kalau dihubungi admin yang berbeda dari
+           yang pertama ditunjukkan di tombol WA di bawah; sama persis
+           angka yang dikirim otomatis lewat pesan WA, dan sama persis
+           yang ditampilkan di kartu "Pesanan masuk" vendor. Disembunyikan
+           kalau belum ada (jaring pengaman sekuens deploy sebelum
+           migration 051 benar-benar jalan — lihat orderRef di atas). -->
+      ${
+        data.order_code
+          ? `<span style="display:inline-block;padding:4px 10px;border-radius:999px;font-size:0.7rem;font-weight:700;font-family:monospace;color:#6E6853;background:#F1EEE2;border:1px solid #DBD5C1;">Kode: ${escapeHtml(data.order_code)}</span>`
+          : ''
+      }
+    </div>
     <p style="margin:12px 0 0;font-size:0.8rem;color:#6E6853;">Pemesan</p>
     <p style="margin:2px 0 0;font-weight:700;">${escapeHtml(data.customer_name)}</p>
     <p style="margin:10px 0 0;font-size:0.8rem;color:#6E6853;">Tanggal sewa</p>

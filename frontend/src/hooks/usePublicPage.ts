@@ -32,6 +32,15 @@ export type PublicPage = {
   // DEFAULT_EXPIRY_HOURS yang dulu hardcoded.
   confirmation_deadline_hours: number;
   current_terms_version_id: string | null;
+  // Nomor WA admin untuk Pesanan Online (migration 051), sampai 3,
+  // label tetap "Admin 1/2/3" (tidak bisa diganti nama). Admin 1
+  // di-coalesce dengan public_phone di get_booking_request_status kalau
+  // dikosongkan — DI SINI (form Etalase) nilainya tetap apa adanya
+  // (null kalau belum pernah diisi), fallback itu murni logika RPC
+  // baca publik, bukan ditulis balik ke kolom ini.
+  order_admin_phone_1: string | null;
+  order_admin_phone_2: string | null;
+  order_admin_phone_3: string | null;
 };
 
 export type PublicPageInput = {
@@ -54,6 +63,9 @@ export type PublicPageInput = {
   dp_mode: DpMode;
   dp_value: number | null;
   confirmation_deadline_hours: number;
+  order_admin_phone_1: string | null;
+  order_admin_phone_2: string | null;
+  order_admin_phone_3: string | null;
 };
 
 // Syarat & Ketentuan (migration 047) — TIDAK ikut PublicPage/
@@ -89,7 +101,7 @@ export function usePublicPage(businessId: string | null) {
     const { data } = await supabase
       .from('public_pages')
       .select(
-        'business_id, published, slug, description, address, regency_id, operating_hours, public_phone, accept_online_orders, confirmation_message, pay_transfer_enabled, bank_name, bank_account_number, bank_account_holder, pay_qris_enabled, qris_image_url, pay_cash_enabled, dp_mode, dp_value, confirmation_deadline_hours, current_terms_version_id',
+        'business_id, published, slug, description, address, regency_id, operating_hours, public_phone, accept_online_orders, confirmation_message, pay_transfer_enabled, bank_name, bank_account_number, bank_account_holder, pay_qris_enabled, qris_image_url, pay_cash_enabled, dp_mode, dp_value, confirmation_deadline_hours, current_terms_version_id, order_admin_phone_1, order_admin_phone_2, order_admin_phone_3',
       )
       .eq('business_id', businessId)
       .maybeSingle();

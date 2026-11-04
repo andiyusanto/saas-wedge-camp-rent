@@ -13,6 +13,17 @@ import { resizeImageToDataUrl } from '../utils/imageResize';
 
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
+// Pola sama seperti PHONE_RE/normalizePhone() di backend/src/routes/
+// bookingRequests.ts — disalin, bukan diimpor (frontend vs backend,
+// modul terpisah). Dipakai buat validasi + normalisasi nomor WA admin
+// Pesanan Online (migration 051) sebelum disimpan, konsisten dengan
+// cara nomor WA pelanggan dinormalkan di form pesanan.
+const ADMIN_PHONE_RE = /^(\+?62|0)8[0-9]{8,12}$/;
+function normalizeAdminPhone(raw: string): string {
+  const stripped = raw.replace(/[\s-]/g, '').replace(/^\+/, '');
+  return stripped.startsWith('0') ? `62${stripped.slice(1)}` : stripped;
+}
+
 // VITE_TOKO_PUBLIC_BASE_URL = domain publik Etalase Online kalau custom
 // domain toko.sewalog.com sudah disambungkan (lihat backend/.env.example,
 // TOKO_PUBLIC_HOST — dua env var ini HARUS konsisten, satu dipakai backend
@@ -58,6 +69,14 @@ export function EtalaseOnlineScreen({
   // (bukan number) supaya input kosong sementara saat diketik ulang tidak
   // dipaksa jadi 0 — divalidasi & di-clamp 2-72 cuma saat Simpan.
   const [confirmationDeadlineHours, setConfirmationDeadlineHours] = useState('24');
+  // Nomor WA admin Pesanan Online (migration 051, keputusan Andi opsi B
+  // 3-4 Nov 2026) — sampai 3, label tetap "Admin 1/2/3". Admin 1 kosong
+  // berarti fallback ke publicPhone (diresolve di RPC
+  // get_booking_request_status, bukan di sini), jadi input-nya boleh
+  // dibiarkan kosong tanpa validasi "wajib".
+  const [orderAdminPhone1, setOrderAdminPhone1] = useState('');
+  const [orderAdminPhone2, setOrderAdminPhone2] = useState('');
+  const [orderAdminPhone3, setOrderAdminPhone3] = useState('');
   // Syarat & Ketentuan (migration 047) — disimpan lewat RPC set_rental_terms
   // TERPISAH dari handleSubmit utama (lihat handleSaveTerms di bawah), jadi
   // state+status-nya juga terpisah dari form public_pages biasa.
@@ -109,6 +128,9 @@ export function EtalaseOnlineScreen({
       setDpMode(page.dp_mode);
       setDpValue(page.dp_value != null ? String(page.dp_value) : '');
       setConfirmationDeadlineHours(String(page.confirmation_deadline_hours));
+      setOrderAdminPhone1(page.order_admin_phone_1 ?? '');
+      setOrderAdminPhone2(page.order_admin_phone_2 ?? '');
+      setOrderAdminPhone3(page.order_admin_phone_3 ?? '');
     } else {
       setSlug(slugify(businessName));
       setAddress(businessAddress ?? '');
@@ -300,6 +322,29 @@ export function EtalaseOnlineScreen({
       return;
     }
 
+    // Admin 1/2/3 (migration 051) — validasi SAMA seperti form pesanan
+    // (ADMIN_PHONE_RE), tapi semuanya opsional (string kosong dilewati,
+    // bukan ditolak) — Admin 1 kosong fallback ke publicPhone di RPC,
+    // Admin 2/3 kosong ya memang tidak dipakai.
+    const adminPhoneFields: [string, string, string][] = [
+      [orderAdminPhone1, 'Admin 1', 'order_admin_phone_1'],
+      [orderAdminPhone2, 'Admin 2', 'order_admin_phone_2'],
+      [orderAdminPhone3, 'Admin 3', 'order_admin_phone_3'],
+    ];
+    const normalizedAdminPhones: Record<string, string | null> = {};
+    for (const [raw, label, key] of adminPhoneFields) {
+      const trimmed = raw.trim();
+      if (!trimmed) {
+        normalizedAdminPhones[key] = null;
+        continue;
+      }
+      if (!ADMIN_PHONE_RE.test(trimmed.replace(/[\s-]/g, ''))) {
+        setError(`Nomor WA ${label} tidak valid. Pakai format 08xx atau +62xx.`);
+        return;
+      }
+      normalizedAdminPhones[key] = normalizeAdminPhone(trimmed);
+    }
+
     const input: PublicPageInput = {
       published,
       slug: cleanSlug,
@@ -320,6 +365,9 @@ export function EtalaseOnlineScreen({
       dp_mode: dpMode,
       dp_value: dpMode === 'none' ? null : Number(dpValue),
       confirmation_deadline_hours: deadlineHoursNum,
+      order_admin_phone_1: normalizedAdminPhones.order_admin_phone_1,
+      order_admin_phone_2: normalizedAdminPhones.order_admin_phone_2,
+      order_admin_phone_3: normalizedAdminPhones.order_admin_phone_3,
     };
 
     setSubmitting(true);
@@ -546,6 +594,48 @@ export function EtalaseOnlineScreen({
                 Pesanan otomatis kedaluwarsa kalau belum dikonfirmasi dalam sekian jam (2-72 jam, default 24).
               </span>
             </label>
+
+            {/* Nomor WA admin Pesanan Online (migration 051) — sampai 3,
+                label SENGAJA tetap "Admin 1/2/3" (bukan nama bebas),
+                supaya pelanggan tahu persis ini admin ke berapa kalau
+                harus menghubungi lebih dari satu. */}
+            <div className="space-y-2 pt-1 border-t border-[#E6E1D2]">
+              <p className="text-sm font-semibold text-[#26302B]">Nomor WA admin untuk pesanan online</p>
+              <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
+                Admin 1
+                <input
+                  type="tel"
+                  value={orderAdminPhone1}
+                  onChange={(e) => setOrderAdminPhone1(e.target.value)}
+                  placeholder={publicPhone ? `Kosongkan untuk pakai ${publicPhone}` : '08xx atau +62xx'}
+                  className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
+                Admin 2 (opsional)
+                <input
+                  type="tel"
+                  value={orderAdminPhone2}
+                  onChange={(e) => setOrderAdminPhone2(e.target.value)}
+                  placeholder="08xx atau +62xx"
+                  className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
+                Admin 3 (opsional)
+                <input
+                  type="tel"
+                  value={orderAdminPhone3}
+                  onChange={(e) => setOrderAdminPhone3(e.target.value)}
+                  placeholder="08xx atau +62xx"
+                  className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+                />
+              </label>
+              <span className="text-[11px] text-[#6E6853]">
+                Pelanggan yang memesan online bisa hubungi salah satu nomor ini lewat halaman status pesanannya.
+                Label "Admin 1/2/3" tidak bisa diganti nama.
+              </span>
+            </div>
 
             <div className="space-y-2 pt-1 border-t border-[#E6E1D2]">
               <p className="text-sm font-semibold text-[#26302B]">Cara bayar yang diterima</p>

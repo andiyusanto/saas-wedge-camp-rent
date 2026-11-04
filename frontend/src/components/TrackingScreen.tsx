@@ -279,7 +279,20 @@ export function TrackingScreen({
               <div key={r.id} className="p-4 space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="font-bold text-[#26302B] text-sm truncate">{r.customer_name}</p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="font-bold text-[#26302B] text-sm truncate">{r.customer_name}</p>
+                      {/* Kode pendek (migration 051) — 6 karakter pertama
+                          booking_requests.id, dihitung ulang di sini dari
+                          r.id yang sudah ada (bukan field backend baru) —
+                          SAMA PERSIS rumus order_code di
+                          get_booking_request_status (etalase.ts), supaya
+                          pelanggan & vendor bisa saling cocokkan kalau
+                          pelanggan menghubungi admin yang berbeda dari
+                          yang pertama ditunjukkan. */}
+                      <span className="shrink-0 text-[10px] font-mono font-bold text-[#A65C2A] bg-[#F9EFE7] border border-[#A65C2A]/30 rounded px-1.5 py-0.5">
+                        {r.id.slice(0, 6).toUpperCase()}
+                      </span>
+                    </div>
                     <p className="text-xs text-[#6E6853] truncate">
                       {r.items.map((i) => `${i.name} ×${i.quantity}`).join(', ')}
                     </p>
