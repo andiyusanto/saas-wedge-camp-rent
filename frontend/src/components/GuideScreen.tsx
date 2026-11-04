@@ -537,6 +537,13 @@ export function GuideScreen({ businessName }: { businessName: string }) {
               sudah ada minimal satu cara bayar aktif.
             </>,
             <>
+              Isi <strong>Nomor WA admin untuk pesanan online</strong> — sampai 3 nomor (label tetap <Ui>Admin
+              1</Ui>/<Ui>Admin 2</Ui>/<Ui>Admin 3</Ui>, tidak bisa diganti nama), supaya lebih dari satu orang bisa
+              bantu tanggapi pesanan lewat WA. <Ui>Admin 1</Ui> boleh dikosongkan — otomatis pakai nomor WA publik
+              Etalase (<SectionLink id="g-8">bagian 8</SectionLink>). <Ui>Admin 2</Ui>/<Ui>Admin 3</Ui> opsional, isi
+              kalau memang ada admin lain yang ikut pegang HP toko.
+            </>,
+            <>
               Atur <strong>DP (uang muka)</strong> kalau mau (opsional) — "Tidak wajib", persen dari total, atau
               nominal tetap. Pelanggan lihat angka DP-nya setelah pesanannya kamu Konfirmasi (lihat bagian "Apa yang
               pelanggan lihat" di bawah).
@@ -588,6 +595,15 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           Informasi cara bayar (nomor rekening, QRIS, atau nominal DP/total yang harus dibayar) <strong>cuma muncul
           setelah kamu Konfirmasi</strong> — sebelum itu pelanggan cuma lihat ringkasan pesanannya dan Total sewa
           (harga katalog), belum ada instruksi bayar apa pun.
+        </p>
+        <p>
+          Halaman status itu juga menampilkan tombol kirim WA — satu tombol per nomor <Ui>Admin</Ui> yang kamu isi
+          (lihat langkah di atas), lengkap dengan catatan "Cukup hubungi salah satu admin" kalau nomornya lebih dari
+          satu, supaya pelanggan tidak kirim pesan yang sama ke semua admin sekaligus. Tiap halaman status juga punya{' '}
+          <strong>kode pesanan 6 karakter</strong> (mis. "607B5D") yang SAMA PERSIS dengan yang tampil di kartu
+          "Pesanan masuk"-mu di atas — kalau pelanggan kebetulan menghubungi admin yang berbeda dari yang pertama
+          kali dia pakai, kode ini yang dipakai buat mencocokkan itu pesanan yang mana (pesan WA-nya sendiri juga
+          sudah otomatis menyertakan kode + link status ini, jadi biasanya tidak perlu dicocokkan manual).
         </p>
         <Note>
           <strong>Sewalog tidak pernah menerima atau menyimpan dana dari pelanggan.</strong> Transfer/QRIS/tunai
