@@ -10,6 +10,7 @@ import uploadsRouter from './routes/uploads.js';
 import itemsRouter from './routes/items.js';
 import demoRouter from './routes/demo.js';
 import etalaseRouter from './routes/etalase.js';
+import { warmUpShareCard } from './lib/shareCard.js';
 import bookingRequestsRouter from './routes/bookingRequests.js';
 
 // Node global fetch (dipakai @supabase/supabase-js) nyimpen koneksi
@@ -51,5 +52,6 @@ app.use('/api', bookingRequestsRouter);
 app.use(etalaseRouter);
 
 app.listen(port, () => {
+  warmUpShareCard();
   console.log(`Backend jalan di http://localhost:${port}`);
 });

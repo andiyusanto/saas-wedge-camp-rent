@@ -53,6 +53,21 @@ export async function uploadToR2(key: string, body: Buffer, contentType: string)
   return `${publicBaseUrl.replace(/\/$/, '')}/${key}`;
 }
 
+// Baca objek dari bucket publik lewat API R2 (bukan domain publik) —
+// dipakai cache gambar share (lib/shareCard.ts). Lewat domain publik,
+// pengecekan "belum ada" bisa membuat Cloudflare menyimpan jawaban 404 dan
+// terus menyajikannya walau objeknya sudah diunggah. null = tidak ada/gagal.
+export async function getFromR2(key: string): Promise<Buffer | null> {
+  try {
+    const s3 = getClient();
+    const out = await s3.send(new GetObjectCommand({ Bucket: bucketName, Key: key }));
+    if (!out.Body) return null;
+    return Buffer.from(await out.Body.transformToByteArray());
+  } catch {
+    return null;
+  }
+}
+
 // Audit privasi 2 Nov 2026 — foto penyewa (customer-photo) TIDAK LAGI
 // masuk bucket publik di atas (URL-nya bisa diakses siapa pun selamanya
 // tanpa login begitu diketahui, dikonfirmasi lewat curl langsung).

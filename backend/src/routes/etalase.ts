@@ -3,6 +3,7 @@ import { createAnonClient } from '../lib/supabaseClient.js';
 import { escapeHtml } from '../lib/html.js';
 import { addDays, normalizeTimezone, todayInTz, tzLabel } from '../lib/dates.js';
 import { buildWhatsAppUrl } from '../lib/whatsapp.js';
+import { getShareCard, shareCardHash, type ShareCardInput } from '../lib/shareCard.js';
 
 const router = Router();
 
@@ -90,15 +91,42 @@ async function handleTokoRequest(req: import('express').Request, res: import('ex
   // published = true dan cuma balikin kolom aman (lihat komentar di
   // migration-nya) — jangan query tabel public_pages/items langsung di
   // sini (lihat larangan di komentar createAnonClient()).
-  const { data, error } = await supabase.rpc('get_public_page', { p_slug: slug });
+  // get_public_ordering_page dipanggil paralel cuma untuk tahu apakah
+  // Pesanan Online aktif (null = tidak aktif) — dipakai teks pratinjau
+  // link ("pesan online sekarang" vs "cek katalog").
+  const [{ data, error }, { data: orderingData }] = await Promise.all([
+    supabase.rpc('get_public_page', { p_slug: slug }),
+    supabase.rpc('get_public_ordering_page', { p_slug: slug }),
+  ]);
 
   if (error || !data) {
     res.status(404).type('html').send(renderNotFound());
     return;
   }
 
-  res.type('html').send(renderPage(data as PublicPageData, slug, req));
+  res.type('html').send(renderPage(data as PublicPageData, slug, req, Boolean(orderingData)));
 }
+
+// Gambar pratinjau link (og:image) 1200x630 PNG — lihat lib/shareCard.ts.
+// Aktif di host manapun (toko.sewalog.com maupun domain backend), karena
+// og:image di halaman Etalase menunjuk ke sini. `?v=` cuma pemecah cache
+// di sisi WA/Telegram/FB; isi gambar selalu dihitung ulang dari data
+// Etalase TERKINI (published), bukan dari parameter.
+router.get('/og/:slug.png', async (req, res) => {
+  const supabase = createAnonClient();
+  const { data, error } = await supabase.rpc('get_public_page', { p_slug: req.params.slug });
+  if (error || !data) {
+    res.status(404).end();
+    return;
+  }
+  try {
+    const png = await getShareCard(shareCardInputFromPage(data as PublicPageData));
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.type('png').send(png);
+  } catch {
+    res.redirect(302, FALLBACK_OG_IMAGE);
+  }
+});
 
 // Jalur dev/fallback — selalu aktif di host manapun (termasuk
 // api.sewalog.com kalau ada yang masih pakai link lama, dan localhost saat
@@ -536,6 +564,10 @@ function renderStatusPage(data: BookingRequestStatus, req: import('express').Req
 <meta property="og:site_name" content="Sewalog" />
 <meta property="og:title" content="Status pesanan di ${escapeHtml(data.business_name)}" />
 <meta property="og:description" content="Cek status pesanan rental Anda." />
+${data.slug ? `<meta property="og:image" content="${escapeHtml(shareImageUrl(req, data.slug))}" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:card" content="summary_large_image" />` : ''}
 <style>
   * { box-sizing: border-box; }
   body { margin: 0; background: #F1EEE2; color: #26302B; font-family: system-ui, -apple-system, sans-serif; }
@@ -678,24 +710,44 @@ function resolvePageUrl(req: import('express').Request, slug: string): string {
   return `${baseUrl}/toko/${slug}`;
 }
 
-function renderPage(page: PublicPageData, slug: string, req: import('express').Request): string {
+function locationLabelOf(page: PublicPageData): string {
+  return [page.district_name ? `Kec. ${page.district_name}` : null, page.regency_name].filter(Boolean).join(', ');
+}
+
+function shareCardInputFromPage(page: PublicPageData): ShareCardInput {
+  return { businessName: page.business_name, logoUrl: page.logo_url, location: locationLabelOf(page) };
+}
+
+// Origin tempat route /og/:slug.png dijawab — host yang sama dengan
+// canonical Etalase (toko.sewalog.com di produksi).
+function shareImageUrl(req: import('express').Request, slug: string, version?: string): string {
+  const origin = new URL(resolvePageUrl(req, slug)).origin;
+  return `${origin}/og/${encodeURIComponent(slug)}.png${version ? `?v=${version}` : ''}`;
+}
+
+function renderPage(page: PublicPageData, slug: string, req: import('express').Request, orderingEnabled = false): string {
   // "Kec. Lowokwaru, Kota Malang" — kecamatan opsional (migration 052).
-  const locationLabel = [page.district_name ? `Kec. ${page.district_name}` : null, page.regency_name]
-    .filter(Boolean)
-    .join(', ');
+  const locationLabel = locationLabelOf(page);
   const pageUrl = resolvePageUrl(req, slug);
 
-  // Prioritas og:image (migration 035): logo usaha (representasi brand
-  // paling otentik untuk preview link WA) -> foto alat pertama (perilaku
-  // sebelum logo ada) -> fallback generik. Logo hasil upload di-resize ke
-  // 512px (BusinessInfoSection.tsx) — cukup di atas ambang render WA
-  // (umumnya ~200px), dan sama seperti foto alat sebagai og:image
-  // sebelumnya, bisa saja persegi (bukan 1200x630) tergantung WA
-  // merender; ini bukan regresi, Etalase sudah begini dari awal.
   const itemWithPhoto = page.items.find((item) => item.image_url);
-  const ogImage = page.logo_url ?? itemWithPhoto?.image_url ?? FALLBACK_OG_IMAGE;
+  // og:image = gambar share 1200x630 PNG (lib/shareCard.ts): logo vendor
+  // dikonversi, atau kartu nama rental kalau belum ada logo. ?v= = hash
+  // isi, supaya WA/Telegram/FB mengambil ulang begitu logo/nama berubah.
+  const ogImage = shareImageUrl(req, slug, shareCardHash(shareCardInputFromPage(page)));
 
-  const title = `${page.business_name} — Etalase Online | Sewalog`;
+  // Teks pratinjau link (WA/Telegram/IG/TikTok) — gaya "Sewa Alat Camping
+  // {nama}" + ajakan. Kata "sewa"/"rental" tidak diulang kalau sudah ada
+  // di nama usahanya sendiri.
+  const shareTitle = /\b(sewa|rental|rent)\b/i.test(page.business_name)
+    ? page.business_name
+    : `Sewa Alat Camping ${page.business_name}`;
+  const shareTitleFull = locationLabel ? `${shareTitle} — ${page.regency_name ?? locationLabel}` : shareTitle;
+  const shareDescription = orderingEnabled
+    ? 'Cek stok alat & pesan online sekarang — tinggal pilih tanggal, kirim pesanan.'
+    : 'Cek katalog & stok alat sewa, lalu hubungi lewat WhatsApp.';
+
+  const title = `${shareTitleFull} | Sewalog`;
   const description =
     page.description?.trim() ||
     `Lihat katalog alat sewa dari ${page.business_name}. Hubungi lewat WhatsApp untuk cek ketersediaan.`;
@@ -816,9 +868,19 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
 <meta property="og:url" content="${escapeHtml(pageUrl)}" />
 <meta property="og:site_name" content="Sewalog" />
 <meta property="og:locale" content="id_ID" />
-<meta property="og:title" content="${escapeHtml(page.business_name)} — Etalase Online" />
-<meta property="og:description" content="${escapeHtml(description)}" />
+<meta property="og:title" content="${escapeHtml(shareTitleFull)}" />
+<meta property="og:description" content="${escapeHtml(shareDescription)}" />
 <meta property="og:image" content="${escapeHtml(ogImage)}" />
+<meta property="og:image:secure_url" content="${escapeHtml(ogImage)}" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="${escapeHtml(page.business_name)}" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="${escapeHtml(shareTitleFull)}" />
+<meta name="twitter:description" content="${escapeHtml(shareDescription)}" />
+<meta name="twitter:image" content="${escapeHtml(ogImage)}" />
+<link rel="image_src" href="${escapeHtml(ogImage)}" />
 
 <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
 
