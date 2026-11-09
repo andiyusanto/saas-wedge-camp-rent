@@ -229,7 +229,7 @@ export function BusinessInfoSection({
             value={address}
             onChange={(e) => setAddress(e.target.value)}
             rows={2}
-            placeholder="Jl. Contoh No. 1, Malang"
+            placeholder="Jl. Contoh No. 1, Kecamatan, Kota"
             className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
           />
           <span className="text-[11px] text-[#6E6853]">

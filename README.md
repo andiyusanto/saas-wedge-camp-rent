@@ -1,6 +1,6 @@
 # Sewalog
 
-SaaS tools operasional untuk UKM rental alat kamping/outdoor di Malang Raya (Kota Malang, Kabupaten Malang, Kota Batu). Fase sekarang adalah **SaaS-wedge**: tools gratis/uji coba untuk vendor kelola stok, transaksi, jaminan, dan denda — belum jadi marketplace publik. Konteks produk lengkap ada di [CLAUDE.md](CLAUDE.md).
+SaaS tools operasional untuk UKM rental alat kamping/outdoor di seluruh Indonesia (pilot pertama di Malang Raya). Fase sekarang adalah **SaaS-wedge**: tools gratis/uji coba untuk vendor kelola stok, transaksi, jaminan, dan denda — belum jadi marketplace publik. Konteks produk lengkap ada di [CLAUDE.md](CLAUDE.md).
 
 ## Fitur yang tersedia saat ini
 

@@ -373,10 +373,10 @@ function App() {
 
       <footer className="bg-[#1E3429] border-t border-[#3A5C4A] text-[#DBD5C1] text-xs py-4 px-4 text-center">
         <p className="font-semibold text-[#FBFAF4]">
-          Sewalog — SaaS Operational Tools UKM Rental Camping Malang Raya
+          Sewalog — Aplikasi Operasional UKM Rental Camping se-Indonesia
         </p>
         <p className="text-[11px] text-[#DBD5C1]/70 mt-0.5">
-          Aturan denda keterlambatan vs kerusakan dipisah eksplisit • Isolasi data multi-tenant • Malang, Jawa Timur
+          Aturan denda keterlambatan vs kerusakan dipisah eksplisit • Isolasi data multi-tenant • WIB, WITA &amp; WIT
         </p>
       </footer>
     </div>

@@ -668,7 +668,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
             </a>{' '}
             Sewalog untuk detail lengkap soal data yang disimpan dan cara kami memperlakukannya.
           </li>
-          <li><strong>Wilayah tervalidasi saat ini</strong>: Malang Raya (Kota Malang, Kabupaten Malang, Kota Batu).</li>
+          <li><strong>Wilayah</strong>: bisa dipakai rental di seluruh Indonesia (WIB, WITA, dan WIT — atur zona waktu di Kelola Usaha).</li>
         </ul>
       </Section>
 

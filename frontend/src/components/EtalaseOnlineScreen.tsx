@@ -462,7 +462,7 @@ export function EtalaseOnlineScreen({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
-              placeholder="Rental alat camping & outdoor terlengkap di Malang, siap sewa harian."
+              placeholder="Rental alat camping & outdoor terlengkap di kota Anda, siap sewa harian."
               className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
             />
           </label>

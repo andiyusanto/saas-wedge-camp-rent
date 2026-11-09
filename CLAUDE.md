@@ -4,7 +4,7 @@ Konteks lengkap project ini untuk sesi Claude Code. Baca seluruh file ini sebelu
 
 ## 1. Apa project ini
 
-SaaS tools operasional untuk UKM rental alat kamping/outdoor di **Malang Raya** (Kota Malang, Kabupaten Malang, Kota Batu), dengan rencana jangka panjang berkembang jadi marketplace publik — tapi **belum sekarang**.
+SaaS tools operasional untuk UKM rental alat kamping/outdoor di **seluruh Indonesia** (pilot/validasi pertama di Malang Raya — Kota Malang, Kabupaten Malang, Kota Batu, lihat bagian 3), dengan rencana jangka panjang berkembang jadi marketplace publik — tapi **belum sekarang**.
 
 **Project ini terpisah dari `bilbo-outdoors`** (repo lain milik owner yang sama). Tidak ada relasi kode atau data antara keduanya, kecuali kemungkinan pola stack teknis yang mirip.
 
