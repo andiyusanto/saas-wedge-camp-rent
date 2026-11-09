@@ -376,7 +376,7 @@ function App() {
           Sewalog — Aplikasi Operasional UKM Rental Camping se-Indonesia
         </p>
         <p className="text-[11px] text-[#DBD5C1]/70 mt-0.5">
-          Aturan denda keterlambatan vs kerusakan dipisah eksplisit • Isolasi data multi-tenant • WIB, WITA &amp; WIT
+          Aturan denda keterlambatan vs kerusakan dipisah eksplisit • Isolasi data multi-tenant • Indonesia
         </p>
       </footer>
     </div>
