@@ -32,6 +32,9 @@ type PublicPageData = {
   description: string | null;
   address: string | null;
   regency_name: string | null;
+  // Kecamatan (migration 052) — opsional, null kalau vendor tidak mengisi
+  // (atau backend jalan sebelum migration 052 dijalankan).
+  district_name?: string | null;
   operating_hours: string | null;
   public_phone: string | null;
   writable: boolean;
@@ -671,6 +674,10 @@ function resolvePageUrl(req: import('express').Request, slug: string): string {
 }
 
 function renderPage(page: PublicPageData, slug: string, req: import('express').Request): string {
+  // "Kec. Lowokwaru, Kota Malang" — kecamatan opsional (migration 052).
+  const locationLabel = [page.district_name ? `Kec. ${page.district_name}` : null, page.regency_name]
+    .filter(Boolean)
+    .join(', ');
   const pageUrl = resolvePageUrl(req, slug);
 
   // Prioritas og:image (migration 035): logo usaha (representasi brand
@@ -698,10 +705,11 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
     name: page.business_name,
   };
   if (page.description) jsonLd.description = page.description;
-  if (page.address || page.regency_name) {
+  const street = [page.address, page.district_name ? `Kec. ${page.district_name}` : null].filter(Boolean).join(', ');
+  if (street || page.regency_name) {
     jsonLd.address = {
       '@type': 'PostalAddress',
-      ...(page.address ? { streetAddress: page.address } : {}),
+      ...(street ? { streetAddress: street } : {}),
       ...(page.regency_name ? { addressLocality: page.regency_name } : {}),
       addressCountry: 'ID',
     };
@@ -958,12 +966,12 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
       <div style="min-width:0;">
         <p style="margin:0 0 4px;font-size:0.75rem;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#A65C2A;">Etalase Online</p>
         <h1 style="margin:0;font-size:1.5rem;color:#26302B;">${escapeHtml(page.business_name)}</h1>
-        ${page.regency_name ? `<p style="margin:4px 0 0;color:#6E6853;font-size:0.875rem;">${escapeHtml(page.regency_name)}</p>` : ''}
+        ${locationLabel ? `<p style="margin:4px 0 0;color:#6E6853;font-size:0.875rem;">${escapeHtml(locationLabel)}</p>` : ''}
       </div>
     </div>`
         : `<p style="margin:0 0 4px;font-size:0.75rem;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#A65C2A;">Etalase Online</p>
     <h1 style="margin:0;font-size:1.5rem;color:#26302B;">${escapeHtml(page.business_name)}</h1>
-    ${page.regency_name ? `<p style="margin:4px 0 0;color:#6E6853;font-size:0.875rem;">${escapeHtml(page.regency_name)}</p>` : ''}`
+    ${locationLabel ? `<p style="margin:4px 0 0;color:#6E6853;font-size:0.875rem;">${escapeHtml(locationLabel)}</p>` : ''}`
     }
     ${page.description ? `<p style="margin:10px 0 0;color:#26302B;line-height:1.5;">${escapeHtml(page.description)}</p>` : ''}
     ${page.address ? `<p style="margin:10px 0 0;color:#6E6853;font-size:0.875rem;">📍 ${escapeHtml(page.address)}</p>` : ''}

@@ -10,6 +10,7 @@ export type Business = {
   phone: string | null;
   address: string | null;
   regency_id: string | null;
+  district_id: string | null; // kecamatan, opsional (migration 052)
   late_tolerance_hours: number;
   logo_url: string | null;
   // Cara hitung durasi sewa (migration 049) — setting LIVE, dipakai
@@ -26,6 +27,7 @@ export type BusinessUpdateInput = {
   phone: string | null;
   address: string | null;
   regency_id: string | null;
+  district_id: string | null; // kecamatan, opsional (migration 052)
   late_tolerance_hours: number;
   logo_url: string | null;
   rental_day_mode: RentalDayMode;
@@ -52,7 +54,7 @@ export function useBusiness(session: Session | null) {
     // RLS (members_select_own_business) sudah membatasi ke baris milik user ini.
     const { data, error: queryError } = await supabase
       .from('businesses')
-      .select('id, name, owner_name, phone, address, regency_id, late_tolerance_hours, logo_url, rental_day_mode, created_at')
+      .select('id, name, owner_name, phone, address, regency_id, district_id, late_tolerance_hours, logo_url, rental_day_mode, created_at')
       .maybeSingle();
 
     // PENTING: error di sini (mis. PGRST116 "multiple rows" kalau akun ini
@@ -112,6 +114,7 @@ export function useBusiness(session: Session | null) {
         phone: input.phone,
         address: input.address,
         regency_id: input.regency_id,
+        district_id: input.district_id,
         late_tolerance_hours: input.late_tolerance_hours,
         logo_url: input.logo_url,
         rental_day_mode: input.rental_day_mode,

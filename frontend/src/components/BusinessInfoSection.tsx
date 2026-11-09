@@ -27,6 +27,7 @@ export function BusinessInfoSection({
   const [phone, setPhone] = useState(business.phone ?? '');
   const [address, setAddress] = useState(business.address ?? '');
   const [regencyId, setRegencyId] = useState(business.regency_id ?? '');
+  const [districtId, setDistrictId] = useState(business.district_id ?? '');
   const { provinces, regencies } = useRegencies();
   const [toleranceHours, setToleranceHours] = useState(String(business.late_tolerance_hours));
   const [rentalDayMode, setRentalDayMode] = useState<RentalDayMode>(business.rental_day_mode);
@@ -49,6 +50,7 @@ export function BusinessInfoSection({
     setPhone(business.phone ?? '');
     setAddress(business.address ?? '');
     setRegencyId(business.regency_id ?? '');
+    setDistrictId(business.district_id ?? '');
     setToleranceHours(String(business.late_tolerance_hours));
     setRentalDayMode(business.rental_day_mode);
     setLogoUrl(business.logo_url ?? '');
@@ -92,6 +94,7 @@ export function BusinessInfoSection({
       phone: phone.trim() || null,
       address: address.trim() || null,
       regency_id: regencyId || null,
+      district_id: (regencyId && districtId) || null,
       late_tolerance_hours: Math.max(0, Number(toleranceHours) || 0),
       logo_url: logoUrl.trim() || null,
       rental_day_mode: rentalDayMode,
@@ -193,7 +196,7 @@ export function BusinessInfoSection({
               className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
             />
           </label>
-          <RegencySelect provinces={provinces} regencies={regencies} value={regencyId} onChange={setRegencyId} />
+          <RegencySelect provinces={provinces} regencies={regencies} value={regencyId} onChange={setRegencyId} districtValue={districtId} onDistrictChange={setDistrictId} />
           <div className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
             Email pemilik (akun login)
             <p className="px-3 py-2 rounded-lg bg-[#F1EEE2] border border-[#DBD5C1] text-[#26302B]">

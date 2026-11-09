@@ -14,6 +14,7 @@ export type PublicPage = {
   description: string | null;
   address: string | null;
   regency_id: string | null;
+  district_id: string | null; // kecamatan, opsional (migration 052)
   operating_hours: string | null;
   public_phone: string | null;
   accept_online_orders: boolean;
@@ -49,6 +50,7 @@ export type PublicPageInput = {
   description: string | null;
   address: string | null;
   regency_id: string | null;
+  district_id: string | null; // kecamatan, opsional (migration 052)
   operating_hours: string | null;
   public_phone: string | null;
   accept_online_orders: boolean;
@@ -101,7 +103,7 @@ export function usePublicPage(businessId: string | null) {
     const { data } = await supabase
       .from('public_pages')
       .select(
-        'business_id, published, slug, description, address, regency_id, operating_hours, public_phone, accept_online_orders, confirmation_message, pay_transfer_enabled, bank_name, bank_account_number, bank_account_holder, pay_qris_enabled, qris_image_url, pay_cash_enabled, dp_mode, dp_value, confirmation_deadline_hours, current_terms_version_id, order_admin_phone_1, order_admin_phone_2, order_admin_phone_3',
+        'business_id, published, slug, description, address, regency_id, district_id, operating_hours, public_phone, accept_online_orders, confirmation_message, pay_transfer_enabled, bank_name, bank_account_number, bank_account_holder, pay_qris_enabled, qris_image_url, pay_cash_enabled, dp_mode, dp_value, confirmation_deadline_hours, current_terms_version_id, order_admin_phone_1, order_admin_phone_2, order_admin_phone_3',
       )
       .eq('business_id', businessId)
       .maybeSingle();

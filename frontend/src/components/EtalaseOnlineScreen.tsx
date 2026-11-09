@@ -91,6 +91,7 @@ export function EtalaseOnlineScreen({
   const [description, setDescription] = useState('');
   const [address, setAddress] = useState('');
   const [regencyId, setRegencyId] = useState('');
+  const [districtId, setDistrictId] = useState('');
   const [operatingHours, setOperatingHours] = useState('');
   const [publicPhone, setPublicPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -114,6 +115,7 @@ export function EtalaseOnlineScreen({
       setDescription(page.description ?? '');
       setAddress(page.address ?? businessAddress ?? '');
       setRegencyId(page.regency_id ?? '');
+      setDistrictId(page.district_id ?? '');
       setOperatingHours(page.operating_hours ?? '');
       setPublicPhone(page.public_phone ?? businessPhone ?? '');
       setAcceptOnlineOrders(page.accept_online_orders);
@@ -351,6 +353,7 @@ export function EtalaseOnlineScreen({
       description: description.trim() || null,
       address: address.trim() || null,
       regency_id: regencyId || null,
+      district_id: (regencyId && districtId) || null,
       operating_hours: operatingHours.trim() || null,
       public_phone: publicPhone.trim() || null,
       accept_online_orders: acceptOnlineOrders,
@@ -464,7 +467,7 @@ export function EtalaseOnlineScreen({
             />
           </label>
 
-          <RegencySelect provinces={provinces} regencies={regencies} value={regencyId} onChange={setRegencyId} />
+          <RegencySelect provinces={provinces} regencies={regencies} value={regencyId} onChange={setRegencyId} districtValue={districtId} onDistrictChange={setDistrictId} />
 
           <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
             Jam operasional
