@@ -6,6 +6,7 @@ import type { Business, BusinessUpdateInput } from '../hooks/useBusiness';
 import type { RentalDayMode } from '../utils/formatters';
 import { useRegencies } from '../hooks/useRegencies';
 import { RegencySelect } from './RegencySelect';
+import { TIMEZONE_OPTIONS, suggestedTimezoneForProvince, type BusinessTimezone } from '../hooks/useRegencies';
 import { apiFetch } from '../lib/api';
 import { resizeImageToDataUrl } from '../utils/imageResize';
 
@@ -29,8 +30,13 @@ export function BusinessInfoSection({
   const [regencyId, setRegencyId] = useState(business.regency_id ?? '');
   const [districtId, setDistrictId] = useState(business.district_id ?? '');
   const { provinces, regencies } = useRegencies();
+  const selectedProvinceName = provinces.find(
+    (p) => p.id === regencies.find((r) => r.id === regencyId)?.province_id,
+  )?.name;
+  const suggestedTimezone = suggestedTimezoneForProvince(selectedProvinceName);
   const [toleranceHours, setToleranceHours] = useState(String(business.late_tolerance_hours));
   const [rentalDayMode, setRentalDayMode] = useState<RentalDayMode>(business.rental_day_mode);
+  const [timezone, setTimezone] = useState<BusinessTimezone>(business.timezone ?? 'Asia/Jakarta');
   const [logoUrl, setLogoUrl] = useState(business.logo_url ?? '');
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -53,6 +59,7 @@ export function BusinessInfoSection({
     setDistrictId(business.district_id ?? '');
     setToleranceHours(String(business.late_tolerance_hours));
     setRentalDayMode(business.rental_day_mode);
+    setTimezone(business.timezone ?? 'Asia/Jakarta');
     setLogoUrl(business.logo_url ?? '');
   }, [business]);
 
@@ -98,6 +105,7 @@ export function BusinessInfoSection({
       late_tolerance_hours: Math.max(0, Number(toleranceHours) || 0),
       logo_url: logoUrl.trim() || null,
       rental_day_mode: rentalDayMode,
+      timezone,
     });
 
     setSubmitting(false);
@@ -265,6 +273,40 @@ export function BusinessInfoSection({
               Berlaku untuk transaksi baru. Transaksi lama tetap dihitung seperti saat dibuat.
             </p>
           )}
+        </div>
+
+        <div className="flex flex-col gap-2 pt-2 border-t border-[#E6E1D2]">
+          <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
+            <span className="font-semibold text-[#26302B]">Zona Waktu</span>
+            <select
+              value={timezone}
+              onChange={(e) => setTimezone(e.target.value as BusinessTimezone)}
+              className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+            >
+              {TIMEZONE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {suggestedTimezone && suggestedTimezone !== timezone && (
+            <p className="text-xs font-semibold text-[#A65C2A]">
+              Provinsi {selectedProvinceName} biasanya memakai{' '}
+              {TIMEZONE_OPTIONS.find((o) => o.value === suggestedTimezone)?.label.split(' ')[0]}.{' '}
+              <button
+                type="button"
+                onClick={() => setTimezone(suggestedTimezone)}
+                className="underline text-[#2B4739]"
+              >
+                Pakai ini
+              </button>
+            </p>
+          )}
+          <p className="text-[11px] text-[#6E6853]">
+            Dipakai untuk status transaksi, batas jam denda telat, dan batas waktu Pesanan Online. Ganti
+            hanya kalau rental Anda memang berada di zona ini.
+          </p>
         </div>
 
         {error && <p className="text-xs font-semibold text-[#A8412E]">{error}</p>}

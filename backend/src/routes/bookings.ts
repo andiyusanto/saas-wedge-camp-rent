@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { createRequestClient } from '../lib/supabaseClient.js';
 import { fetchActiveBookingItems, usedUnitsOn } from '../lib/availability.js';
-import { dateRange, todayInWIB } from '../lib/dates.js';
+import { dateRange, todayInTz, tzOffsetIso } from '../lib/dates.js';
 import { logBookingStatus } from '../lib/audit.js';
 import { isBusinessWritable, SUBSCRIPTION_LOCKED_MESSAGE } from '../lib/subscription.js';
 import { getCustomerPhotoSignedUrl } from '../lib/r2.js';
@@ -24,10 +24,12 @@ type BookingItemInput = { item_id: string; quantity: number; subtotal?: number }
 async function generateBookingNumber(
   supabase: ReturnType<typeof createRequestClient>,
   businessId: string,
+  timezone: string | null,
 ): Promise<string> {
-  const todayWib = todayInWIB();
-  const dayStart = `${todayWib}T00:00:00+07:00`;
-  const dayEnd = `${todayWib}T23:59:59+07:00`;
+  // Hari ini & batas harinya di zona rental (migration 053), bukan selalu WIB.
+  const todayWib = todayInTz(timezone);
+  const dayStart = `${todayWib}T00:00:00${tzOffsetIso(timezone)}`;
+  const dayEnd = `${todayWib}T23:59:59${tzOffsetIso(timezone)}`;
 
   const { count } = await supabase
     .from('bookings')
@@ -112,7 +114,7 @@ router.post('/bookings', async (req, res) => {
   // struk WA, denda telat bertingkat) tidak pernah ikut berubah.
   const { data: bizRow, error: bizError } = await supabase
     .from('businesses')
-    .select('rental_day_mode')
+    .select('rental_day_mode, timezone')
     .eq('id', businessId)
     .maybeSingle();
 
@@ -154,7 +156,7 @@ router.post('/bookings', async (req, res) => {
     }
 
     for (const day of days) {
-      const used = usedUnitsOn(existingBookingItems, requested.item_id, day, itemRow.readiness_hours);
+      const used = usedUnitsOn(existingBookingItems, requested.item_id, day, itemRow.readiness_hours, bizRow.timezone);
       if (used + requested.quantity > itemRow.total_units) {
         res.status(409).json({
           error: `Alat "${itemRow.name}" tidak cukup pada ${day} (sisa ${itemRow.total_units - used}, diminta ${requested.quantity})`,
@@ -202,8 +204,8 @@ router.post('/bookings', async (req, res) => {
 
   // Jalan diambil hari ini -> langsung 'aktif' (alur walk-in biasa).
   // Tanggal ambil di masa depan -> 'dipesan' (reservasi, belum diambil fisik).
-  const status = start_date <= todayInWIB() ? 'aktif' : 'dipesan';
-  const bookingNumber = await generateBookingNumber(supabase, businessId);
+  const status = start_date <= todayInTz(bizRow.timezone) ? 'aktif' : 'dipesan';
+  const bookingNumber = await generateBookingNumber(supabase, businessId, bizRow.timezone);
   // 'aktif' di sini berarti diambil LANGSUNG saat dicatat (walk-in, staff
   // ngetik sambil pelanggan menunggu) — created_at praktis = jam ambil
   // sungguhan, tapi disimpan eksplisit di kolom sendiri (bukan cuma

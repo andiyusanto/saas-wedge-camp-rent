@@ -65,7 +65,7 @@ router.get('/trackings', async (req, res) => {
 
   const { data: business, error: bizError } = await supabase
     .from('businesses')
-    .select('late_tolerance_hours')
+    .select('late_tolerance_hours, timezone')
     .maybeSingle();
 
   if (bizError || !business) {
@@ -99,7 +99,7 @@ router.get('/trackings', async (req, res) => {
 
     // 'dipesan' belum diambil fisik — belum relevan hitung telat.
     const isPendingPickup = b.status === 'dipesan';
-    const dueAt = computeDueAt(b.end_date, b.created_at, b.picked_up_at);
+    const dueAt = computeDueAt(b.end_date, b.created_at, b.picked_up_at, business.timezone);
     const hLate = isPendingPickup ? 0 : Math.max(0, hoursLate(dueAt, now));
 
     // Per item: tiered (snapshot ada) atau flat lama (snapshot null),
@@ -224,11 +224,11 @@ router.post('/bookings/:id/return', async (req, res) => {
 
   const { data: business } = await supabase
     .from('businesses')
-    .select('late_tolerance_hours')
+    .select('late_tolerance_hours, timezone')
     .maybeSingle();
 
   const now = new Date();
-  const dueAt = computeDueAt(booking.end_date, booking.created_at, booking.picked_up_at);
+  const dueAt = computeDueAt(booking.end_date, booking.created_at, booking.picked_up_at, business?.timezone ?? null);
   const hLate = Math.max(0, hoursLate(dueAt, now));
   const isLate = hLate > (business?.late_tolerance_hours ?? 6);
 

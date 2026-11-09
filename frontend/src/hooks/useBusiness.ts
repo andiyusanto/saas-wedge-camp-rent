@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
 import type { RentalDayMode } from '../utils/formatters';
+import type { BusinessTimezone } from './useRegencies';
 
 export type Business = {
   id: string;
@@ -13,6 +14,7 @@ export type Business = {
   district_id: string | null; // kecamatan, opsional (migration 052)
   late_tolerance_hours: number;
   logo_url: string | null;
+  timezone: BusinessTimezone; // migration 053, default WIB
   // Cara hitung durasi sewa (migration 049) — setting LIVE, dipakai
   // untuk transaksi BARU (NewBookingModal). Transaksi yang sudah dibuat
   // punya snapshot sendiri di bookings.rental_day_mode, tidak ikut
@@ -31,6 +33,7 @@ export type BusinessUpdateInput = {
   late_tolerance_hours: number;
   logo_url: string | null;
   rental_day_mode: RentalDayMode;
+  timezone: BusinessTimezone;
 };
 
 export type MemberRole = 'owner' | 'karyawan';
@@ -54,7 +57,7 @@ export function useBusiness(session: Session | null) {
     // RLS (members_select_own_business) sudah membatasi ke baris milik user ini.
     const { data, error: queryError } = await supabase
       .from('businesses')
-      .select('id, name, owner_name, phone, address, regency_id, district_id, late_tolerance_hours, logo_url, rental_day_mode, created_at')
+      .select('id, name, owner_name, phone, address, regency_id, district_id, late_tolerance_hours, logo_url, rental_day_mode, timezone, created_at')
       .maybeSingle();
 
     // PENTING: error di sini (mis. PGRST116 "multiple rows" kalau akun ini
@@ -118,6 +121,7 @@ export function useBusiness(session: Session | null) {
         late_tolerance_hours: input.late_tolerance_hours,
         logo_url: input.logo_url,
         rental_day_mode: input.rental_day_mode,
+        timezone: input.timezone,
       })
       .eq('id', business.id);
 

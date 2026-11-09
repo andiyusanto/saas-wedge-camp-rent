@@ -1,4 +1,4 @@
-import { WIB_OFFSET_MS } from './dates.js';
+import { tzOffsetMs } from './dates.js';
 import { computeItemRentalPrice, type ItemDayRates } from './pricing.js';
 
 const BLOCK_HOURS = 12;
@@ -22,16 +22,26 @@ const BLOCK_RATE = 0.5;
 // Semua ekstraksi jam sengaja lewat offset WIB tetap (bukan getHours() lokal
 // server) — server bisa di-deploy di timezone apa saja, tapi jam ambil barang
 // harus dibaca sebagai jam WIB (lihat insiden serupa di lib/dates.ts).
-export function computeDueAt(endDate: string, createdAt: string, pickedUpAt: string | null = null): Date {
+//
+// `timezone` (migration 053) = zona rental. Jam ambil dibaca di zona itu,
+// jadi batasnya "tanggal kembali, jam yang sama dengan jam ambil" waktu
+// setempat. Default WIB = perilaku sebelum 053.
+export function computeDueAt(
+  endDate: string,
+  createdAt: string,
+  pickedUpAt: string | null = null,
+  timezone: string | null = null,
+): Date {
+  const offsetMs = tzOffsetMs(timezone);
   const anchor = pickedUpAt ?? createdAt;
-  const anchorWibMs = new Date(anchor).getTime() + WIB_OFFSET_MS;
-  const anchorWib = new Date(anchorWibMs);
-  const hours = anchorWib.getUTCHours();
-  const minutes = anchorWib.getUTCMinutes();
-  const seconds = anchorWib.getUTCSeconds();
+  const anchorLocalMs = new Date(anchor).getTime() + offsetMs;
+  const anchorLocal = new Date(anchorLocalMs);
+  const hours = anchorLocal.getUTCHours();
+  const minutes = anchorLocal.getUTCMinutes();
+  const seconds = anchorLocal.getUTCSeconds();
 
   const [y, m, d] = endDate.split('-').map(Number);
-  const dueAtUtcMs = Date.UTC(y, m - 1, d, hours, minutes, seconds) - WIB_OFFSET_MS;
+  const dueAtUtcMs = Date.UTC(y, m - 1, d, hours, minutes, seconds) - offsetMs;
   return new Date(dueAtUtcMs);
 }
 

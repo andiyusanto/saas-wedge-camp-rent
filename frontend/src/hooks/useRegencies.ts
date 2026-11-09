@@ -66,3 +66,31 @@ export function useDistricts(regencyId: string) {
 
   return { districts, loading };
 }
+
+// Zona waktu per rental (migration 053, businesses.timezone). Dipakai server
+// untuk "hari ini", batas denda telat, dan kedaluwarsa Pesanan Online.
+export type BusinessTimezone = 'Asia/Jakarta' | 'Asia/Makassar' | 'Asia/Jayapura';
+
+export const TIMEZONE_OPTIONS: { value: BusinessTimezone; label: string }[] = [
+  { value: 'Asia/Jakarta', label: 'WIB (UTC+7) — Sumatera, Jawa, Kalbar, Kalteng' },
+  { value: 'Asia/Makassar', label: 'WITA (UTC+8) — Bali, NTB, NTT, Kalsel, Kaltim, Kaltara, Sulawesi' },
+  { value: 'Asia/Jayapura', label: 'WIT (UTC+9) — Maluku, Papua' },
+];
+
+const WITA_PROVINCES = new Set([
+  'Bali', 'Nusa Tenggara Barat', 'Nusa Tenggara Timur', 'Kalimantan Selatan', 'Kalimantan Timur',
+  'Kalimantan Utara', 'Sulawesi Utara', 'Sulawesi Tengah', 'Sulawesi Selatan', 'Sulawesi Tenggara',
+  'Gorontalo', 'Sulawesi Barat',
+]);
+const WIT_PROVINCES = new Set([
+  'Maluku', 'Maluku Utara', 'Papua', 'Papua Barat', 'Papua Selatan', 'Papua Tengah', 'Papua Pegunungan',
+  'Papua Barat Daya',
+]);
+
+// Cuma SARAN di UI — tidak pernah mengganti pengaturan otomatis.
+export function suggestedTimezoneForProvince(provinceName: string | undefined): BusinessTimezone | null {
+  if (!provinceName) return null;
+  if (WITA_PROVINCES.has(provinceName)) return 'Asia/Makassar';
+  if (WIT_PROVINCES.has(provinceName)) return 'Asia/Jayapura';
+  return 'Asia/Jakarta';
+}

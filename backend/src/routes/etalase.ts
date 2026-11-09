@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { createAnonClient } from '../lib/supabaseClient.js';
 import { escapeHtml } from '../lib/html.js';
+import { addDays, normalizeTimezone, todayInTz, tzLabel } from '../lib/dates.js';
 import { buildWhatsAppUrl } from '../lib/whatsapp.js';
 
 const router = Router();
@@ -35,6 +36,8 @@ type PublicPageData = {
   // Kecamatan (migration 052) — opsional, null kalau vendor tidak mengisi
   // (atau backend jalan sebelum migration 052 dijalankan).
   district_name?: string | null;
+  // Zona rental (migration 053); undefined sebelum 053 dijalankan = WIB.
+  timezone?: string | null;
   operating_hours: string | null;
   public_phone: string | null;
   writable: boolean;
@@ -237,6 +240,7 @@ type BookingRequestStatus = {
   expires_at: string;
   accepted_terms_content: string | null;
   business_name: string;
+  timezone?: string | null; // migration 053
   logo_url: string | null;
   public_phone: string | null;
   slug: string | null;
@@ -314,23 +318,24 @@ function formatDateID(dateStr: string): string {
 }
 
 // Batas konfirmasi (tahap 5) — tampil cuma untuk status 'menunggu'
-// (lihat renderStatusPage), WIB hardcoded (CLAUDE.md bagian 4: device
-// pelanggan/vendor fisik di Malang Raya), bukan timezone server.
-function formatDeadlineWIB(expiresAtIso: string): string {
+// (lihat renderStatusPage), di zona RENTAL (migration 053, WIB/WITA/WIT),
+// bukan timezone server atau browser pelanggan.
+function formatDeadline(expiresAtIso: string, timezone: string | null | undefined): string {
+  const tz = normalizeTimezone(timezone);
   const d = new Date(expiresAtIso);
   const dayDate = d.toLocaleDateString('id-ID', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
     year: 'numeric',
-    timeZone: 'Asia/Jakarta',
+    timeZone: tz,
   });
   const time = d.toLocaleTimeString('id-ID', {
     hour: '2-digit',
     minute: '2-digit',
-    timeZone: 'Asia/Jakarta',
+    timeZone: tz,
   });
-  return `${dayDate} pukul ${time} WIB`;
+  return `${dayDate} pukul ${time} ${tzLabel(tz)}`;
 }
 
 // Review -c1 (tahap 3, poin 1): OG tags di halaman ini SENGAJA generik
@@ -471,7 +476,7 @@ function renderStatusPage(data: BookingRequestStatus, req: import('express').Req
     // teks reassurance, jadi SELALU ditampilkan terlepas vendor sudah
     // isi pesan custom atau belum (beda dari perilaku lama yang
     // menyembunyikan baris "24 jam" generik kalau custom message ada).
-    bodyExtraHtml = `<p style="margin:10px 0 0;font-size:0.85rem;color:#6E6853;">Batas konfirmasi: <strong style="color:#26302B;">${escapeHtml(formatDeadlineWIB(data.expires_at))}</strong>. Kalau mendesak, langsung chat WA.</p>`;
+    bodyExtraHtml = `<p style="margin:10px 0 0;font-size:0.85rem;color:#6E6853;">Batas konfirmasi: <strong style="color:#26302B;">${escapeHtml(formatDeadline(data.expires_at, data.timezone))}</strong>. Kalau mendesak, langsung chat WA.</p>`;
   } else if (data.status === 'ditolak') {
     bodyExtraHtml = `<p style="margin:10px 0 0;font-size:0.85rem;color:#A8412E;">Alasan: ${escapeHtml(data.rejection_reason ?? 'Tidak disebutkan')}. Silakan hubungi lewat WA untuk tanggal lain, atau pesan ulang.</p>`;
   } else if (data.status === 'kedaluwarsa') {
@@ -1278,19 +1283,16 @@ document.addEventListener('keydown', function (e) {
   // ------------------------------------------------------------
   // Rencana tahap 3: Pesanan Online dari Etalase (form + keranjang)
   // ------------------------------------------------------------
-  // min date picker = BESOK, dihitung dari waktu LOKAL BROWSER (bukan
-  // offset WIB manual) — CLAUDE.md bagian 4: device pengunjung secara
-  // fisik ada di WIB, jadi waktu lokal browser sudah benar tanpa perlu
-  // offset. Sama pola dengan todayStr() di frontend/src/utils/formatters.ts.
+  // min date picker = BESOK menurut zona RENTAL (migration 053), dihitung
+  // server saat render — pelanggan bisa membuka dari zona lain, dan
+  // validasi server (bookingRequests.ts) juga memakai zona rental.
   function localDateStr(d) {
     var y = d.getFullYear();
     var m = String(d.getMonth() + 1).padStart(2, '0');
     var day = String(d.getDate()).padStart(2, '0');
     return y + '-' + m + '-' + day;
   }
-  var tomorrowLocal = new Date();
-  tomorrowLocal.setDate(tomorrowLocal.getDate() + 1);
-  var minDateStr = localDateStr(tomorrowLocal);
+  var minDateStr = ${JSON.stringify(addDays(todayInTz(page.timezone), 1))};
   startInput.min = minDateStr;
   endInput.min = minDateStr;
 

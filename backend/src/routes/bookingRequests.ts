@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { createAnonClient } from '../lib/supabaseClient.js';
-import { todayInWIB, rentalDuration } from '../lib/dates.js';
+import { todayInTz, tzOffsetIso, rentalDuration } from '../lib/dates.js';
 import { computeItemRentalPrice } from '../lib/pricing.js';
 
 const router = Router();
@@ -183,25 +183,6 @@ router.post('/public/booking-requests/:slug', perIpLimiter, async (req, res) => 
     res.status(400).json({ error: 'Tanggal kembali tidak boleh sebelum tanggal ambil.' });
     return;
   }
-  // Review -c1: ambil hari ini sendiri tidak masuk akal untuk pesanan
-  // online (perlu dikonfirmasi vendor dulu, lalu DP/instruksi bayar, baru
-  // benar-benar diambil — proses itu tidak realistis selesai dalam
-  // hitungan jam yang sama). Ditolak dengan pesan ramah di sini, BUKAN
-  // dibiarkan lolos ke expiresAt yang sudah lewat (lihat di bawah) yang
-  // akan membuat create_booking_request menolak dengan pesan server
-  // mentah. Form publik (tahap 3) akan menegakkan ini juga di sisi UI
-  // (minimal tanggal ambil = besok), tapi validasi di sini tetap wajib
-  // berdiri sendiri terlepas dari form.
-  const todayWib = todayInWIB();
-  if (start_date <= todayWib) {
-    res.status(400).json({
-      error:
-        start_date < todayWib
-          ? 'Tanggal ambil sudah lewat.'
-          : 'Untuk ambil hari ini, hubungi rental langsung lewat WhatsApp.',
-    });
-    return;
-  }
 
   const totalQty = requestedItems.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0);
   if (requestedItems.length > MAX_ITEMS_PER_REQUEST || totalQty < 1 || totalQty > MAX_ITEMS_PER_REQUEST) {
@@ -234,7 +215,30 @@ router.post('/public/booking-requests/:slug', perIpLimiter, async (req, res) => 
     pay_cash_enabled: boolean;
     confirmation_deadline_hours: number;
     rental_day_mode: 'per_malam' | 'per_hari_kalender';
+    timezone?: string | null; // migration 053; undefined sebelum 053 = WIB
   };
+
+  // Review -c1: ambil hari ini sendiri tidak masuk akal untuk pesanan
+  // online (perlu dikonfirmasi vendor dulu, lalu DP/instruksi bayar, baru
+  // benar-benar diambil — proses itu tidak realistis selesai dalam
+  // hitungan jam yang sama). Ditolak dengan pesan ramah di sini, BUKAN
+  // dibiarkan lolos ke expiresAt yang sudah lewat (lihat di bawah) yang
+  // akan membuat create_booking_request menolak dengan pesan server
+  // mentah. Form publik (tahap 3) akan menegakkan ini juga di sisi UI
+  // (minimal tanggal ambil = besok), tapi validasi di sini tetap wajib
+  // berdiri sendiri terlepas dari form.
+  // "Hari ini" di zona rental (migration 053), bukan selalu WIB — makanya
+  // dicek SETELAH get_public_ordering_page (butuh page.timezone).
+  const todayWib = todayInTz(page.timezone);
+  if (start_date <= todayWib) {
+    res.status(400).json({
+      error:
+        start_date < todayWib
+          ? 'Tanggal ambil sudah lewat.'
+          : 'Untuk ambil hari ini, hubungi rental langsung lewat WhatsApp.',
+    });
+    return;
+  }
 
   // Cara hitung durasi sewa (migration 049) — tolak ambil=kembali hari
   // sama kalau per_malam, SEBELUM dihitung apa pun (estimasi harga,
@@ -325,14 +329,14 @@ router.post('/public/booking-requests/:slug', perIpLimiter, async (req, res) => 
   // Batas kedaluwarsa (rencana 2.6 revisi, tahap 5): mana yang lebih dulu
   // — N jam dari sekarang (N = confirmation_deadline_hours per-business,
   // migration 046, default 24 kalau vendor belum pernah mengatur) ATAU
-  // awal hari start_date WIB. Hard cap 7 hari tetap ditegakkan di
+  // awal hari start_date (zona rental, 053). Hard cap 7 hari tetap ditegakkan di
   // create_booking_request sendiri (migration 037), independen dari
   // setting ini — kalau vendor set 72 jam tapi pelanggan pesan utk
   // tanggal 6 hari lagi, byHours (72 jam dari sekarang) masih < startOf
   // PickupDayWib, jadi expiresAt tetap byHours yang aman di bawah cap.
   const now = Date.now();
   const byHours = new Date(now + page.confirmation_deadline_hours * 60 * 60 * 1000);
-  const startOfPickupDayWib = new Date(`${start_date}T00:00:00+07:00`);
+  const startOfPickupDayWib = new Date(`${start_date}T00:00:00${tzOffsetIso(page.timezone)}`);
   const expiresAt = byHours < startOfPickupDayWib ? byHours : startOfPickupDayWib;
 
   // Rencana 2.7: maks 3 pesanan 'menunggu' bersamaan per nomor WA per

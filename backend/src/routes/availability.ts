@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { createRequestClient } from '../lib/supabaseClient.js';
 import { fetchActiveBookingItems, usedUnitsOn, computeAvailabilityStatus } from '../lib/availability.js';
-import { todayInWIB, addDays } from '../lib/dates.js';
+import { todayInTz, addDays } from '../lib/dates.js';
 
 const router = Router();
 
@@ -16,8 +16,13 @@ router.get('/availability', async (req, res) => {
   const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 30);
   const supabase = createRequestClient(req);
 
+  // Zona rental (migration 053) — RLS cuma memperlihatkan business milik
+  // pemanggil (pola sama seperti routes/trackings.ts). Gagal baca = WIB.
+  const { data: business } = await supabase.from('businesses').select('timezone').maybeSingle();
+  const timezone: string | null = business?.timezone ?? null;
+
   const requestedStart = typeof req.query.start_date === 'string' ? req.query.start_date : '';
-  const startDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedStart) ? requestedStart : todayInWIB();
+  const startDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedStart) ? requestedStart : todayInTz(timezone);
   const dateList: string[] = Array.from({ length: days }, (_, i) => addDays(startDate, i));
 
   const { data: items, error: itemsError } = await supabase
@@ -41,7 +46,7 @@ router.get('/availability', async (req, res) => {
 
   const result = (items ?? []).map((item) => {
     const remaining = dateList.map(
-      (dateStr) => item.total_units - usedUnitsOn(bookingItems, item.id, dateStr, item.readiness_hours),
+      (dateStr) => item.total_units - usedUnitsOn(bookingItems, item.id, dateStr, item.readiness_hours, timezone),
     );
 
     return {

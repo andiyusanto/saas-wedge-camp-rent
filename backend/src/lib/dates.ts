@@ -1,5 +1,6 @@
-// Semua vendor pilot ada di Malang Raya (WIB, UTC+7, tanpa DST) — lihat
-// CLAUDE.md bagian 3. "Hari ini" dan aritmetika tanggal sengaja dihitung
+// Default WIB (UTC+7, tanpa DST); sejak migration 053 tiap rental bisa
+// WITA/WIT — pakai todayInTz()/toDateStrInTz() di kode yang tahu business-nya.
+// Lihat CLAUDE.md bagian 4. "Hari ini" dan aritmetika tanggal sengaja dihitung
 // relatif ke WIB, bukan timezone lokal server atau UTC polos, supaya tidak
 // bergeser satu hari tergantung di mana server di-deploy (lihat insiden:
 // new Date(`${str}T00:00:00`) + toISOString() menggeser tanggal mundur
@@ -8,6 +9,48 @@ export const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 export function todayInWIB(): string {
   return new Date(Date.now() + WIB_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+// Zona waktu per rental (migration 053, businesses.timezone). Indonesia
+// tidak punya DST, jadi offset tiap zona tetap dan aman dihitung manual
+// seperti WIB di atas (tetap TIDAK lewat timezone server). Nilai tak dikenal
+// atau null (baris/route lama) jatuh balik ke WIB = perilaku sebelum 053.
+export type BusinessTimezone = 'Asia/Jakarta' | 'Asia/Makassar' | 'Asia/Jayapura';
+
+const TZ_OFFSET_HOURS: Record<BusinessTimezone, number> = {
+  'Asia/Jakarta': 7,
+  'Asia/Makassar': 8,
+  'Asia/Jayapura': 9,
+};
+const TZ_LABEL: Record<BusinessTimezone, string> = {
+  'Asia/Jakarta': 'WIB',
+  'Asia/Makassar': 'WITA',
+  'Asia/Jayapura': 'WIT',
+};
+
+export function normalizeTimezone(tz: string | null | undefined): BusinessTimezone {
+  return tz && tz in TZ_OFFSET_HOURS ? (tz as BusinessTimezone) : 'Asia/Jakarta';
+}
+
+export function tzOffsetMs(tz: string | null | undefined): number {
+  return TZ_OFFSET_HOURS[normalizeTimezone(tz)] * 60 * 60 * 1000;
+}
+
+// "+07:00" / "+08:00" / "+09:00" — buat literal timestamp ISO.
+export function tzOffsetIso(tz: string | null | undefined): string {
+  return `+${String(TZ_OFFSET_HOURS[normalizeTimezone(tz)]).padStart(2, '0')}:00`;
+}
+
+export function tzLabel(tz: string | null | undefined): string {
+  return TZ_LABEL[normalizeTimezone(tz)];
+}
+
+export function todayInTz(tz: string | null | undefined): string {
+  return new Date(Date.now() + tzOffsetMs(tz)).toISOString().slice(0, 10);
+}
+
+export function toDateStrInTz(isoInstant: string, tz: string | null | undefined): string {
+  return new Date(new Date(isoInstant).getTime() + tzOffsetMs(tz)).toISOString().slice(0, 10);
 }
 
 // Tanggal kalender WIB dari sebuah instant asli (mis. bookings.actual_return_at)

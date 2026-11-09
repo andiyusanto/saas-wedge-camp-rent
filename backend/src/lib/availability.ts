@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { addDays, toWibDateStr } from './dates.js';
+import { addDays, toDateStrInTz } from './dates.js';
 
 // Dipindah ke sini (dari routes/availability.ts) supaya bisa dipakai ulang
 // oleh routes/etalase.ts (pencarian ketersediaan publik di Etalase Online)
@@ -62,6 +62,9 @@ export function usedUnitsOn(
   itemId: string,
   dateStr: string,
   readinessHours = 0,
+  // Zona rental (migration 053) — dipakai membaca hari sungguhan barang
+  // kembali. Harus sama dengan get_public_availability (053).
+  timezone: string | null = null,
 ): number {
   const readinessDays = readinessHours > 0 ? Math.ceil(readinessHours / 24) : 0;
 
@@ -100,7 +103,7 @@ export function usedUnitsOn(
       // 'telat'/'selesai' (SUDAH DITUTUP lewat Proses Pengembalian, punya
       // actual_return_at asli) — jendela jeda dijangkarkan ke HARI SUNGGUHAN
       // barang kembali (actual_return_at, dibaca sebagai tanggal WIB lewat
-      // toWibDateStr), BUKAN end_date terjadwal. Ini perbaikan dari versi
+      // toDateStrInTz, zona rental sejak 053), BUKAN end_date terjadwal. Ini perbaikan dari versi
       // sebelumnya (yang menjangkarkan ke end_date+readinessDays) — untuk
       // booking 'telat' yang kembali jauh setelah end_date, menjangkar ke
       // end_date bisa membebaskan alat SEBELUM jeda persiapan sungguhan
@@ -111,7 +114,7 @@ export function usedUnitsOn(
       // jeda persiapan fisik tidak peduli pengembaliannya telat atau tidak.
       if ((booking.status === 'telat' || booking.status === 'selesai') && booking.actual_return_at) {
         if (readinessDays <= 0) return false; // 0 jam = tersedia lagi hari yang sama, tidak diblokir sama sekali
-        const returnDay = toWibDateStr(booking.actual_return_at);
+        const returnDay = toDateStrInTz(booking.actual_return_at, timezone);
         const effectiveEnd = addDays(returnDay, readinessDays - 1);
         return returnDay <= dateStr && dateStr <= effectiveEnd;
       }
