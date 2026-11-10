@@ -181,6 +181,7 @@ export function RescheduleModal({
                 onChange={(e) => setStartDate(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] font-semibold disabled:bg-[#F1EEE2] disabled:text-[#6E6853]"
               />
+              {startDate && <p className="text-[10px] text-[#6E6853] mt-1">{formatDateIndo(startDate, true)}</p>}
             </div>
             <div>
               <label className="block font-semibold text-[#26302B] mb-1">Tanggal Kembali</label>
@@ -191,6 +192,7 @@ export function RescheduleModal({
                 onChange={(e) => setEndDate(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] font-semibold"
               />
+              {endDate && <p className="text-[10px] text-[#6E6853] mt-1">{formatDateIndo(endDate, true)}</p>}
             </div>
           </div>
 

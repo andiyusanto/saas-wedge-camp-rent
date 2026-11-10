@@ -155,6 +155,7 @@ export function HistoryScreen({ businessId }: { businessId: string }) {
               onChange={(e) => setFrom(e.target.value)}
               className="px-3 py-1.5 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] text-xs"
             />
+            {from && <span className="text-[10px] text-[#6E6853]">{formatDateIndo(from, true)}</span>}
           </label>
           <label className="flex flex-col gap-1 text-xs text-[#6E6853]">
             Sampai
@@ -164,6 +165,7 @@ export function HistoryScreen({ businessId }: { businessId: string }) {
               onChange={(e) => setTo(e.target.value)}
               className="px-3 py-1.5 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] text-xs"
             />
+            {to && <span className="text-[10px] text-[#6E6853]">{formatDateIndo(to, true)}</span>}
           </label>
           <label className="flex flex-col gap-1 text-xs text-[#6E6853]">
             Status

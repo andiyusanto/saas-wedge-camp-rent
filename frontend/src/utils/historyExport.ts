@@ -182,8 +182,11 @@ export async function downloadHistoryExcel(allFiltered: HistoryBooking[], filter
       denda_kerusakan: bookingPenaltyByType(b, 'kerusakan-kehilangan'),
       status: bookingStatusLabel(b.status),
     });
-    row.getCell('start_date').numFmt = 'dd/mm/yyyy';
-    row.getCell('end_date').numFmt = 'dd/mm/yyyy';
+    // Format tampilan sel diseragamkan dd-mm-yyyy (keputusan Andi 10 Nov
+    // 2026) — sel tetap bertipe tanggal Excel sungguhan (bisa diurutkan/
+    // difilter), cuma numFmt-nya yang berubah dari dd/mm/yyyy.
+    row.getCell('start_date').numFmt = 'dd-mm-yyyy';
+    row.getCell('end_date').numFmt = 'dd-mm-yyyy';
     for (const key of ['total_price', 'dp_paid', 'remaining', 'denda_telat', 'denda_kerusakan']) {
       row.getCell(key).numFmt = '#,##0';
     }

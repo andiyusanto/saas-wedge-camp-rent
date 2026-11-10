@@ -1,7 +1,15 @@
 import { Router } from 'express';
 import { createAnonClient } from '../lib/supabaseClient.js';
 import { escapeHtml } from '../lib/html.js';
-import { addDays, normalizeTimezone, todayInTz, tzLabel } from '../lib/dates.js';
+import { addDays, normalizeTimezone, todayInTz, tzLabel, tzOffsetMs } from '../lib/dates.js';
+
+// Nama hari singkat Indonesia, indeks SAMA PERSIS dengan Date.getUTCDay()
+// (0 = Minggu) -- dipakai formatDateID()/formatDeadline() di bawah.
+const DAY_NAMES_ID = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
 import { buildWhatsAppUrl } from '../lib/whatsapp.js';
 import { getShareCard, shareCardHash, type ShareCardInput } from '../lib/shareCard.js';
 
@@ -349,9 +357,12 @@ function renderStatusNotFound(): string {
 </html>`;
 }
 
+// Format tanggal diseragamkan dd-mm-yyyy (keputusan Andi 10 Nov 2026) --
+// rakit manual dari angka, sengaja TIDAK lewat toLocaleDateString/Intl
+// (hasilnya bisa beda antar runtime).
 function formatDateID(dateStr: string): string {
-  const d = new Date(`${dateStr}T00:00:00Z`);
-  return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const [y, m, d] = dateStr.split('-');
+  return `${d}-${m}-${y}`;
 }
 
 // Batas konfirmasi (tahap 5) — tampil cuma untuk status 'menunggu'
@@ -359,20 +370,15 @@ function formatDateID(dateStr: string): string {
 // bukan timezone server atau browser pelanggan.
 function formatDeadline(expiresAtIso: string, timezone: string | null | undefined): string {
   const tz = normalizeTimezone(timezone);
-  const d = new Date(expiresAtIso);
-  const dayDate = d.toLocaleDateString('id-ID', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    timeZone: tz,
-  });
-  const time = d.toLocaleTimeString('id-ID', {
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: tz,
-  });
-  return `${dayDate} pukul ${time} ${tzLabel(tz)}`;
+  // Geser instant ke "jam lokal zona rental" lalu baca lewat getter UTC --
+  // pola sama dengan toWibDateStr()/toDateStrInTz() (lib/dates.ts), sengaja
+  // TIDAK lewat toLocaleDateString/toLocaleTimeString (Intl, hasilnya bisa
+  // beda antar runtime).
+  const shifted = new Date(new Date(expiresAtIso).getTime() + tzOffsetMs(tz));
+  const dayName = DAY_NAMES_ID[shifted.getUTCDay()];
+  const dateStr = `${pad2(shifted.getUTCDate())}-${pad2(shifted.getUTCMonth() + 1)}-${shifted.getUTCFullYear()}`;
+  const time = `${pad2(shifted.getUTCHours())}:${pad2(shifted.getUTCMinutes())}`;
+  return `${dayName}, ${dateStr} pukul ${time} ${tzLabel(tz)}`;
 }
 
 // Review -c1 (tahap 3, poin 1): OG tags di halaman ini SENGAJA generik
@@ -1068,11 +1074,13 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
       <label class="avail-field">
         <span>Tanggal ambil</span>
         <input type="date" id="avail-start" />
+        <span id="avail-start-confirm" style="display:block;font-size:0.7rem;color:#6E6853;margin-top:2px;"></span>
       </label>
       <span class="avail-sep">s/d</span>
       <label class="avail-field">
         <span>Tanggal kembali</span>
         <input type="date" id="avail-end" />
+        <span id="avail-end-confirm" style="display:block;font-size:0.7rem;color:#6E6853;margin-top:2px;"></span>
       </label>
       <button type="button" id="avail-check">Cek Ketersediaan</button>
     </div>
@@ -1245,6 +1253,31 @@ document.addEventListener('keydown', function (e) {
     return localDateStr(d);
   }
 
+  // Teks konfirmasi dd-mm-yyyy di bawah date picker bawaan (keputusan
+  // Andi 10 Nov 2026) — formatnya ikut bahasa perangkat (ambigu, mis.
+  // en-US: 11/10/2026 untuk 10 Nov), rakit manual sendiri di sini
+  // (bukan Intl/toLocaleDateString), sama pola dengan
+  // frontend/src/utils/formatters.ts formatDateIndo().
+  var AVAIL_DAY_NAMES_ID = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+  function formatDateConfirm(dateStr) {
+    if (!dateStr) return '';
+    var parts = dateStr.split('-').map(Number);
+    var d = new Date(parts[0], parts[1] - 1, parts[2]);
+    return AVAIL_DAY_NAMES_ID[d.getDay()] + ', ' + pad2(parts[2]) + '-' + pad2(parts[1]) + '-' + parts[0];
+  }
+  function pad2(n) {
+    return n < 10 ? '0' + n : '' + n;
+  }
+  var startConfirm = document.getElementById('avail-start-confirm');
+  var endConfirm = document.getElementById('avail-end-confirm');
+  function updateAvailConfirm() {
+    if (startConfirm) startConfirm.textContent = formatDateConfirm(startInput.value);
+    if (endConfirm) endConfirm.textContent = formatDateConfirm(endInput.value);
+  }
+  startInput.addEventListener('input', updateAvailConfirm);
+  endInput.addEventListener('input', updateAvailConfirm);
+  updateAvailConfirm();
+
   // Begitu tanggal ambil diisi, default-kan tanggal kembali — hari yang
   // sama kalau mode per hari kalender (kebanyakan pengunjung cuma mau
   // isi satu tanggal dulu buat cek sewa 1 hari), atau BESOKNYA kalau
@@ -1254,6 +1287,7 @@ document.addEventListener('keydown', function (e) {
     var minEnd = rentalDayMode === 'per_malam' ? addOneDayStr(startInput.value) : startInput.value;
     if (!endInput.value || endInput.value < minEnd) {
       endInput.value = minEnd;
+      updateAvailConfirm();
     }
     endInput.min = minEnd;
   });
@@ -1462,28 +1496,17 @@ document.addEventListener('keydown', function (e) {
     return rentalDayMode === 'per_malam' ? nights : nights + 1;
   }
 
-  // Review -c1: rentang tanggal di header keranjang sebelumnya tampil
-  // mentah ISO ("2026-11-03 – 2026-11-04"), kurang ramah dibaca pelanggan
-  // awam. Format pendek ala Indonesia: "3–4 Nov 2026" kalau bulan+tahun
-  // sama, "30 Nov – 2 Des 2026" kalau beda bulan (tahun sama), atau
-  // "30 Des 2026 – 2 Jan 2027" kalau beda tahun — tanggal tunggal cuma
-  // "3 November 2026" (dieja penuh, konsisten dengan formatDateID() di
-  // halaman status).
-  var MONTH_ABBR_ID = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  // Format tanggal diseragamkan dd-mm-yyyy (keputusan Andi 10 Nov 2026) --
+  // rakit manual dari string YYYY-MM-DD apa adanya (tanpa lewat Date +
+  // toLocaleDateString, yang Intl-nya bisa beda hasil antar runtime).
+  // Tanggal tunggal "13-11-2026", rentang "13-11-2026 – 14-11-2026".
+  function formatDateDMY(dateStr) {
+    var parts = dateStr.split('-');
+    return parts[2] + '-' + parts[1] + '-' + parts[0];
+  }
   function formatDateRangeID(startStr, endStr) {
-    var s = new Date(startStr + 'T00:00:00');
-    var e = new Date(endStr + 'T00:00:00');
-    if (startStr === endStr) {
-      return s.getDate() + ' ' + s.toLocaleDateString('id-ID', { month: 'long' }) + ' ' + s.getFullYear();
-    }
-    var sameYear = s.getFullYear() === e.getFullYear();
-    var sameMonth = sameYear && s.getMonth() === e.getMonth();
-    if (sameMonth) {
-      return s.getDate() + '–' + e.getDate() + ' ' + MONTH_ABBR_ID[e.getMonth()] + ' ' + e.getFullYear();
-    }
-    var startLabel = s.getDate() + ' ' + MONTH_ABBR_ID[s.getMonth()] + (sameYear ? '' : ' ' + s.getFullYear());
-    var endLabel = e.getDate() + ' ' + MONTH_ABBR_ID[e.getMonth()] + ' ' + e.getFullYear();
-    return startLabel + ' – ' + endLabel;
+    if (startStr === endStr) return formatDateDMY(startStr);
+    return formatDateDMY(startStr) + ' – ' + formatDateDMY(endStr);
   }
 
   // Salinan vanilla-JS dari computeItemRentalPrice() (frontend/src/utils/

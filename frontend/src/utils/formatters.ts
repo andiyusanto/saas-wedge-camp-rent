@@ -6,28 +6,39 @@ export function formatIDR(amount: number): string {
   }).format(amount);
 }
 
+// Nama hari singkat Indonesia, indeks SAMA PERSIS dengan Date.getDay()
+// (0 = Minggu). Dipakai formatDateIndo() di bawah.
+const DAY_NAMES_ID = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+// Format tanggal diseragamkan dd-mm-yyyy (keputusan Andi 10 Nov 2026) —
+// RAKIT MANUAL dari angka, sengaja TIDAK lewat Intl.DateTimeFormat/
+// toLocaleDateString: Intl id-ID bisa memakai "/" atau nama bulan dan
+// hasilnya bisa beda antar runtime/browser, sedangkan date picker bawaan
+// (input type="date") juga sudah ambigu (format ikut bahasa perangkat) —
+// tampilan lain di aplikasi tidak boleh ikut ambigu juga.
 export function formatDateIndo(dateStr: string, withDay: boolean = true): string {
   if (!dateStr) return '-';
   const [year, month, day] = dateStr.split('-').map(Number);
   const date = new Date(year, month - 1, day);
   if (isNaN(date.getTime())) return dateStr;
 
-  const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' };
-  if (withDay) options.weekday = 'short';
-
-  return new Intl.DateTimeFormat('id-ID', options).format(date);
+  const formatted = `${pad2(day)}-${pad2(month)}-${year}`;
+  return withDay ? `${DAY_NAMES_ID[date.getDay()]}, ${formatted}` : formatted;
 }
 
+// Sama alasan rakit manual seperti formatDateIndo() di atas. Tanpa nama
+// hari (konsisten dengan perilaku lama) — format "dd-mm-yyyy HH:mm", jam
+// 24 jam.
 export function formatDateTimeIndo(isoString: string): string {
   const date = new Date(isoString);
   if (isNaN(date.getTime())) return isoString;
-  return new Intl.DateTimeFormat('id-ID', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
+  const dateStr = `${pad2(date.getDate())}-${pad2(date.getMonth() + 1)}-${date.getFullYear()}`;
+  const timeStr = `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+  return `${dateStr} ${timeStr}`;
 }
 
 // Dipakai buat auto-generate slug Etalase Online dari nama usaha

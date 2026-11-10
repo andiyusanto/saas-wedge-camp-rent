@@ -196,10 +196,9 @@ export function RescheduleVsExtendIllustration() {
           <p className="text-[11px] font-bold text-[#26302B] mb-1">
             Ubah Jadwal <span className="text-[#A65C2A] font-normal">(status Siap Diambil)</span>
           </p>
-          <div className="flex items-center gap-1.5 text-[10px]">
-            <span className="line-through text-[#6E6853]">Rab 12 Nov → Jum 14 Nov</span>
-            <span className="text-[#2B4739] font-bold">→</span>
-            <span className="font-bold text-[#2B4739]">Kam 13 Nov → Sab 15 Nov</span>
+          <div className="flex flex-col gap-0.5 text-[10px]">
+            <span className="line-through text-[#6E6853]">Rab, 12-11-2026 → Jum, 14-11-2026</span>
+            <span className="font-bold text-[#2B4739]">→ Kam, 13-11-2026 → Sab, 15-11-2026</span>
           </div>
           <p className="text-[10px] text-[#6E6853] mt-0.5">Tanggal ambil DAN kembali bisa bergeser.</p>
         </div>
@@ -207,12 +206,10 @@ export function RescheduleVsExtendIllustration() {
           <p className="text-[11px] font-bold text-[#26302B] mb-1">
             Perpanjang <span className="text-[#A65C2A] font-normal">(status Aktif)</span>
           </p>
-          <div className="flex items-center gap-1.5 text-[10px]">
-            <span className="text-[#6E6853]">Rab 12 Nov (sudah diambil)</span>
-            <span className="text-[#6E6853]">→</span>
-            <span className="line-through text-[#6E6853]">Jum 14 Nov</span>
-            <span className="text-[#2B4739] font-bold">→</span>
-            <span className="font-bold text-[#2B4739]">Min 16 Nov</span>
+          <div className="flex flex-col gap-0.5 text-[10px]">
+            <span className="text-[#6E6853]">Ambil Rab, 12-11-2026 (sudah diambil)</span>
+            <span className="text-[#6E6853] line-through">Kembali Jum, 14-11-2026</span>
+            <span className="font-bold text-[#2B4739]">→ Kembali Min, 16-11-2026</span>
           </div>
           <p className="text-[10px] text-[#6E6853] mt-0.5">
             Cuma tanggal kembali yang maju — batas telat ikut bergeser ke tanggal baru.

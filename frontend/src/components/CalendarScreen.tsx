@@ -2,14 +2,15 @@ import { useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { Search, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Package } from 'lucide-react';
 import { useAvailability } from '../hooks/useAvailability';
-import { formatIDR, todayStr } from '../utils/formatters';
+import { formatIDR, formatDateIndo, todayStr } from '../utils/formatters';
 import { ScrollableRow } from './ScrollableRow';
 import { ImagePreviewModal } from './ImagePreviewModal';
 
+// Format tanggal diseragamkan dd-mm-yyyy (keputusan Andi 10 Nov 2026) —
+// pakai formatDateIndo() terpusat (rakit manual, bukan Intl/
+// toLocaleDateString), bukan lagi "Sel, 10/11" ad-hoc di sini.
 function shortDate(dateStr: string) {
-  const [, m, d] = dateStr.split('-').map(Number);
-  const weekday = new Date(`${dateStr}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'short' });
-  return `${weekday}, ${d}/${m}`;
+  return formatDateIndo(dateStr, true);
 }
 
 export function CalendarScreen({
@@ -88,12 +89,18 @@ export function CalendarScreen({
             <button onClick={() => shiftDates(-1)} className="p-1.5 rounded-lg hover:bg-[#FBFAF4] text-[#26302B] transition">
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <input
-              type="date"
-              value={baseDate}
-              onChange={(e) => setBaseDate(e.target.value)}
-              className="bg-[#FBFAF4] border border-[#DBD5C1] text-[#26302B] text-xs font-semibold rounded-lg px-2.5 py-1 text-center focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
-            />
+            <div className="flex flex-col items-center">
+              <input
+                type="date"
+                value={baseDate}
+                onChange={(e) => setBaseDate(e.target.value)}
+                className="bg-[#FBFAF4] border border-[#DBD5C1] text-[#26302B] text-xs font-semibold rounded-lg px-2.5 py-1 text-center focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+              />
+              {/* Teks konfirmasi dd-mm-yyyy (keputusan Andi 10 Nov 2026) --
+                  input type="date" bawaan formatnya ikut bahasa perangkat,
+                  ambigu (mis. en-US: 11/10/2026 untuk 10 Nov). */}
+              {baseDate && <span className="text-[10px] text-[#6E6853] mt-0.5">{formatDateIndo(baseDate, true)}</span>}
+            </div>
             <button
               onClick={() => setBaseDate(todayStr())}
               className="px-2 py-1 text-[11px] font-bold rounded-lg bg-[#2B4739] text-[#FBFAF4] hover:bg-[#1E3429] transition"

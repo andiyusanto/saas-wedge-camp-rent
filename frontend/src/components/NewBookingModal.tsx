@@ -618,6 +618,9 @@ export function NewBookingModal({
                   }}
                   className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] font-semibold focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
                 />
+                {/* Teks konfirmasi dd-mm-yyyy (keputusan Andi 10 Nov 2026) --
+                    input type="date" bawaan ikut bahasa perangkat, ambigu. */}
+                {startDate && <p className="text-[10px] text-[#6E6853] mt-1">{formatDateIndo(startDate, true)}</p>}
               </div>
               <div>
                 <label className="block font-semibold text-[#26302B] mb-1">Tanggal Kembali *</label>
@@ -629,6 +632,7 @@ export function NewBookingModal({
                   onChange={(e) => setEndDate(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] font-semibold focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
                 />
+                {endDate && <p className="text-[10px] text-[#6E6853] mt-1">{formatDateIndo(endDate, true)}</p>}
               </div>
             </div>
             <div className="p-2.5 rounded-lg bg-[#E8EFEA] border border-[#2B4739]/30 text-[#2B4739] text-xs font-semibold flex items-center justify-between">
