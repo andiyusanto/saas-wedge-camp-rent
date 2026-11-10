@@ -12,5 +12,14 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // Test di src/lib/__tests__ dijalankan lewat tsx (npm test), BUKAN
+  // dikompilasi lewat build produksi ini -- dikecualikan di sini supaya
+  // tidak ikut masuk ke rootDir check / dist/. Insiden 10 Nov 2026:
+  // guideIllustrations.test.ts mengimpor file dari frontend/ (lintas
+  // package, sengaja -- lihat komentar di file itu), lolos dari `tsc -b`
+  // (mode project-reference, beda perilaku rootDir check) tapi gagal di
+  // `tsc -p tsconfig.json` (perintah build produksi Render yang
+  // sebenarnya) -- deploy Render baru ketahuan gagal setelah push.
+  "exclude": ["src/**/__tests__"]
 }
