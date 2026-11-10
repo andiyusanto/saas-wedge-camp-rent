@@ -2,6 +2,14 @@ import type { ReactNode } from 'react';
 import { BookOpen, MessageCircle } from 'lucide-react';
 import { getWhatsAppShareUrl } from '../utils/formatters';
 import { SHOW_TOKO_ONLINE_TAB } from './Navbar';
+import {
+  LateFeeIllustration,
+  PackageDaysIllustration,
+  DurationModeIllustration,
+  TieredPriceIllustration,
+  ReadinessIllustration,
+  RescheduleVsExtendIllustration,
+} from './guideIllustrations';
 
 // Panduan pemakaian in-app, mengikuti alur fitur nyata di Sewalog. Jaga tetap
 // sinkron kalau alur di tab lain berubah (label tombol, urutan langkah, dsb).
@@ -245,6 +253,10 @@ export function GuideScreen({ businessName }: { businessName: string }) {
               label: 'Harga per hari',
               desc: 'Opsional, lewat "Atur harga per hari" — isi tarif hari ke-2 sampai ke-5 dan hari ke-6 dst kalau sewa lama dapat harga lebih murah per hari. Tingkat yang dikosongkan otomatis ikut tarif tingkat sebelumnya, jadi alat dengan harga tetap cukup isi "Sewa /Hari" saja.',
             },
+            {
+              label: 'Paket N hari',
+              desc: 'Untuk alat sewa flat per-trip (bukan per hari lepas): isi "Sewa /Hari" dengan harga paketnya, isi "Tarif lewat paket" kalau ada tarif untuk sewa melewati paket, lalu klik tombol Paket 2/3/4/5 hari — otomatis mengisi hari ke-2 sampai N dengan Rp0 dan hari setelahnya dengan "Tarif lewat paket" tadi. Lihat juga pengaturan Paket Minimal/Maksimal Hari Sewa (bagian 6).',
+            },
             { label: 'Foto', desc: 'Unggah langsung dari galeri/kamera — foto otomatis dikompres sebelum diunggah, tidak perlu tempel URL manual.' },
             {
               label: 'Jeda persiapan',
@@ -256,6 +268,9 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           Alat yang sudah tidak dipakai lagi cukup <Ui>Nonaktifkan</Ui> (ikon daya), bukan dihapus — supaya riwayat
           transaksi lama yang memakai alat tersebut tetap utuh dan bisa ditelusuri.
         </p>
+        <TieredPriceIllustration />
+        <PackageDaysIllustration />
+        <ReadinessIllustration />
 
         <h4 className="text-sm font-bold text-[#26302B] pt-2">Impor dari Excel (banyak alat sekaligus)</h4>
         <p>
@@ -356,6 +371,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           tampil di layar <Ui>Kembalikan</Ui>), tetap menghormati toleransi telat usaha (<SectionLink id="g-1">bagian 1</SectionLink>) sebelum mulai
           dihitung, dan nominalnya tetap bisa diubah manual sebelum disimpan.
         </Note>
+        <LateFeeIllustration />
         <Note>
           Untuk transaksi dengan lebih dari satu alat, denda kerusakan/kehilangan bisa ditautkan ke alat spesifik
           mana yang kena (muncul sebagai pilihan dropdown di <Ui>Tambah Denda</Ui> dan di layar <Ui>Kembalikan</Ui>)
@@ -381,6 +397,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           Perpanjang otomatis menggeser batas telat, jadi pelanggan yang minta tambah hari sebelum terlambat tidak
           kena denda.
         </p>
+        <RescheduleVsExtendIllustration />
         <Note>
           Owner bisa atur <Ui>Ubah Jadwal paling lambat H-berapa</Ui> di Kelola Usaha — ini CUMA PERINGATAN, bukan
           penolakan. Mengubah jadwal setelah batas ini lewat tetap bisa dilakukan oleh owner maupun karyawan, asal
@@ -420,6 +437,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
             },
           ]}
         />
+        <DurationModeIllustration />
         <Note>
           Tampilan di aplikasi selalu memakai kata "hari" (tidak pernah "malam"), apa pun pilihan di sini. Mengganti
           pengaturan ini CUMA berlaku untuk transaksi BARU — transaksi yang sudah dicatat sebelumnya tetap dihitung
@@ -444,9 +462,16 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         />
         <Note>
           Kosongkan salah satu atau keduanya untuk tanpa batas (perilaku biasa). Harga tetap memakai Harga per hari
-          di <Ui>Katalog &amp; Stok Alat</Ui> (<SectionLink id="g-3">bagian 3</SectionLink>) — tombol <Ui>Paket N hari</Ui> di form alat mengisi otomatis hari ke-2 sampai
-          N jadi Rp0 (sudah termasuk harga paket di "Sewa /Hari"). Diganti HANYA berlaku untuk transaksi baru, sama
-          seperti Cara Hitung Durasi Sewa di atas.
+          di <Ui>Katalog &amp; Stok Alat</Ui> (<SectionLink id="g-3">bagian 3</SectionLink>) — tombol <Ui>Paket N hari</Ui> di form alat mengisi hari ke-2 sampai N
+          dengan Rp0 (sudah termasuk harga paket di "Sewa /Hari") DAN hari setelahnya dengan isian <Ui>Tarif lewat
+          paket</Ui>. Diganti HANYA berlaku untuk transaksi baru, sama seperti Cara Hitung Durasi Sewa di atas.
+        </Note>
+        <Note>
+          Denda telat untuk paket tetap memakai rumus bertingkat biasa (<SectionLink id="g-5">bagian 5</SectionLink>),
+          dihitung dari "Tarif lewat paket". Contoh paket 4 hari Rp100rb dengan tarif lewat paket Rp20rb: telat
+          setengah hari → Rp10rb, telat sehari penuh → Rp20rb. Kalau "Tarif lewat paket" dibiarkan kosong (jadi ikut
+          Rp0), aplikasi tidak menyarankan denda otomatis untuk paket itu — vendor isi manual saat Proses
+          Pengembalian kalau mau tetap mendenda.
         </Note>
         <p className="pt-1">
           Di bawahnya ada bagian <Ui>Kelola Karyawan</Ui> untuk undang staf lewat link, tanpa perlu bikin
