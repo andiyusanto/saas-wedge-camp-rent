@@ -91,6 +91,11 @@ function ItemFormModal({
     day5: isNewItem ? '' : String(initial.day5_rate),
     extra: isNewItem ? '' : String(initial.extra_day_rate),
   }));
+  // Input "tarif lewat paket" dipakai tombol "Paket N hari" di bawah —
+  // field terpisah, bukan field tier langsung, supaya satu angka bisa
+  // sekaligus mengisi day(N+1)..day5 DAN extra_day_rate (lihat komentar
+  // di tombolnya untuk kenapa ini wajib diisi eksplisit, bukan kosong).
+  const [templateOverRate, setTemplateOverRate] = useState('');
   const [tiersExpanded, setTiersExpanded] = useState(
     !isNewItem &&
       (initial.day2_rate !== initial.price_per_day ||
@@ -308,6 +313,18 @@ function ItemFormModal({
                   Kosongkan tingkat manapun supaya ikut tarif tingkat sebelumnya — alat dengan harga tetap cukup isi
                   "Sewa /Hari" di atas saja, biarkan semua ini kosong.
                 </p>
+                <label className="block text-[11px] text-[#6E6853]">
+                  Tarif lewat paket (Rp/hari, opsional — kosongkan kalau tidak melayani sewa lebih lama dari paket)
+                  <input
+                    type="number"
+                    min={0}
+                    step={1000}
+                    value={templateOverRate}
+                    onChange={(e) => setTemplateOverRate(e.target.value)}
+                    placeholder="mis. 20000"
+                    className="mt-1 w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B]"
+                  />
+                </label>
                 <div className="flex flex-wrap gap-2">
                   {([2, 3, 4, 5] as const).map((n) => (
                     <button
@@ -316,16 +333,25 @@ function ItemFormModal({
                       onClick={() => {
                         // Template "Paket N hari" (Tahap 1, brief 2026-11) —
                         // tarif hari 1 = harga paket ("Sewa /Hari" di atas,
-                        // isi manual), hari 2..N = 0 (sudah termasuk paket),
-                        // hari setelahnya = tarif lewat batas (isi manual di
-                        // field "Hari ke-6 dst"). Cuma mengisi ULANG tier day2..
-                        // dayN, tidak menyentuh price_per_day atau extra.
+                        // isi manual), hari 2..N = 0 (sudah termasuk paket).
+                        //
+                        // Review -c1 (Tahap 1, 10 Nov 2026): hari ke-(N+1)
+                        // sampai ke-5 TIDAK boleh dibiarkan kosong — field
+                        // kosong mewarisi tingkat SEBELUMNYA (resolveTiers di
+                        // atas), yang baru saja diisi '0' oleh template ini,
+                        // jadi diam-diam ikut jadi Rp0 (bukan tarif lewat
+                        // paket) — menghasilkan hari ke-5 gratis & denda
+                        // telat hari pertama Rp0 untuk paket < 5 hari. Harus
+                        // diisi EKSPLISIT dengan tarif lewat paket yang sama
+                        // dengan extra_day_rate, memutus rantai warisan itu.
+                        const over = templateOverRate.trim() === '' ? '0' : templateOverRate;
                         setTierRaw((prev) => ({
                           ...prev,
                           day2: '0',
-                          day3: n >= 3 ? '0' : prev.day3,
-                          day4: n >= 4 ? '0' : prev.day4,
-                          day5: n >= 5 ? '0' : prev.day5,
+                          day3: n >= 3 ? '0' : over,
+                          day4: n >= 4 ? '0' : over,
+                          day5: n >= 5 ? '0' : over,
+                          extra: over,
                         }));
                       }}
                       className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-white border border-[#DBD5C1] text-[#2B4739] hover:bg-[#E8EFEA]"
@@ -335,9 +361,9 @@ function ItemFormModal({
                   ))}
                 </div>
                 <p className="text-[11px] text-[#6E6853]">
-                  Isi "Sewa /Hari" di atas dengan harga paket, lalu klik salah satu tombol ini — hari ke-2 sampai
-                  tombol yang dipilih jadi Rp0 (sudah termasuk paket). Isi "Hari ke-6 dst" dengan tarif lewat batas
-                  kalau vendor mengizinkan sewa lebih lama.
+                  Isi "Sewa /Hari" di atas dengan harga paket dan "Tarif lewat paket" di atas (kalau ada), lalu klik
+                  salah satu tombol ini — hari ke-2 sampai tombol yang dipilih jadi Rp0 (sudah termasuk paket), hari
+                  setelahnya (termasuk "Hari ke-6 dst") otomatis terisi tarif lewat paket tadi.
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {(
