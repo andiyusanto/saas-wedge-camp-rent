@@ -482,6 +482,13 @@ async function main() {
     console.log(`  - ${extraItemIds.length} alat tambahan di luar seed dinonaktifkan`);
   }
 
+  // Push subscriptions (migration 056) milik business demo — sama persis
+  // demoReset.ts.
+  await rest(`push_subscriptions?business_id=eq.${businessId}`, ownerToken, {
+    method: 'DELETE',
+    headers: { Prefer: 'return=minimal' },
+  });
+
   // --- Etalase Online contoh (published, sama persis logikanya dengan
   // demoReset.ts — supaya verifikasi hidup /toko/{slug} bisa langsung
   // dilakukan sehabis seed, tanpa perlu isi manual dulu) ---

@@ -146,6 +146,7 @@ const TOC: { id: string; num: string; title: string }[] = [
   { id: 'g-7', num: '7', title: 'Riwayat Transaksi' },
   { id: 'g-8', num: '8', title: 'Etalase Online' },
   { id: 'g-8b', num: '8b', title: 'Pesanan Online' },
+  { id: 'g-8c', num: '8c', title: 'Notifikasi Pesanan Online' },
   // Tab-nya sendiri disembunyikan dari Navbar sejak 2 Nov 2026 (lihat
   // SHOW_TOKO_ONLINE_TAB, Navbar.tsx) — entri TOC & Section-nya ikut
   // disembunyikan di bawah (filter saat render), bukan dihapus, supaya
@@ -695,6 +696,32 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           otomatis minta mereka baca ulang versi terbaru dan centang lagi — supaya tidak ada yang tercatat setuju ke
           sesuatu yang tidak pernah mereka baca.
         </p>
+      </Section>
+
+      <Section
+        id="g-8c"
+        num="8c"
+        title="Notifikasi Pesanan Online"
+        kicker="Diberi tahu di perangkatmu sendiri begitu ada pesanan baru dari Etalase, walau Sewalog tidak sedang dibuka."
+      >
+        <p>
+          Kartu <Ui>Notifikasi Pesanan Online</Ui> ada di tab <Ui>Transaksi Aktif</Ui>, di dekat bagian "Pesanan
+          masuk" — tekan <Ui>Aktifkan</Ui> dan izinkan notifikasi saat browser bertanya. Ini{' '}
+          <strong>per perangkat</strong>, bukan per akun: kalau kamu buka Sewalog dari HP dan laptop, aktifkan di
+          masing-masing. Isi notifikasinya sengaja singkat (nama pelanggan, jumlah alat, tanggal ambil-kembali) —
+          tanpa nomor WA, harga, atau alamat, supaya tetap aman kalau terbaca di layar kunci. Ada juga tombol{' '}
+          <Ui>Kirim notifikasi uji</Ui> untuk memastikan notifikasi di perangkatmu benar-benar jalan.
+        </p>
+        <p>
+          <strong>Di Android/desktop</strong>, langsung bisa diaktifkan dari browser biasa. <strong>Di iPhone</strong>,
+          notifikasi cuma bisa aktif setelah Sewalog ditambahkan ke Layar Utama (tombol <Ui>Bagikan</Ui> di Safari →{' '}
+          <Ui>Tambah ke Layar Utama</Ui>) — kartu di atas akan menunjukkan petunjuk ini otomatis kalau terdeteksi
+          dibuka dari Safari biasa.
+        </p>
+        <Note>
+          Kalau browser menolak izin notifikasi, kartu ini akan menunjukkan cara membukanya lagi lewat pengaturan
+          situs di browser (ikon gembok di address bar).
+        </Note>
       </Section>
 
       {SHOW_TOKO_ONLINE_TAB && (

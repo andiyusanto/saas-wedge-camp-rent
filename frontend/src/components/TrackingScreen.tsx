@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import type { Business } from '../hooks/useBusiness';
 import { useBookingRequests } from '../hooks/useBookingRequests';
+import { usePushNotifications } from '../hooks/usePushNotifications';
 import type { BookingRequest } from '../hooks/useBookingRequests';
 import { NewBookingModal } from './NewBookingModal';
 import { apiFetch } from '../lib/api';
@@ -86,6 +87,7 @@ export function TrackingScreen({
     refresh: refreshPendingRequests,
     fetchHistoricalRequests,
   } = useBookingRequests(business.id);
+  const push = usePushNotifications(session, business.id);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [returnTarget, setReturnTarget] = useState<TrackingBooking | null>(null);
@@ -282,6 +284,8 @@ export function TrackingScreen({
           {confirmPrecheckError}
         </p>
       )}
+
+      <PushNotificationCard push={push} />
 
       {!pendingLoading && pendingRequests.length > 0 && (
         <div className="bg-[#F9EFE7] rounded-2xl border border-[#A65C2A]/40 shadow-xs overflow-hidden">
@@ -578,6 +582,86 @@ function FilterButton({
     >
       {label}
     </button>
+  );
+}
+
+// Notifikasi push: Pesanan Online baru (v1) — research/brief-notifikasi-push-2026-11.md.
+// Opt-in PER PERANGKAT (bukan per akun) — anggota yang login di HP dan
+// laptop harus mengaktifkan di masing-masing.
+function PushNotificationCard({ push }: { push: ReturnType<typeof usePushNotifications> }) {
+  if (push.loading) return null;
+  // Env VAPID belum diisi di server — kartu ini tidak ditampilkan sama
+  // sekali (bukan ditampilkan disabled), sesuai brief #6.
+  if (!push.featureAvailable) return null;
+
+  if (!push.supported) {
+    return (
+      <div className="bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] p-4 text-xs text-[#6E6853]">
+        Notifikasi push tidak didukung di browser ini.
+      </div>
+    );
+  }
+
+  if (push.iosNeedsHomeScreen) {
+    return (
+      <div className="bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] p-4 space-y-1">
+        <p className="font-bold text-[#26302B] text-sm">Notifikasi Pesanan Online</p>
+        <p className="text-xs text-[#6E6853]">
+          Di iPhone, notifikasi cuma bisa aktif setelah Sewalog ditambahkan ke Layar Utama: tombol{' '}
+          <span className="font-semibold">Bagikan</span> di Safari → <span className="font-semibold">Tambah ke Layar Utama</span> →
+          buka Sewalog dari ikon itu, lalu aktifkan notifikasi dari sana.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] p-4 space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-bold text-[#26302B] text-sm">Notifikasi Pesanan Online</p>
+          <p className="text-xs text-[#6E6853]">
+            {push.subscribed
+              ? 'Aktif di perangkat ini — pemberitahuan muncul saat ada pesanan baru dari Etalase.'
+              : 'Dapat pemberitahuan di perangkat ini saat ada pesanan baru dari Etalase, walau Sewalog tidak dibuka.'}
+          </p>
+        </div>
+        {push.subscribed ? (
+          <button
+            onClick={push.disable}
+            className="shrink-0 px-3 py-2 rounded-xl bg-[#1E3429]/10 hover:bg-[#1E3429]/20 text-[#2B4739] font-semibold text-xs transition"
+          >
+            Matikan
+          </button>
+        ) : (
+          <button
+            onClick={push.enable}
+            className="shrink-0 px-3 py-2 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-semibold text-xs transition"
+          >
+            Aktifkan
+          </button>
+        )}
+      </div>
+      {push.permission === 'denied' && (
+        <p className="text-xs text-[#A8412E]">
+          Izin notifikasi ditolak browser. Buka pengaturan situs di browser (ikon gembok di address bar) untuk mengizinkan notifikasi,
+          lalu coba lagi.
+        </p>
+      )}
+      {push.error && <p className="text-xs text-[#A8412E]">{push.error}</p>}
+      {push.subscribed && (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={push.sendTest}
+            disabled={push.testSending}
+            className="px-3 py-1.5 rounded-lg border border-[#DBD5C1] text-[#2B4739] font-semibold text-xs disabled:opacity-50"
+          >
+            {push.testSending ? 'Mengirim...' : 'Kirim notifikasi uji'}
+          </button>
+          {push.testResult && <p className="text-xs text-[#6E6853]">{push.testResult}</p>}
+        </div>
+      )}
+    </div>
   );
 }
 

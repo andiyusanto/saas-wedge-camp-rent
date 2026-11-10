@@ -486,6 +486,14 @@ export async function resetDemoData(): Promise<DemoResetResult> {
     });
   }
 
+  // Push subscriptions (migration 056) milik business demo dihapus tiap
+  // reset -- pengunjung demo yang sempat menekan "Aktifkan notifikasi"
+  // tidak boleh terus menerima push dari akun demo setelah reset.
+  await rest(`push_subscriptions?business_id=eq.${businessId}`, ownerToken, {
+    method: 'DELETE',
+    headers: { Prefer: 'return=minimal' },
+  });
+
   // --- Etalase Online contoh (published, supaya verifikasi hidup /toko/{slug}
   // bisa langsung dilakukan sehabis reset, tanpa perlu isi manual dulu) ---
   const existingPublicPage = await rest<{ business_id: string }[]>(

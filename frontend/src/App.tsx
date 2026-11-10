@@ -184,6 +184,19 @@ function App() {
     }
   }, [tab, role, isAppAdmin]);
 
+  // Klik notifikasi push (sw.js) — service worker tidak bisa langsung
+  // mengubah state React, jadi mengirim postMessage ke tab yang sedang
+  // fokus, yang didengarkan di sini.
+  useEffect(() => {
+    function handleSwMessage(event: MessageEvent) {
+      if (event.data?.type === 'sewalog-push-click' && event.data.tab === 'tracking') {
+        setTab('tracking');
+      }
+    }
+    navigator.serviceWorker?.addEventListener('message', handleSwMessage);
+    return () => navigator.serviceWorker?.removeEventListener('message', handleSwMessage);
+  }, []);
+
   const [isNewBookingOpen, setIsNewBookingOpen] = useState(false);
   const [preselectedItemId, setPreselectedItemId] = useState<string | null>(null);
   const [preselectedStartDate, setPreselectedStartDate] = useState<string | null>(null);

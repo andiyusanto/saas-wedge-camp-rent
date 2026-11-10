@@ -21,12 +21,14 @@
     "jszip": "^3.10.2",
     "sharp": "^0.35.5",
     "undici": "^7.29.0",
+    "web-push": "^4.0.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/node": "^20.14.10",
+    "@types/web-push": "^3.6.4",
     "@types/ws": "^8.5.12",
     "tsx": "^4.16.2",
     "typescript": "^5.5.3"

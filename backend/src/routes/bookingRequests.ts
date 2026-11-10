@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { createAnonClient } from '../lib/supabaseClient.js';
 import { todayInTz, tzOffsetIso, rentalDuration } from '../lib/dates.js';
 import { computeItemRentalPrice } from '../lib/pricing.js';
+import { sendPushToBusiness, buildNewOrderPayload } from '../lib/webPush.js';
 
 const router = Router();
 
@@ -427,6 +428,16 @@ router.post('/public/booking-requests/:slug', perIpLimiter, async (req, res) => 
   // request yang gagal validasi/stok/dsb tidak ikut memakan kuota
   // per-slug milik vendor ini.
   recordSlugAttempt(slug);
+
+  // Notifikasi push -- best-effort, SENGAJA tidak di-await (pesanan
+  // pelanggan tidak boleh gagal/tertunda karena push, lihat
+  // research/brief-notifikasi-push-2026-11.md #5). sendPushToBusiness
+  // sendiri sudah menelan semua error di dalamnya.
+  void sendPushToBusiness(
+    page.business_id,
+    secret,
+    buildNewOrderPayload({ customerName: customer_name.trim(), itemCount: totalQty, startDate: start_date, endDate: end_date }),
+  );
 
   // create_booking_request (037) mengembalikan id baris, bukan token —
   // tidak ada policy select publik di booking_requests (disengaja, lihat

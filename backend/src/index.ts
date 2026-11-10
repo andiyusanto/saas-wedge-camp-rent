@@ -12,6 +12,7 @@ import demoRouter from './routes/demo.js';
 import etalaseRouter from './routes/etalase.js';
 import { warmUpShareCard } from './lib/shareCard.js';
 import bookingRequestsRouter from './routes/bookingRequests.js';
+import pushRouter from './routes/push.js';
 
 // Node global fetch (dipakai @supabase/supabase-js) nyimpen koneksi
 // keep-alive lebih lama dari idle timeout sisi Supabase/Cloudflare — begitu
@@ -47,6 +48,7 @@ app.use('/api', uploadsRouter);
 app.use('/api', itemsRouter);
 app.use('/api', demoRouter);
 app.use('/api', bookingRequestsRouter);
+app.use('/api', pushRouter);
 // Bukan di bawah /api — ini halaman HTML publik (/toko/{slug}), bukan
 // endpoint JSON, lihat komentar arsitektur di routes/etalase.ts.
 app.use(etalaseRouter);
