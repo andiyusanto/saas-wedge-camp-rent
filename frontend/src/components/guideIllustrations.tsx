@@ -87,8 +87,8 @@ export function PackageDaysIllustration() {
               }}
             >
               <p className="text-[8px] font-bold opacity-90 leading-tight">H{d}</p>
-              <p className="text-[7px] font-mono leading-tight mt-0.5 break-words">
-                {isDay1 ? '100rb' : isIncluded ? 'ikut' : '20rb'}
+              <p className="text-[7.5px] font-mono leading-tight mt-0.5 break-words">
+                {isDay1 ? '100rb' : isIncluded ? 'paket' : '20rb'}
               </p>
             </div>
           );
