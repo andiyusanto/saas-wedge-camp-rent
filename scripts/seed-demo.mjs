@@ -469,6 +469,19 @@ async function main() {
     }
   }
 
+  // Alat TAMBAHAN di luar 6 kode seed (atau tanpa kode) dinonaktifkan,
+  // BUKAN dihapus — lihat komentar sama di demoReset.ts.
+  const seedCodes = new Set(itemDefs.map((d) => d.code));
+  const extraItemIds = existingItems.filter((i) => !seedCodes.has(i.code)).map((i) => i.id);
+  if (extraItemIds.length > 0) {
+    await rest(`items?id=in.(${extraItemIds.join(',')})&business_id=eq.${businessId}`, ownerToken, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ deactivated_at: new Date().toISOString() }),
+    });
+    console.log(`  - ${extraItemIds.length} alat tambahan di luar seed dinonaktifkan`);
+  }
+
   // --- Etalase Online contoh (published, sama persis logikanya dengan
   // demoReset.ts — supaya verifikasi hidup /toko/{slug} bisa langsung
   // dilakukan sehabis seed, tanpa perlu isi manual dulu) ---

@@ -465,6 +465,27 @@ export async function resetDemoData(): Promise<DemoResetResult> {
     }
   }
 
+  // Bug 10 Nov 2026 (lanjutan dari perbaikan Info Usaha di atas): alat
+  // TAMBAHAN yang dibuat pengunjung demo (code di luar 6 kode seed, atau
+  // tanpa kode sama sekali) tetap aktif selamanya sebelum ini -- tampil
+  // di Katalog & Etalase publik demo untuk pengunjung berikutnya.
+  // DINONAKTIFKAN (deactivated_at, kolom sama dengan tombol Nonaktifkan
+  // di ItemsScreen.tsx), BUKAN dihapus -- konsisten dengan prinsip
+  // "alat tidak dipakai lagi dinonaktifkan, tidak dihapus" (CLAUDE.md
+  // bagian 3) dan supaya riwayat transaksi contoh yang memakainya (kalau
+  // ada) tetap utuh. Filter id eksplisit dari existingItems (sudah
+  // di-scope business_id demo di query select atas) + business_id lagi
+  // di PATCH sebagai jaring pengaman defense-in-depth.
+  const seedCodes = new Set(ITEM_DEFS.map((d) => d.code));
+  const extraItemIds = existingItems.filter((i) => !seedCodes.has(i.code)).map((i) => i.id);
+  if (extraItemIds.length > 0) {
+    await rest(`items?id=in.(${extraItemIds.join(',')})&business_id=eq.${businessId}`, ownerToken, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ deactivated_at: new Date().toISOString() }),
+    });
+  }
+
   // --- Etalase Online contoh (published, supaya verifikasi hidup /toko/{slug}
   // bisa langsung dilakukan sehabis reset, tanpa perlu isi manual dulu) ---
   const existingPublicPage = await rest<{ business_id: string }[]>(
