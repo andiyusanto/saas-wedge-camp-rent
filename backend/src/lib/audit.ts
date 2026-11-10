@@ -1,5 +1,26 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+// Nama tampilan untuk riwayat (Ubah Jadwal/Perpanjang, migration 055) —
+// skema ini TIDAK punya kolom nama untuk karyawan sama sekali (business_
+// members cuma user_id+role), jadi satu-satunya nama asli yang bisa
+// ditampilkan adalah businesses.owner_name, dan HANYA kalau pelakunya
+// memang owner business itu sendiri (actorUserId === businesses.owner_id).
+// Review -c1 10 Nov 2026: supaya riwayat tampil "oleh Rudi" bukan email
+// mentah, kalau datanya ada — karyawan tetap jatuh balik ke email karena
+// memang tidak ada nama lain untuk ditampilkan.
+export async function resolveActorName(
+  supabase: SupabaseClient,
+  businessId: string,
+  actorUserId: string,
+  actorEmail: string,
+): Promise<string> {
+  const { data } = await supabase.from('businesses').select('owner_id, owner_name').eq('id', businessId).maybeSingle();
+  if (data && data.owner_id === actorUserId && data.owner_name) {
+    return data.owner_name;
+  }
+  return actorEmail;
+}
+
 // Best-effort: gagal mencatat riwayat status tidak boleh menggagalkan
 // operasi utamanya (booking sudah berhasil diproses saat fungsi ini
 // dipanggil) — cukup dicatat ke log server untuk investigasi kalau perlu.

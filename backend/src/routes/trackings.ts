@@ -2,10 +2,11 @@ import { Router } from 'express';
 import { createRequestClient } from '../lib/supabaseClient.js';
 import { computeDueAt, hoursLate, computeLateFee, computeTieredLateFee, lateDaysEquivalent } from '../lib/penalty.js';
 import { rentalDuration, dateRange, todayInTz, addDays } from '../lib/dates.js';
-import { logBookingStatus, logBookingReschedule } from '../lib/audit.js';
+import { logBookingStatus, logBookingReschedule, resolveActorName } from '../lib/audit.js';
 import { fetchActiveBookingItems, usedUnitsOn } from '../lib/availability.js';
 import { computeItemRentalPrice, computeBookingTotalPrice } from '../lib/pricing.js';
 import type { ItemDayRates } from '../lib/pricing.js';
+import { isValidDateStr, validateOptionalTotalPriceAndReason } from '../lib/validation.js';
 
 const router = Router();
 
@@ -557,12 +558,17 @@ router.patch('/bookings/:id/reschedule', async (req, res) => {
   const { id } = req.params;
   const { start_date, end_date, total_price, reason } = req.body ?? {};
 
-  if (!start_date || !end_date) {
-    res.status(400).json({ error: 'Tanggal ambil dan kembali wajib diisi' });
+  if (!isValidDateStr(start_date) || !isValidDateStr(end_date)) {
+    res.status(400).json({ error: 'Tanggal ambil dan kembali wajib diisi, format YYYY-MM-DD.' });
     return;
   }
   if (end_date < start_date) {
     res.status(400).json({ error: 'Tanggal kembali harus setelah tanggal ambil' });
+    return;
+  }
+  const inputError = validateOptionalTotalPriceAndReason(total_price, reason);
+  if (inputError) {
+    res.status(400).json({ error: inputError });
     return;
   }
 
@@ -630,7 +636,7 @@ router.patch('/bookings/:id/reschedule', async (req, res) => {
   const oldDays = rentalDuration(booking.start_date, booking.end_date, booking.rental_day_mode);
   const newTotalPrice =
     total_price != null
-      ? Number(total_price) || 0
+      ? Number(total_price)
       : newDays === oldDays
         ? booking.total_price
         : computeBookingTotalPrice(bookingItems, newDays);
@@ -651,6 +657,8 @@ router.patch('/bookings/:id/reschedule', async (req, res) => {
 
   const { data: actorData } = await supabase.auth.getUser();
   if (actorData.user) {
+    const actorEmail = actorData.user.email ?? actorData.user.id;
+    const actorName = await resolveActorName(supabase, booking.business_id, actorData.user.id, actorEmail);
     await logBookingReschedule(supabase, {
       bookingId: id,
       businessId: booking.business_id,
@@ -664,7 +672,7 @@ router.patch('/bookings/:id/reschedule', async (req, res) => {
       reason: String(reason ?? '').trim() || null,
       pastDeadline: !!pastDeadline,
       changedBy: actorData.user.id,
-      changedByName: actorData.user.email ?? actorData.user.id,
+      changedByName: actorName,
     });
   }
 
@@ -686,8 +694,13 @@ router.patch('/bookings/:id/extend', async (req, res) => {
   const { id } = req.params;
   const { end_date, total_price, reason } = req.body ?? {};
 
-  if (!end_date) {
-    res.status(400).json({ error: 'Tanggal kembali baru wajib diisi' });
+  if (!isValidDateStr(end_date)) {
+    res.status(400).json({ error: 'Tanggal kembali baru wajib diisi, format YYYY-MM-DD.' });
+    return;
+  }
+  const inputError = validateOptionalTotalPriceAndReason(total_price, reason);
+  if (inputError) {
+    res.status(400).json({ error: inputError });
     return;
   }
 
@@ -723,7 +736,7 @@ router.patch('/bookings/:id/extend', async (req, res) => {
 
   const oldDays = rentalDuration(booking.start_date, booking.end_date, booking.rental_day_mode);
   const newDays = rentalDuration(booking.start_date, end_date, booking.rental_day_mode);
-  const newTotalPrice = total_price != null ? Number(total_price) || 0 : computeBookingTotalPrice(bookingItems, newDays);
+  const newTotalPrice = total_price != null ? Number(total_price) : computeBookingTotalPrice(bookingItems, newDays);
 
   const { error: updateError } = await supabase.from('bookings').update({ end_date, total_price: newTotalPrice }).eq('id', id);
 
@@ -738,6 +751,8 @@ router.patch('/bookings/:id/extend', async (req, res) => {
 
   const { data: actorData } = await supabase.auth.getUser();
   if (actorData.user) {
+    const actorEmail = actorData.user.email ?? actorData.user.id;
+    const actorName = await resolveActorName(supabase, booking.business_id, actorData.user.id, actorEmail);
     await logBookingReschedule(supabase, {
       bookingId: id,
       businessId: booking.business_id,
@@ -751,7 +766,7 @@ router.patch('/bookings/:id/extend', async (req, res) => {
       reason: String(reason ?? '').trim() || null,
       pastDeadline: false,
       changedBy: actorData.user.id,
-      changedByName: actorData.user.email ?? actorData.user.id,
+      changedByName: actorName,
     });
   }
 

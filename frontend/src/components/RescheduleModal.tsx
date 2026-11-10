@@ -222,6 +222,7 @@ export function RescheduleModal({
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               rows={2}
+              maxLength={500}
               placeholder="mis. pelanggan masih di perjalanan, cuaca buruk, dsb."
               className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
             />
