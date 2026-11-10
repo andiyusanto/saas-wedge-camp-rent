@@ -37,6 +37,8 @@ export function BusinessInfoSection({
   const [toleranceHours, setToleranceHours] = useState(String(business.late_tolerance_hours));
   const [rentalDayMode, setRentalDayMode] = useState<RentalDayMode>(business.rental_day_mode);
   const [timezone, setTimezone] = useState<BusinessTimezone>(business.timezone ?? 'Asia/Jakarta');
+  const [minRentalDays, setMinRentalDays] = useState(business.min_rental_days != null ? String(business.min_rental_days) : '');
+  const [maxRentalDays, setMaxRentalDays] = useState(business.max_rental_days != null ? String(business.max_rental_days) : '');
   const [logoUrl, setLogoUrl] = useState(business.logo_url ?? '');
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -60,6 +62,8 @@ export function BusinessInfoSection({
     setToleranceHours(String(business.late_tolerance_hours));
     setRentalDayMode(business.rental_day_mode);
     setTimezone(business.timezone ?? 'Asia/Jakarta');
+    setMinRentalDays(business.min_rental_days != null ? String(business.min_rental_days) : '');
+    setMaxRentalDays(business.max_rental_days != null ? String(business.max_rental_days) : '');
     setLogoUrl(business.logo_url ?? '');
   }, [business]);
 
@@ -91,6 +95,13 @@ export function BusinessInfoSection({
       setError('Nama usaha wajib diisi.');
       return;
     }
+    const minDays = minRentalDays.trim() ? Math.max(1, Number(minRentalDays)) : null;
+    const maxDays = maxRentalDays.trim() ? Math.max(1, Number(maxRentalDays)) : null;
+    if (minDays != null && maxDays != null && minDays > maxDays) {
+      setError('Minimal hari sewa tidak boleh lebih besar dari maksimal.');
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
     setSaved(false);
@@ -106,6 +117,8 @@ export function BusinessInfoSection({
       logo_url: logoUrl.trim() || null,
       rental_day_mode: rentalDayMode,
       timezone,
+      min_rental_days: minDays,
+      max_rental_days: maxDays,
     });
 
     setSubmitting(false);
@@ -273,6 +286,39 @@ export function BusinessInfoSection({
               Berlaku untuk transaksi baru. Transaksi lama tetap dihitung seperti saat dibuat.
             </p>
           )}
+        </div>
+
+        <div className="flex flex-col gap-2 pt-2 border-t border-[#E6E1D2]">
+          <p className="text-sm font-semibold text-[#26302B]">Paket Minimal/Maksimal Hari Sewa</p>
+          <div className="flex gap-3">
+            <label className="flex-1 flex flex-col gap-1 text-sm text-[#6E6853]">
+              <span>Minimal hari</span>
+              <input
+                type="number"
+                min={1}
+                value={minRentalDays}
+                onChange={(e) => setMinRentalDays(e.target.value)}
+                placeholder="Tanpa batas"
+                className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+              />
+            </label>
+            <label className="flex-1 flex flex-col gap-1 text-sm text-[#6E6853]">
+              <span>Maksimal hari (paket)</span>
+              <input
+                type="number"
+                min={1}
+                value={maxRentalDays}
+                onChange={(e) => setMaxRentalDays(e.target.value)}
+                placeholder="Tanpa batas"
+                className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+              />
+            </label>
+          </div>
+          <p className="text-[11px] text-[#6E6853]">
+            Minimal diterapkan ketat di Catat Transaksi dan Pesanan Online. Maksimal cuma batas paket — Catat
+            Transaksi otomatis mengisi tanggal kembali sesuai paket (masih bisa diubah, ada peringatan kalau
+            melebihi), tapi Pesanan Online dari Etalase tidak bisa melebihi paket. Kosongkan untuk tanpa batas.
+          </p>
         </div>
 
         <div className="flex flex-col gap-2 pt-2 border-t border-[#E6E1D2]">

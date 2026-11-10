@@ -308,6 +308,37 @@ function ItemFormModal({
                   Kosongkan tingkat manapun supaya ikut tarif tingkat sebelumnya — alat dengan harga tetap cukup isi
                   "Sewa /Hari" di atas saja, biarkan semua ini kosong.
                 </p>
+                <div className="flex flex-wrap gap-2">
+                  {([2, 3, 4, 5] as const).map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => {
+                        // Template "Paket N hari" (Tahap 1, brief 2026-11) —
+                        // tarif hari 1 = harga paket ("Sewa /Hari" di atas,
+                        // isi manual), hari 2..N = 0 (sudah termasuk paket),
+                        // hari setelahnya = tarif lewat batas (isi manual di
+                        // field "Hari ke-6 dst"). Cuma mengisi ULANG tier day2..
+                        // dayN, tidak menyentuh price_per_day atau extra.
+                        setTierRaw((prev) => ({
+                          ...prev,
+                          day2: '0',
+                          day3: n >= 3 ? '0' : prev.day3,
+                          day4: n >= 4 ? '0' : prev.day4,
+                          day5: n >= 5 ? '0' : prev.day5,
+                        }));
+                      }}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-white border border-[#DBD5C1] text-[#2B4739] hover:bg-[#E8EFEA]"
+                    >
+                      Paket {n} hari
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-[#6E6853]">
+                  Isi "Sewa /Hari" di atas dengan harga paket, lalu klik salah satu tombol ini — hari ke-2 sampai
+                  tombol yang dipilih jadi Rp0 (sudah termasuk paket). Isi "Hari ke-6 dst" dengan tarif lewat batas
+                  kalau vendor mengizinkan sewa lebih lama.
+                </p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {(
                     [

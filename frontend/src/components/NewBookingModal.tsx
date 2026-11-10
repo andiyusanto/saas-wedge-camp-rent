@@ -317,6 +317,10 @@ export function NewBookingModal({
       setError('Pilih minimal satu alat.');
       return;
     }
+    if (business.min_rental_days != null && days < business.min_rental_days) {
+      setError(`Minimal sewa ${business.min_rental_days} hari.`);
+      return;
+    }
     // Jaminan uang tanpa jumlah tidak masuk akal sebagai jaminan (beda
     // dari KTP/SIM/dsb yang memang cuma catatan identitas, tanpa angka)
     // — wajibkan di sini, DIPERKUAT lagi server-side (POST /bookings)
@@ -600,7 +604,17 @@ export function NewBookingModal({
                     const newStart = e.target.value;
                     setStartDate(newStart);
                     const minEnd = business.rental_day_mode === 'per_malam' ? addDaysStr(newStart, 1) : newStart;
-                    if (endDate < minEnd) setEndDate(minEnd);
+                    // Paket maksimal hari (migration 054) — isi otomatis tanggal
+                    // kembali sesuai paket (bukan batas keras, vendor masih bisa
+                    // mengubahnya manual, lihat peringatan di bawah form tanggal).
+                    if (business.max_rental_days != null) {
+                      const nights = business.rental_day_mode === 'per_malam'
+                        ? business.max_rental_days
+                        : business.max_rental_days - 1;
+                      setEndDate(addDaysStr(newStart, Math.max(nights, 0)));
+                    } else if (endDate < minEnd) {
+                      setEndDate(minEnd);
+                    }
                   }}
                   className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] font-semibold focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
                 />
@@ -625,6 +639,16 @@ export function NewBookingModal({
               <p className="text-[11px] text-[#A65C2A] font-medium">
                 Tanggal ambil di masa depan → transaksi akan berstatus "Siap Diambil" sampai kamu tandai barang
                 sudah diambil.
+              </p>
+            )}
+            {business.min_rental_days != null && days < business.min_rental_days && (
+              <p className="text-[11px] text-[#A8412E] font-semibold">
+                Minimal sewa {business.min_rental_days} hari.
+              </p>
+            )}
+            {business.max_rental_days != null && days > business.max_rental_days && (
+              <p className="text-[11px] text-[#A65C2A] font-semibold">
+                Melebihi paket {business.max_rental_days} hari.
               </p>
             )}
           </div>

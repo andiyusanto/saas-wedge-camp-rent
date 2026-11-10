@@ -20,6 +20,11 @@ export type Business = {
   // punya snapshot sendiri di bookings.rental_day_mode, tidak ikut
   // berubah kalau ini diganti (lihat utils/formatters.ts).
   rental_day_mode: RentalDayMode;
+  // Paket minimal/maksimal hari sewa (migration 054) — setting LIVE,
+  // nullable = tanpa batas. Transaksi yang sudah dibuat punya snapshot
+  // sendiri di bookings.min_rental_days/max_rental_days.
+  min_rental_days: number | null;
+  max_rental_days: number | null;
   created_at: string;
 };
 
@@ -34,6 +39,8 @@ export type BusinessUpdateInput = {
   logo_url: string | null;
   rental_day_mode: RentalDayMode;
   timezone: BusinessTimezone;
+  min_rental_days: number | null;
+  max_rental_days: number | null;
 };
 
 export type MemberRole = 'owner' | 'karyawan';
@@ -57,7 +64,7 @@ export function useBusiness(session: Session | null) {
     // RLS (members_select_own_business) sudah membatasi ke baris milik user ini.
     const { data, error: queryError } = await supabase
       .from('businesses')
-      .select('id, name, owner_name, phone, address, regency_id, district_id, late_tolerance_hours, logo_url, rental_day_mode, timezone, created_at')
+      .select('id, name, owner_name, phone, address, regency_id, district_id, late_tolerance_hours, logo_url, rental_day_mode, timezone, min_rental_days, max_rental_days, created_at')
       .maybeSingle();
 
     // PENTING: error di sini (mis. PGRST116 "multiple rows" kalau akun ini
@@ -122,6 +129,8 @@ export function useBusiness(session: Session | null) {
         logo_url: input.logo_url,
         rental_day_mode: input.rental_day_mode,
         timezone: input.timezone,
+        min_rental_days: input.min_rental_days,
+        max_rental_days: input.max_rental_days,
       })
       .eq('id', business.id);
 

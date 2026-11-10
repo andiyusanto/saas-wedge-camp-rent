@@ -227,6 +227,8 @@ router.get('/api/public/etalase/:slug/ordering-config', async (req, res) => {
     terms_content: string | null;
     terms_version_id: string | null;
     rental_day_mode: 'per_malam' | 'per_hari_kalender';
+    min_rental_days: number | null;
+    max_rental_days: number | null;
   };
   res.json({
     enabled: true,
@@ -235,6 +237,13 @@ router.get('/api/public/etalase/:slug/ordering-config', async (req, res) => {
       qris: page.pay_qris_enabled,
       cash: page.pay_cash_enabled,
     },
+    // Paket minimal/maksimal hari (migration 054) — Pesanan Online
+    // DIBLOKIR di luar rentang ini (beda dari walk-in Catat Transaksi,
+    // yang hanya menolak di bawah min). Divalidasi ulang server-side di
+    // bookingRequests.ts dan create_booking_request, ini cuma supaya
+    // pelanggan tidak perlu submit dulu untuk tahu ditolak.
+    min_rental_days: page.min_rental_days,
+    max_rental_days: page.max_rental_days,
     // Syarat & Ketentuan (migration 047) — diambil fresh tiap kali form
     // pesanan dibuka (bukan dari get_public_page saat load halaman
     // pertama kali), supaya kalau vendor ubah teksnya SETELAH pengunjung
@@ -1292,6 +1301,19 @@ document.addEventListener('keydown', function (e) {
       hideChip();
       return;
     }
+    // Paket minimal/maksimal hari (migration 054) — Pesanan Online
+    // DIBLOKIR di luar paket, ditegakkan ulang server-side.
+    var checkedDays = rentalDaysCount(start, end);
+    if (minRentalDays != null && checkedDays < minRentalDays) {
+      status.textContent = 'Minimal sewa ' + minRentalDays + ' hari.';
+      hideChip();
+      return;
+    }
+    if (maxRentalDays != null && checkedDays > maxRentalDays) {
+      status.textContent = 'Maksimal sewa ' + maxRentalDays + ' hari untuk pesanan online.';
+      hideChip();
+      return;
+    }
     status.textContent = 'Memuat ketersediaan...';
     hideChip();
     fetch(
@@ -1365,6 +1387,9 @@ document.addEventListener('keydown', function (e) {
   // lama, paling longgar — tidak menolak apa pun sebelum nilai
   // sebenarnya diketahui).
   var rentalDayMode = 'per_hari_kalender';
+  // Paket minimal/maksimal hari (migration 054) — null = tanpa batas.
+  var minRentalDays = null;
+  var maxRentalDays = null;
   var cart = []; // [{item_id, name, quantity, remaining, rates: {...}}]
   var orderDates = { start: null, end: null };
   // Syarat & Ketentuan (migration 047/048) — diisi ulang tiap fetch
@@ -1381,6 +1406,8 @@ document.addEventListener('keydown', function (e) {
         orderingEnabled = !!(cfg && cfg.enabled);
         paymentMethods = (cfg && cfg.payment_methods) || paymentMethods;
         rentalDayMode = (cfg && cfg.rental_day_mode) || 'per_hari_kalender';
+        minRentalDays = (cfg && cfg.min_rental_days) || null;
+        maxRentalDays = (cfg && cfg.max_rental_days) || null;
         termsContent = (cfg && cfg.terms_content) || null;
         termsVersionId = (cfg && cfg.terms_version_id) || null;
         var termsSection = document.getElementById('order-terms-section');

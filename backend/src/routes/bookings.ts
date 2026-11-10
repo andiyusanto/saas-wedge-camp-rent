@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { createRequestClient } from '../lib/supabaseClient.js';
 import { fetchActiveBookingItems, usedUnitsOn } from '../lib/availability.js';
-import { dateRange, todayInTz, tzOffsetIso } from '../lib/dates.js';
+import { dateRange, todayInTz, tzOffsetIso, rentalDuration } from '../lib/dates.js';
 import { logBookingStatus } from '../lib/audit.js';
 import { isBusinessWritable, SUBSCRIPTION_LOCKED_MESSAGE } from '../lib/subscription.js';
 import { getCustomerPhotoSignedUrl } from '../lib/r2.js';
@@ -114,7 +114,7 @@ router.post('/bookings', async (req, res) => {
   // struk WA, denda telat bertingkat) tidak pernah ikut berubah.
   const { data: bizRow, error: bizError } = await supabase
     .from('businesses')
-    .select('rental_day_mode, timezone')
+    .select('rental_day_mode, timezone, min_rental_days, max_rental_days')
     .eq('id', businessId)
     .maybeSingle();
 
@@ -126,6 +126,18 @@ router.post('/bookings', async (req, res) => {
   if (bizRow.rental_day_mode === 'per_malam' && end_date === start_date) {
     res.status(400).json({ error: 'Tanggal ambil dan kembali tidak boleh di hari yang sama.' });
     return;
+  }
+
+  // Paket minimal hari (migration 054) -- batas KERAS, berlaku juga untuk
+  // walk-in (Catat Transaksi). Maksimal SENGAJA tidak ditolak di sini --
+  // itu cuma batas paket (NewBookingModal.tsx auto-fill + peringatan),
+  // walk-in boleh melewatinya (lihat brief Tahap 1).
+  if (bizRow.min_rental_days != null) {
+    const rentalDays = rentalDuration(start_date, end_date, bizRow.rental_day_mode);
+    if (rentalDays < bizRow.min_rental_days) {
+      res.status(400).json({ error: `Minimal sewa ${bizRow.min_rental_days} hari.` });
+      return;
+    }
   }
 
   const { data: itemRows, error: itemsError } = await supabase
@@ -242,6 +254,8 @@ router.post('/bookings', async (req, res) => {
       total_price: Number(total_price) || 0,
       dp_paid: Number(dp_paid) || 0,
       rental_day_mode: bizRow.rental_day_mode,
+      min_rental_days: bizRow.min_rental_days,
+      max_rental_days: bizRow.max_rental_days,
     })
     .select('id, booking_number, status')
     .single();

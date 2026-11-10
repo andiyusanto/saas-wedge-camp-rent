@@ -400,6 +400,29 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           pengaturan ini CUMA berlaku untuk transaksi BARU — transaksi yang sudah dicatat sebelumnya tetap dihitung
           persis seperti saat dibuat, tidak ikut berubah.
         </Note>
+        <p className="font-bold text-xs mt-2">Paket Minimal/Maksimal Hari Sewa</p>
+        <p>
+          Juga di kartu <Ui>Info Usaha</Ui>, di bawah Cara Hitung Durasi Sewa. Untuk usaha yang sewa per-trip/paket
+          (bukan per hari lepas) — mis. maksimal 4 hari dengan harga 1 hari sama dengan 4 hari.
+        </p>
+        <FieldsTable
+          rows={[
+            {
+              label: 'Minimal hari',
+              desc: 'Batas KERAS. Tanggal kembali di bawah minimal tidak bisa dipilih di Catat Transaksi maupun Pesanan Online.',
+            },
+            {
+              label: 'Maksimal hari',
+              desc: 'Batas PAKET, bukan batas keras. Catat Transaksi otomatis mengisi tanggal kembali sesuai paket (masih bisa diubah manual, ada peringatan kalau melebihi). Pesanan Online dari Etalase tidak bisa melebihi paket sama sekali.',
+            },
+          ]}
+        />
+        <Note>
+          Kosongkan salah satu atau keduanya untuk tanpa batas (perilaku biasa). Harga tetap memakai Harga per hari
+          di <Ui>Katalog &amp; Stok Alat</Ui> (<SectionLink id="g-3">bagian 3</SectionLink>) — tombol <Ui>Paket N hari</Ui> di form alat mengisi otomatis hari ke-2 sampai
+          N jadi Rp0 (sudah termasuk harga paket di "Sewa /Hari"). Diganti HANYA berlaku untuk transaksi baru, sama
+          seperti Cara Hitung Durasi Sewa di atas.
+        </Note>
         <p className="pt-1">
           Di bawahnya ada bagian <Ui>Kelola Karyawan</Ui> untuk undang staf lewat link, tanpa perlu bikin
           username/password dari sisi pemilik:

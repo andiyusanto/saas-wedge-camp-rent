@@ -216,6 +216,8 @@ router.post('/public/booking-requests/:slug', perIpLimiter, async (req, res) => 
     confirmation_deadline_hours: number;
     rental_day_mode: 'per_malam' | 'per_hari_kalender';
     timezone?: string | null; // migration 053; undefined sebelum 053 = WIB
+    min_rental_days?: number | null; // migration 054
+    max_rental_days?: number | null; // migration 054
   };
 
   // Review -c1: ambil hari ini sendiri tidak masuk akal untuk pesanan
@@ -299,6 +301,20 @@ router.post('/public/booking-requests/:slug', perIpLimiter, async (req, res) => 
   // (belum ada baris bookings untuk disnapshot — itu baru terjadi saat
   // vendor Konfirmasi lewat Catat Transaksi biasa, lihat routes/bookings.ts).
   const rentalDaysCount = rentalDuration(start_date, end_date, page.rental_day_mode);
+
+  // Paket minimal/maksimal hari (migration 054) -- Pesanan Online DIBLOKIR
+  // di luar rentang paket (beda dari walk-in di routes/bookings.ts, yang
+  // cuma menolak di bawah min dan membiarkan di atas max). create_booking_
+  // request menegakkan ulang ini server-side sebagai jaring pengaman.
+  if (page.min_rental_days != null && rentalDaysCount < page.min_rental_days) {
+    res.status(400).json({ error: `Minimal sewa ${page.min_rental_days} hari.` });
+    return;
+  }
+  if (page.max_rental_days != null && rentalDaysCount > page.max_rental_days) {
+    res.status(400).json({ error: `Maksimal sewa ${page.max_rental_days} hari untuk pesanan online.` });
+    return;
+  }
+
   let estimatedPrice = 0;
 
   for (const requested of requestedItems) {
