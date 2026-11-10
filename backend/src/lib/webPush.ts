@@ -76,7 +76,16 @@ export async function sendPushToBusiness(businessId: string, secret: string, pay
       p_business_id: businessId,
     });
 
-    if (error || !subs || subs.length === 0) return;
+    if (error) {
+      // Review -c1 (migration 057): sebelumnya error RPC ditelan diam-diam
+      // di sini, sampai bikin bug nyata (grant execute anon kelupaan di
+      // migration 056) tidak kelihatan sama sekali di log Render -- tes
+      // regresi tetap terlihat lolos karena pesanan pelanggan tetap
+      // sukses walau push-nya diam-diam tidak pernah terkirim.
+      console.error('sendPushToBusiness: get_push_subscriptions_for_business gagal', error.message);
+      return;
+    }
+    if (!subs || subs.length === 0) return;
 
     await Promise.all(
       subs.map(async (sub: { id: string; endpoint: string; p256dh: string; auth: string }) => {
