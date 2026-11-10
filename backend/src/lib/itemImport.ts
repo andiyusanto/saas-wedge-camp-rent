@@ -53,6 +53,9 @@ export type ParsedRow = {
   readiness_hours: number;
   description: string | null;
   photo_url: string | null;
+  // Peringatan non-fatal (impor tetap lanjut) — mis. tarif lewat paket
+  // ikut mewarisi Rp0, lihat parseImportFile(). null = tidak ada.
+  warning: string | null;
 };
 
 export type ImportMatch =
@@ -81,6 +84,7 @@ const EMPTY_PARSED_ROW: ParsedRow = {
   readiness_hours: 0,
   description: null,
   photo_url: null,
+  warning: null,
 };
 
 export type ImportParseResult = {
@@ -335,12 +339,52 @@ export async function parseImportFile(
       return;
     }
 
-    const day2 = cleanNumber(cell(r, 'Harga hari 2')) ?? priceDay1;
-    const day3 = cleanNumber(cell(r, 'Harga hari 3')) ?? day2;
-    const day4 = cleanNumber(cell(r, 'Harga hari 4')) ?? day3;
-    const day5 = cleanNumber(cell(r, 'Harga hari 5')) ?? day4;
-    const extra = cleanNumber(cell(r, 'Harga hari 6 dst')) ?? day5;
-    const readinessHours = cleanNumber(cell(r, 'Jeda persiapan (jam)')) ?? 0;
+    // Review -c1 10 Nov 2026 (replika bug tombol "Paket N hari" di
+    // ItemsScreen.tsx): kolom kosong mewarisi tarif tingkat SEBELUMNYA,
+    // termasuk kalau tingkat sebelumnya itu sendiri 0. Dulu tidak ada
+    // validasi minus sama sekali untuk day2..extra/readiness_hours
+    // (cuma priceDay1/totalUnits yang dicek) — ditutup di sini.
+    const day2Raw = cleanNumber(cell(r, 'Harga hari 2'));
+    const day3Raw = cleanNumber(cell(r, 'Harga hari 3'));
+    const day4Raw = cleanNumber(cell(r, 'Harga hari 4'));
+    const day5Raw = cleanNumber(cell(r, 'Harga hari 5'));
+    const extraRaw = cleanNumber(cell(r, 'Harga hari 6 dst'));
+    const readinessHoursRaw = cleanNumber(cell(r, 'Jeda persiapan (jam)'));
+
+    const negativeField = ([
+      ['Harga hari 2', day2Raw],
+      ['Harga hari 3', day3Raw],
+      ['Harga hari 4', day4Raw],
+      ['Harga hari 5', day5Raw],
+      ['Harga hari 6 dst', extraRaw],
+      ['Jeda persiapan (jam)', readinessHoursRaw],
+    ] as const).find(([, v]) => v !== null && v < 0);
+    if (negativeField) {
+      parsedRows.push({ rowNumber, name, error: `${negativeField[0]} tidak boleh minus.` });
+      return;
+    }
+
+    const day2 = day2Raw ?? priceDay1;
+    const day3 = day3Raw ?? day2;
+    const day4 = day4Raw ?? day3;
+    const day5 = day5Raw ?? day4;
+    const extra = extraRaw ?? day5;
+    const readinessHours = readinessHoursRaw ?? 0;
+
+    // Peringatan (BUKAN error, impor tetap lanjut): tingkat yang kosong
+    // mewarisi Rp0 dari tingkat sebelumnya, PADAHAL ada tingkat lebih
+    // jauh (termasuk "Harga hari 6 dst") yang diisi eksplisit > 0 —
+    // tanda vendor sebenarnya punya tarif lewat paket, cuma lupa isi
+    // sel di antaranya. Baris "100000, 0, 0, 0, (kosong), 20000": hari 5
+    // kosong -> mewarisi hari 4 (0) -> Rp0, padahal hari 6 dst diisi
+    // 20000 -> peringatan.
+    const rawTiers = [day2Raw, day3Raw, day4Raw, day5Raw, extraRaw];
+    const resolvedTiers = [day2, day3, day4, day5, extra];
+    let zeroInheritWarning = false;
+    for (let i = 0; i < rawTiers.length && !zeroInheritWarning; i++) {
+      if (rawTiers[i] !== null || resolvedTiers[i] !== 0) continue;
+      zeroInheritWarning = rawTiers.slice(i + 1).some((v) => v !== null && v > 0);
+    }
 
     parsedRows.push({
       rowNumber,
@@ -360,6 +404,7 @@ export async function parseImportFile(
       readiness_hours: readinessHours,
       description: normalizeText(cell(r, 'Deskripsi')),
       photo_url: normalizeText(cell(r, 'Link foto')),
+      warning: zeroInheritWarning ? 'Tarif setelah paket ikut Rp0. Isi Harga hari 5 dan 6 dst kalau ada tarif lewat paket.' : null,
     });
   });
 

@@ -65,6 +65,7 @@ type PreviewResponseRowData = {
   readiness_hours: number;
   description: string | null;
   photo_url: string | null;
+  warning: string | null;
 };
 
 type PreviewResponseRow = {
@@ -100,6 +101,7 @@ function toPreviewRowData(row: ImportRowResult['row']): PreviewResponseRowData {
     readiness_hours: row.readiness_hours,
     description: row.description,
     photo_url: row.photo_url,
+    warning: row.warning,
   };
 }
 

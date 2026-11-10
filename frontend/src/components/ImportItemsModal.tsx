@@ -21,6 +21,7 @@ type PreviewRowData = {
   readiness_hours: number;
   description: string | null;
   photo_url: string | null;
+  warning: string | null;
 };
 
 type PreviewRow = {
@@ -428,6 +429,12 @@ export function ImportItemsModal({
                         </div>
                         {row.status === 'skipped' && <p className="text-[#A8412E] mt-1 text-left">{row.reason}</p>}
                         {row.data && <p className="text-[#6E6853] mt-1 text-left">{summaryLine(row.data)}</p>}
+                        {row.data?.warning && (
+                          <p className="text-[#A65C2A] font-semibold mt-1 text-left flex items-start gap-1">
+                            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                            <span>{row.data.warning}</span>
+                          </p>
+                        )}
                       </button>
 
                       {isExpanded && row.data && (

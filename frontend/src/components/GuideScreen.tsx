@@ -283,6 +283,15 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           di bawah unit yang sedang disewa/dipesan, akan muncul peringatan dan kamu perlu centang "Saya paham" dulu
           sebelum bisa menyimpan.
         </Note>
+        <Note>
+          Alat harga paket (sewa flat N hari, lihat <SectionLink id="g-3">bagian 3</SectionLink>) — isi hari 1 = harga
+          paket, hari 2 sampai hari ke-N = 0, lalu isi hari setelahnya (termasuk "Harga hari 6 dst") kalau ada tarif
+          lewat paket. Contoh baris di template: Paket Camping 4H (hari 1 = 100000, hari 2–4 = 0, hari 5 dst =
+          20000). JANGAN biarkan sel di antara hari 2..6 kosong kalau ada tarif lewat paket — sel kosong ikut
+          mewarisi tarif hari sebelumnya, jadi kalau hari sebelumnya 0, sel kosong itu ikut jadi Rp0 juga (bukan
+          tarif lewat paket yang kamu maksud). Pratinjau impor akan menandai baris seperti ini dengan peringatan,
+          tapi impornya tetap bisa dilanjutkan — isi dulu sel yang kelewat sebelum tekan Simpan.
+        </Note>
       </Section>
 
       <Section id="g-4" num="4" title="Catat Transaksi Sewa" kicker="Form input cepat, dipakai sambil melayani pelanggan yang menunggu.">
