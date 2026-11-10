@@ -35,14 +35,33 @@ export type TrackingBooking = {
     item_name: string | null;
   }[];
   history: { status: string; changed_by_name: string; created_at: string }[];
+  // Riwayat Ubah Jadwal/Perpanjang (Tahap 2, migration 055).
+  reschedule_history: {
+    action: 'ubah_jadwal' | 'perpanjang';
+    old_start_date: string;
+    old_end_date: string;
+    new_start_date: string;
+    new_end_date: string;
+    reason: string | null;
+    past_deadline: boolean;
+    changed_by_name: string;
+    created_at: string;
+  }[];
   total_price: number;
   dp_paid: number;
   // Snapshot (migration 049) — mode saat booking ini DIBUAT, null untuk
   // baris dari sebelum fitur ini (ditafsirkan 'per_hari_kalender').
   rental_day_mode: RentalDayMode | null;
+  // Snapshot paket min/maks hari (Tahap 1, migration 054).
+  min_rental_days: number | null;
+  max_rental_days: number | null;
 };
 
-type TrackingsResponse = { bookings: TrackingBooking[]; tolerance_hours: number };
+type TrackingsResponse = {
+  bookings: TrackingBooking[];
+  tolerance_hours: number;
+  reschedule_deadline_days: number | null;
+};
 
 // Dipakai bareng oleh struk WA dan Nota Sewa (cetak/PDF) — satu sumber
 // pemetaan booking -> data struk, supaya keduanya konsisten.
@@ -95,13 +114,54 @@ export function useTrackings(session: Session | null) {
   const cancelBooking = (bookingId: string) => postAction(bookingId, 'cancel');
   const pickupBooking = (bookingId: string) => postAction(bookingId, 'pickup');
 
+  // Ubah Jadwal (status dipesan) / Perpanjang (status aktif) — Tahap 2,
+  // migration 055. Dua endpoint terpisah, lihat backend/src/routes/trackings.ts.
+  // Mengembalikan error mentah dari server (termasuk pesan "lewat batas
+  // H-N" dari reschedule) supaya RescheduleModal bisa menampilkan dialog
+  // konfirmasi "Tetap ubah?" alih-alih cuma pesan error biasa.
+  async function rescheduleBooking(
+    bookingId: string,
+    body: { start_date: string; end_date: string; total_price?: number; reason?: string },
+  ) {
+    if (!session) return { error: 'Belum login', data: null };
+    try {
+      const result = await apiFetch<{ start_date: string; end_date: string; total_price: number }>(
+        session,
+        `/api/bookings/${bookingId}/reschedule`,
+        { method: 'PATCH', body: JSON.stringify(body) },
+      );
+      await refresh();
+      return { error: null, data: result };
+    } catch (err) {
+      return { error: (err as Error).message, data: null };
+    }
+  }
+
+  async function extendBooking(bookingId: string, body: { end_date: string; total_price?: number; reason?: string }) {
+    if (!session) return { error: 'Belum login', data: null };
+    try {
+      const result = await apiFetch<{ end_date: string; total_price: number }>(
+        session,
+        `/api/bookings/${bookingId}/extend`,
+        { method: 'PATCH', body: JSON.stringify(body) },
+      );
+      await refresh();
+      return { error: null, data: result };
+    } catch (err) {
+      return { error: (err as Error).message, data: null };
+    }
+  }
+
   return {
     bookings: data?.bookings ?? [],
     toleranceHours: data?.tolerance_hours ?? 6,
+    rescheduleDeadlineDays: data?.reschedule_deadline_days ?? null,
     loading,
     error,
     refresh,
     cancelBooking,
     pickupBooking,
+    rescheduleBooking,
+    extendBooking,
   };
 }

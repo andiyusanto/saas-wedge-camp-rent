@@ -363,6 +363,22 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           Transaksi bisa <Ui>Dibatalkan</Ui> kapan saja sebelum selesai — jaminan yang ditahan otomatis dilepas begitu
           dibatalkan.
         </p>
+        <p className="font-bold text-xs mt-2">Ubah Jadwal &amp; Perpanjang</p>
+        <p>
+          Tombol <Ui>Ubah Jadwal</Ui> (transaksi <Ui>Siap Diambil</Ui>, boleh ganti tanggal ambil DAN kembali) atau{' '}
+          <Ui>Perpanjang</Ui> (transaksi <Ui>Aktif</Ui>, cuma tanggal kembali yang bisa dimajukan) di tiap kartu
+          transaksi. Stok tanggal baru dicek otomatis, dan kalau jumlah hari berubah, total harga dihitung ulang dari
+          tarif alat SAAT transaksi ini dibuat (bukan harga katalog sekarang) — tetap bisa diubah manual kalau perlu.
+          Perpanjang otomatis menggeser batas telat, jadi pelanggan yang minta tambah hari sebelum terlambat tidak
+          kena denda.
+        </p>
+        <Note>
+          Owner bisa atur <Ui>Ubah Jadwal paling lambat H-berapa</Ui> di Kelola Usaha — ini CUMA PERINGATAN, bukan
+          penolakan. Mengubah jadwal setelah batas ini lewat tetap bisa dilakukan oleh owner maupun karyawan, asal
+          kolom <Ui>Alasan perubahan</Ui> diisi. Aturan ini tidak berlaku untuk Perpanjang (barang sudah diambil).
+          Semua perubahan tercatat di <Ui>Riwayat Perubahan Jadwal</Ui> di kartu transaksi, lengkap dengan siapa,
+          kapan, dan alasannya — lalu ada tombol <Ui>Kirim Jadwal Baru via WA</Ui> untuk kabari pelanggan.
+        </Note>
         <Note>
           Tombol <Ui>Cetak Nota</Ui> di tiap kartu transaksi membuka versi nota yang bisa langsung dicetak atau
           disimpan sebagai PDF lewat dialog print browser (pilih tujuan "Simpan sebagai PDF") — tidak perlu aplikasi

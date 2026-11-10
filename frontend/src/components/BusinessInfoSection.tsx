@@ -39,6 +39,9 @@ export function BusinessInfoSection({
   const [timezone, setTimezone] = useState<BusinessTimezone>(business.timezone ?? 'Asia/Jakarta');
   const [minRentalDays, setMinRentalDays] = useState(business.min_rental_days != null ? String(business.min_rental_days) : '');
   const [maxRentalDays, setMaxRentalDays] = useState(business.max_rental_days != null ? String(business.max_rental_days) : '');
+  const [rescheduleDeadlineDays, setRescheduleDeadlineDays] = useState(
+    business.reschedule_deadline_days != null ? String(business.reschedule_deadline_days) : '',
+  );
   const [logoUrl, setLogoUrl] = useState(business.logo_url ?? '');
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -64,6 +67,7 @@ export function BusinessInfoSection({
     setTimezone(business.timezone ?? 'Asia/Jakarta');
     setMinRentalDays(business.min_rental_days != null ? String(business.min_rental_days) : '');
     setMaxRentalDays(business.max_rental_days != null ? String(business.max_rental_days) : '');
+    setRescheduleDeadlineDays(business.reschedule_deadline_days != null ? String(business.reschedule_deadline_days) : '');
     setLogoUrl(business.logo_url ?? '');
   }, [business]);
 
@@ -119,6 +123,7 @@ export function BusinessInfoSection({
       timezone,
       min_rental_days: minDays,
       max_rental_days: maxDays,
+      reschedule_deadline_days: rescheduleDeadlineDays.trim() ? Math.max(0, Number(rescheduleDeadlineDays)) : null,
     });
 
     setSubmitting(false);
@@ -318,6 +323,25 @@ export function BusinessInfoSection({
             Minimal diterapkan ketat di Catat Transaksi dan Pesanan Online. Maksimal cuma batas paket — Catat
             Transaksi otomatis mengisi tanggal kembali sesuai paket (masih bisa diubah, ada peringatan kalau
             melebihi), tapi Pesanan Online dari Etalase tidak bisa melebihi paket. Kosongkan untuk tanpa batas.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2 pt-2 border-t border-[#E6E1D2]">
+          <label className="flex flex-col gap-1 text-sm text-[#6E6853]">
+            <span className="font-semibold text-[#26302B]">Ubah Jadwal paling lambat H-berapa</span>
+            <input
+              type="number"
+              min={0}
+              value={rescheduleDeadlineDays}
+              onChange={(e) => setRescheduleDeadlineDays(e.target.value)}
+              placeholder="Kapan saja (tanpa batas)"
+              className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+            />
+          </label>
+          <p className="text-[11px] text-[#6E6853]">
+            Hari sebelum tanggal ambil. Cuma PERINGATAN — owner maupun karyawan tetap bisa Ubah Jadwal setelah batas
+            ini lewat, tapi wajib isi "Alasan perubahan". Tidak berlaku untuk Perpanjang (alat sudah diambil).
+            Kosongkan untuk tanpa batas (boleh ubah jadwal kapan saja sebelum diambil).
           </p>
         </div>
 

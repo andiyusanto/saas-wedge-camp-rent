@@ -22,11 +22,13 @@ import {
   ChevronDown,
   ChevronUp,
   Printer,
+  CalendarClock,
 } from 'lucide-react';
 import { useTrackings, buildReceiptData } from '../hooks/useTrackings';
 import type { TrackingBooking } from '../hooks/useTrackings';
 import { ReturnModal } from './ReturnModal';
 import { AddFineModal } from './AddFineModal';
+import { RescheduleModal } from './RescheduleModal';
 import { ConfirmModal } from './ConfirmModal';
 import { InvoiceModal } from './InvoiceModal';
 import { ScrollableRow } from './ScrollableRow';
@@ -63,7 +65,18 @@ export function TrackingScreen({
   // (tetap terbuka, lihat migration 044 bagian 6).
   writable?: boolean;
 }) {
-  const { bookings, toleranceHours, loading, error, refresh, cancelBooking, pickupBooking } = useTrackings(session);
+  const {
+    bookings,
+    toleranceHours,
+    rescheduleDeadlineDays,
+    loading,
+    error,
+    refresh,
+    cancelBooking,
+    pickupBooking,
+    rescheduleBooking,
+    extendBooking,
+  } = useTrackings(session);
   const {
     requests: pendingRequests,
     loading: pendingLoading,
@@ -77,6 +90,7 @@ export function TrackingScreen({
   const [searchQuery, setSearchQuery] = useState('');
   const [returnTarget, setReturnTarget] = useState<TrackingBooking | null>(null);
   const [fineTarget, setFineTarget] = useState<TrackingBooking | null>(null);
+  const [rescheduleTarget, setRescheduleTarget] = useState<{ booking: TrackingBooking; mode: 'ubah_jadwal' | 'perpanjang' } | null>(null);
   // Rencana tahap 4, bagian "Pesanan masuk" — alur Konfirmasi.
   const [confirmPrefillTarget, setConfirmPrefillTarget] = useState<BookingRequest | null>(null);
   const [confirmPrecheckError, setConfirmPrecheckError] = useState<string | null>(null);
@@ -417,10 +431,29 @@ export function TrackingScreen({
               onAddFine={() => setFineTarget(b)}
               onReturn={() => setReturnTarget(b)}
               onCancel={() => setCancelTarget(b)}
+              onReschedule={() => setRescheduleTarget({ booking: b, mode: b.is_pending_pickup ? 'ubah_jadwal' : 'perpanjang' })}
+              rescheduleDeadlineDays={rescheduleDeadlineDays}
             />
           ))
         )}
       </div>
+
+      <RescheduleModal
+        isOpen={rescheduleTarget !== null}
+        onClose={() => setRescheduleTarget(null)}
+        booking={rescheduleTarget?.booking ?? null}
+        mode={rescheduleTarget?.mode ?? 'ubah_jadwal'}
+        rescheduleDeadlineDays={rescheduleDeadlineDays}
+        rescheduleBooking={rescheduleBooking}
+        extendBooking={extendBooking}
+        businessName={businessName}
+        businessAddress={businessAddress}
+        businessLogoUrl={businessLogoUrl}
+        onDone={() => {
+          setRescheduleTarget(null);
+          refresh();
+        }}
+      />
 
       <ReturnModal
         isOpen={returnTarget !== null}
@@ -590,6 +623,8 @@ function BookingCard({
   onAddFine,
   onReturn,
   onCancel,
+  onReschedule,
+  rescheduleDeadlineDays,
 }: {
   session: Session;
   booking: TrackingBooking;
@@ -599,6 +634,8 @@ function BookingCard({
   onAddFine: () => void;
   onReturn: () => void;
   onCancel: () => void;
+  onReschedule: () => void;
+  rescheduleDeadlineDays: number | null;
 }) {
   const lateFines = b.penalties.filter((p) => p.type === 'keterlambatan');
   const otherFines = b.penalties.filter((p) => p.type !== 'keterlambatan');
@@ -770,6 +807,30 @@ function BookingCard({
         </div>
       )}
 
+      {b.reschedule_history.length > 0 && (
+        <div className="pt-3 mt-3 border-t border-[#E6E1D2]">
+          <p className="flex items-center gap-1.5 text-[11px] font-bold text-[#6E6853] mb-2">
+            <CalendarClock className="w-3.5 h-3.5" />
+            <span>Riwayat Perubahan Jadwal ({b.reschedule_history.length})</span>
+          </p>
+          <ol className="space-y-1.5">
+            {b.reschedule_history.map((h, idx) => (
+              <li key={idx} className="text-[11px] text-[#26302B] bg-[#F1EEE2] border border-[#DBD5C1] rounded-lg p-2">
+                <strong>{h.action === 'ubah_jadwal' ? 'Ubah jadwal' : 'Perpanjang'}</strong>
+                {': '}
+                {formatDateIndo(h.old_start_date)}–{formatDateIndo(h.old_end_date)} → {formatDateIndo(h.new_start_date)}–
+                {formatDateIndo(h.new_end_date)}
+                {h.past_deadline && rescheduleDeadlineDays != null && (
+                  <span className="text-[#A65C2A] font-semibold"> · Melewati batas H-{rescheduleDeadlineDays}</span>
+                )}
+                <span className="text-[#6E6853]"> · oleh {h.changed_by_name} · {formatDateTimeIndo(h.created_at)}</span>
+                {h.reason && <p className="text-[#6E6853] italic mt-0.5">Alasan: {h.reason}</p>}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center justify-between pt-3 mt-3 border-t border-[#E6E1D2] gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -818,6 +879,14 @@ function BookingCard({
               Proses Pengembalian
             </button>
           )}
+
+          <button
+            onClick={onReschedule}
+            className="px-3 py-1.5 rounded-lg bg-white border border-[#DBD5C1] hover:bg-[#F1EEE2] text-[#26302B] text-xs font-bold transition flex items-center gap-1"
+          >
+            <CalendarClock className="w-3.5 h-3.5 text-[#2B4739]" />
+            {b.is_pending_pickup ? 'Ubah Jadwal' : 'Perpanjang'}
+          </button>
 
           <button
             onClick={onCancel}

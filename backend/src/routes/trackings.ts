@@ -1,8 +1,11 @@
 import { Router } from 'express';
 import { createRequestClient } from '../lib/supabaseClient.js';
 import { computeDueAt, hoursLate, computeLateFee, computeTieredLateFee, lateDaysEquivalent } from '../lib/penalty.js';
-import { rentalDuration } from '../lib/dates.js';
-import { logBookingStatus } from '../lib/audit.js';
+import { rentalDuration, dateRange, todayInTz, addDays } from '../lib/dates.js';
+import { logBookingStatus, logBookingReschedule } from '../lib/audit.js';
+import { fetchActiveBookingItems, usedUnitsOn } from '../lib/availability.js';
+import { computeItemRentalPrice, computeBookingTotalPrice } from '../lib/pricing.js';
+import type { ItemDayRates } from '../lib/pricing.js';
 
 const router = Router();
 
@@ -54,6 +57,17 @@ type PenaltyJoin = {
   items: { name: string } | null;
 };
 type StatusHistoryJoin = { status: string; changed_by_name: string; created_at: string };
+type RescheduleHistoryJoin = {
+  action: 'ubah_jadwal' | 'perpanjang';
+  old_start_date: string;
+  old_end_date: string;
+  new_start_date: string;
+  new_end_date: string;
+  reason: string | null;
+  past_deadline: boolean;
+  changed_by_name: string;
+  created_at: string;
+};
 
 router.get('/trackings', async (req, res) => {
   if (!req.headers.authorization) {
@@ -65,7 +79,7 @@ router.get('/trackings', async (req, res) => {
 
   const { data: business, error: bizError } = await supabase
     .from('businesses')
-    .select('late_tolerance_hours, timezone')
+    .select('late_tolerance_hours, timezone, reschedule_deadline_days')
     .maybeSingle();
 
   if (bizError || !business) {
@@ -76,7 +90,7 @@ router.get('/trackings', async (req, res) => {
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select(
-      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_key, rental_day_mode, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_status_history(status, changed_by_name, created_at)',
+      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_key, rental_day_mode, min_rental_days, max_rental_days, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_status_history(status, changed_by_name, created_at), booking_reschedules(action, old_start_date, old_end_date, new_start_date, new_end_date, reason, past_deadline, changed_by_name, created_at)',
     )
     .in('status', ['dipesan', 'aktif'])
     .order('end_date');
@@ -168,13 +182,24 @@ router.get('/trackings', async (req, res) => {
       history: ((b.booking_status_history ?? []) as unknown as StatusHistoryJoin[])
         .slice()
         .sort((x, y) => x.created_at.localeCompare(y.created_at)),
+      // Tahap 2 (migration 055) — riwayat Ubah Jadwal/Perpanjang,
+      // ditampilkan terpisah dari riwayat status (TrackingScreen.tsx).
+      reschedule_history: ((b.booking_reschedules ?? []) as unknown as RescheduleHistoryJoin[])
+        .slice()
+        .sort((x, y) => x.created_at.localeCompare(y.created_at)),
       total_price: b.total_price,
       dp_paid: b.dp_paid,
       rental_day_mode: b.rental_day_mode,
+      min_rental_days: b.min_rental_days,
+      max_rental_days: b.max_rental_days,
     };
   });
 
-  res.json({ tolerance_hours: business.late_tolerance_hours, bookings: result });
+  res.json({
+    tolerance_hours: business.late_tolerance_hours,
+    reschedule_deadline_days: business.reschedule_deadline_days,
+    bookings: result,
+  });
 });
 
 type ExtraPenaltyInput = {
@@ -429,6 +454,308 @@ router.post('/bookings/:id/penalties', async (req, res) => {
   }
 
   res.status(201).json({ ok: true });
+});
+
+// ------------------------------------------------------------
+// Ubah Jadwal & Perpanjang (Tahap 2, migration 055)
+// ------------------------------------------------------------
+type RescheduleBookingItem = {
+  item_id: string;
+  quantity: number;
+  price_at_booking: number;
+  day2_rate_at_booking: number | null;
+  day3_rate_at_booking: number | null;
+  day4_rate_at_booking: number | null;
+  day5_rate_at_booking: number | null;
+  extra_day_rate_at_booking: number | null;
+};
+
+// Tulis ulang booking_items.subtotal per baris untuk durasi BARU (Tahap
+// 2) — dipanggil setelah jumlah hari berubah lewat Ubah Jadwal/Perpanjang,
+// pola sama seperti computeBookingTotalPrice (lib/pricing.ts) tapi per
+// baris (subtotal ditampilkan terpisah di struk/Nota, lihat migration 034).
+async function updateBookingItemSubtotals(
+  supabase: ReturnType<typeof createRequestClient>,
+  bookingId: string,
+  bookingItems: RescheduleBookingItem[],
+  newDays: number,
+): Promise<void> {
+  for (const bi of bookingItems) {
+    const newSubtotal =
+      bi.day2_rate_at_booking == null
+        ? bi.quantity * bi.price_at_booking * newDays
+        : bi.quantity *
+          computeItemRentalPrice(
+            {
+              price_per_day: bi.price_at_booking,
+              day2_rate: bi.day2_rate_at_booking,
+              day3_rate: bi.day3_rate_at_booking!,
+              day4_rate: bi.day4_rate_at_booking!,
+              day5_rate: bi.day5_rate_at_booking!,
+              extra_day_rate: bi.extra_day_rate_at_booking!,
+            } satisfies ItemDayRates,
+            newDays,
+          );
+    await supabase.from('booking_items').update({ subtotal: newSubtotal }).eq('booking_id', bookingId).eq('item_id', bi.item_id);
+  }
+}
+
+// Stok di tanggal BARU, mengecualikan booking ini sendiri (lihat
+// excludeBookingId di usedUnitsOn, migration 055) — dipakai sama-sama oleh
+// Ubah Jadwal dan Perpanjang. Mengembalikan nama alat pertama yang tidak
+// cukup, atau null kalau semua cukup.
+async function checkStockForNewDates(
+  supabase: ReturnType<typeof createRequestClient>,
+  bookingId: string,
+  newStart: string,
+  newEnd: string,
+  itemRows: { item_id: string; quantity: number }[],
+): Promise<string | null> {
+  const itemIds = itemRows.map((i) => i.item_id);
+  const { data: catalogItems } = await supabase
+    .from('items')
+    .select('id, name, total_units, readiness_hours')
+    .in('id', itemIds);
+
+  const { data: bizRow } = await supabase.from('businesses').select('timezone').maybeSingle();
+  const existingBookingItems = await fetchActiveBookingItems(supabase);
+  const days = dateRange(newStart, newEnd);
+
+  for (const requested of itemRows) {
+    const catalogItem = catalogItems?.find((i) => i.id === requested.item_id);
+    if (!catalogItem) return 'Alat tidak ditemukan';
+
+    for (const day of days) {
+      const used = usedUnitsOn(
+        existingBookingItems,
+        requested.item_id,
+        day,
+        catalogItem.readiness_hours,
+        bizRow?.timezone ?? null,
+        bookingId,
+      );
+      if (used + requested.quantity > catalogItem.total_units) {
+        return `Alat "${catalogItem.name}" tidak cukup pada ${day} (sisa ${catalogItem.total_units - used}, diminta ${requested.quantity})`;
+      }
+    }
+  }
+  return null;
+}
+
+// Ubah Jadwal — booking berstatus 'dipesan' (belum diambil fisik).
+// Tanggal ambil & kembali keduanya bisa berubah, jumlah hari boleh
+// berubah. Batas "H-N hari sebelum tanggal ambil" (businesses.
+// reschedule_deadline_days) HANYA peringatan (keputusan Andi 10 Nov
+// 2026) — ditegakkan di sini cuma sebagai "reason wajib diisi kalau
+// lewat batas", BUKAN penolakan permintaan itu sendiri.
+router.patch('/bookings/:id/reschedule', async (req, res) => {
+  if (!req.headers.authorization) {
+    res.status(401).json({ error: 'Belum login' });
+    return;
+  }
+
+  const { id } = req.params;
+  const { start_date, end_date, total_price, reason } = req.body ?? {};
+
+  if (!start_date || !end_date) {
+    res.status(400).json({ error: 'Tanggal ambil dan kembali wajib diisi' });
+    return;
+  }
+  if (end_date < start_date) {
+    res.status(400).json({ error: 'Tanggal kembali harus setelah tanggal ambil' });
+    return;
+  }
+
+  const supabase = createRequestClient(req);
+
+  const { data: booking, error: bookingError } = await supabase
+    .from('bookings')
+    .select(
+      'id, business_id, booking_number, start_date, end_date, status, total_price, rental_day_mode, min_rental_days, max_rental_days, booking_items(item_id, quantity, price_at_booking, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking)',
+    )
+    .eq('id', id)
+    .maybeSingle();
+
+  if (bookingError || !booking) {
+    res.status(404).json({ error: 'Transaksi tidak ditemukan' });
+    return;
+  }
+  if (booking.status !== 'dipesan') {
+    res.status(400).json({ error: 'Ubah Jadwal cuma berlaku untuk transaksi berstatus "Siap Diambil" (belum diambil).' });
+    return;
+  }
+
+  if (booking.rental_day_mode === 'per_malam' && end_date === start_date) {
+    res.status(400).json({ error: 'Tanggal ambil dan kembali tidak boleh di hari yang sama.' });
+    return;
+  }
+
+  const newDays = rentalDuration(start_date, end_date, booking.rental_day_mode);
+
+  // Minimal paket (snapshot Tahap 1) — batas KERAS, sama seperti saat
+  // transaksi dibuat. Maksimal SENGAJA tidak ditolak (staf boleh melebihi,
+  // konsisten dengan kebijakan POST /bookings).
+  if (booking.min_rental_days != null && newDays < booking.min_rental_days) {
+    res.status(400).json({ error: `Minimal sewa ${booking.min_rental_days} hari.` });
+    return;
+  }
+
+  const { data: bizRow } = await supabase
+    .from('businesses')
+    .select('timezone, reschedule_deadline_days')
+    .maybeSingle();
+
+  // "H-N hari sebelum tanggal ambil" dihitung dari tanggal ambil LAMA
+  // (sebelum diubah) — soal "seberapa mepet" permintaan perubahan ini
+  // datang relatif ke jadwal yang sudah dijanjikan, bukan jadwal baru.
+  const pastDeadline =
+    bizRow?.reschedule_deadline_days != null &&
+    todayInTz(bizRow.timezone) > addDays(booking.start_date, -bizRow.reschedule_deadline_days);
+
+  if (pastDeadline && !String(reason ?? '').trim()) {
+    res.status(400).json({
+      error: `Melewati batas ubah jadwal H-${bizRow!.reschedule_deadline_days}. Isi "Alasan perubahan" untuk tetap melanjutkan.`,
+      past_deadline: true,
+    });
+    return;
+  }
+
+  const bookingItems = (booking.booking_items ?? []) as unknown as RescheduleBookingItem[];
+  const stockError = await checkStockForNewDates(supabase, id, start_date, end_date, bookingItems);
+  if (stockError) {
+    res.status(409).json({ error: stockError });
+    return;
+  }
+
+  const oldDays = rentalDuration(booking.start_date, booking.end_date, booking.rental_day_mode);
+  const newTotalPrice =
+    total_price != null
+      ? Number(total_price) || 0
+      : newDays === oldDays
+        ? booking.total_price
+        : computeBookingTotalPrice(bookingItems, newDays);
+
+  const { error: updateError } = await supabase
+    .from('bookings')
+    .update({ start_date, end_date, total_price: newTotalPrice })
+    .eq('id', id);
+
+  if (updateError) {
+    res.status(400).json({ error: updateError.message });
+    return;
+  }
+
+  if (newDays !== oldDays) {
+    await updateBookingItemSubtotals(supabase, id, bookingItems, newDays);
+  }
+
+  const { data: actorData } = await supabase.auth.getUser();
+  if (actorData.user) {
+    await logBookingReschedule(supabase, {
+      bookingId: id,
+      businessId: booking.business_id,
+      action: 'ubah_jadwal',
+      oldStartDate: booking.start_date,
+      oldEndDate: booking.end_date,
+      newStartDate: start_date,
+      newEndDate: end_date,
+      oldTotalPrice: booking.total_price,
+      newTotalPrice,
+      reason: String(reason ?? '').trim() || null,
+      pastDeadline: !!pastDeadline,
+      changedBy: actorData.user.id,
+      changedByName: actorData.user.email ?? actorData.user.id,
+    });
+  }
+
+  res.json({ ok: true, start_date, end_date, total_price: newTotalPrice, past_deadline: !!pastDeadline });
+});
+
+// Perpanjang — booking berstatus 'aktif' (sudah diambil fisik). Hanya
+// tanggal kembali yang maju; batas telat (computeDueAt, dipanggil dari
+// GET /trackings & POST /bookings/:id/return) otomatis ikut geser karena
+// cuma membaca bookings.end_date — tidak ada kolom tambahan yang perlu
+// disentuh untuk itu. Aturan H-N (reschedule_deadline_days) TIDAK
+// berlaku di sini (brief Tahap 2 poin 5 — alat sudah diambil).
+router.patch('/bookings/:id/extend', async (req, res) => {
+  if (!req.headers.authorization) {
+    res.status(401).json({ error: 'Belum login' });
+    return;
+  }
+
+  const { id } = req.params;
+  const { end_date, total_price, reason } = req.body ?? {};
+
+  if (!end_date) {
+    res.status(400).json({ error: 'Tanggal kembali baru wajib diisi' });
+    return;
+  }
+
+  const supabase = createRequestClient(req);
+
+  const { data: booking, error: bookingError } = await supabase
+    .from('bookings')
+    .select(
+      'id, business_id, start_date, end_date, status, total_price, rental_day_mode, booking_items(item_id, quantity, price_at_booking, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking)',
+    )
+    .eq('id', id)
+    .maybeSingle();
+
+  if (bookingError || !booking) {
+    res.status(404).json({ error: 'Transaksi tidak ditemukan' });
+    return;
+  }
+  if (booking.status !== 'aktif') {
+    res.status(400).json({ error: 'Perpanjang cuma berlaku untuk transaksi berstatus "Aktif" (sudah diambil).' });
+    return;
+  }
+  if (end_date <= booking.end_date) {
+    res.status(400).json({ error: 'Tanggal kembali baru harus setelah tanggal kembali semula.' });
+    return;
+  }
+
+  const bookingItems = (booking.booking_items ?? []) as unknown as RescheduleBookingItem[];
+  const stockError = await checkStockForNewDates(supabase, id, booking.start_date, end_date, bookingItems);
+  if (stockError) {
+    res.status(409).json({ error: stockError });
+    return;
+  }
+
+  const oldDays = rentalDuration(booking.start_date, booking.end_date, booking.rental_day_mode);
+  const newDays = rentalDuration(booking.start_date, end_date, booking.rental_day_mode);
+  const newTotalPrice = total_price != null ? Number(total_price) || 0 : computeBookingTotalPrice(bookingItems, newDays);
+
+  const { error: updateError } = await supabase.from('bookings').update({ end_date, total_price: newTotalPrice }).eq('id', id);
+
+  if (updateError) {
+    res.status(400).json({ error: updateError.message });
+    return;
+  }
+
+  if (newDays !== oldDays) {
+    await updateBookingItemSubtotals(supabase, id, bookingItems, newDays);
+  }
+
+  const { data: actorData } = await supabase.auth.getUser();
+  if (actorData.user) {
+    await logBookingReschedule(supabase, {
+      bookingId: id,
+      businessId: booking.business_id,
+      action: 'perpanjang',
+      oldStartDate: booking.start_date,
+      oldEndDate: booking.end_date,
+      newStartDate: booking.start_date,
+      newEndDate: end_date,
+      oldTotalPrice: booking.total_price,
+      newTotalPrice,
+      reason: String(reason ?? '').trim() || null,
+      pastDeadline: false,
+      changedBy: actorData.user.id,
+      changedByName: actorData.user.email ?? actorData.user.id,
+    });
+  }
+
+  res.json({ ok: true, end_date, total_price: newTotalPrice });
 });
 
 export default router;

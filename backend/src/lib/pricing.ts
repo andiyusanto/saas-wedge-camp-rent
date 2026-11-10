@@ -39,3 +39,35 @@ export function computeItemRentalPrice(rates: ItemDayRates, days: number): numbe
   if (days > 5) total += (days - 5) * rates.extra_day_rate;
   return total;
 }
+
+// Total booking dari tarif SNAPSHOT booking_items.*_at_booking untuk N
+// hari (Tahap 2, migration 055 — Ubah Jadwal/Perpanjang, dipakai saat
+// jumlah hari berubah). Baris lama (day2_rate_at_booking null, dari
+// sebelum migration 034) fallback ke tarif flat price_at_booking * days,
+// perilaku sama seperti sebelum harga bertingkat ada.
+export type BookingItemRatesSnapshot = {
+  quantity: number;
+  price_at_booking: number;
+  day2_rate_at_booking: number | null;
+  day3_rate_at_booking: number | null;
+  day4_rate_at_booking: number | null;
+  day5_rate_at_booking: number | null;
+  extra_day_rate_at_booking: number | null;
+};
+
+export function computeBookingTotalPrice(items: BookingItemRatesSnapshot[], days: number): number {
+  return items.reduce((sum, bi) => {
+    if (bi.day2_rate_at_booking == null) {
+      return sum + bi.quantity * bi.price_at_booking * days;
+    }
+    const rates: ItemDayRates = {
+      price_per_day: bi.price_at_booking,
+      day2_rate: bi.day2_rate_at_booking,
+      day3_rate: bi.day3_rate_at_booking!,
+      day4_rate: bi.day4_rate_at_booking!,
+      day5_rate: bi.day5_rate_at_booking!,
+      extra_day_rate: bi.extra_day_rate_at_booking!,
+    };
+    return sum + bi.quantity * computeItemRentalPrice(rates, days);
+  }, 0);
+}

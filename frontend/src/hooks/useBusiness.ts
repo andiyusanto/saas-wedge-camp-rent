@@ -25,6 +25,10 @@ export type Business = {
   // sendiri di bookings.min_rental_days/max_rental_days.
   min_rental_days: number | null;
   max_rental_days: number | null;
+  // "Ubah jadwal paling lambat H-N hari sebelum tanggal ambil" (Tahap 2,
+  // migration 055) — nullable, null = kapan saja sebelum diambil. Cuma
+  // PERINGATAN (RescheduleModal.tsx), tidak pernah menolak permintaan.
+  reschedule_deadline_days: number | null;
   created_at: string;
 };
 
@@ -41,6 +45,7 @@ export type BusinessUpdateInput = {
   timezone: BusinessTimezone;
   min_rental_days: number | null;
   max_rental_days: number | null;
+  reschedule_deadline_days: number | null;
 };
 
 export type MemberRole = 'owner' | 'karyawan';
@@ -64,7 +69,7 @@ export function useBusiness(session: Session | null) {
     // RLS (members_select_own_business) sudah membatasi ke baris milik user ini.
     const { data, error: queryError } = await supabase
       .from('businesses')
-      .select('id, name, owner_name, phone, address, regency_id, district_id, late_tolerance_hours, logo_url, rental_day_mode, timezone, min_rental_days, max_rental_days, created_at')
+      .select('id, name, owner_name, phone, address, regency_id, district_id, late_tolerance_hours, logo_url, rental_day_mode, timezone, min_rental_days, max_rental_days, reschedule_deadline_days, created_at')
       .maybeSingle();
 
     // PENTING: error di sini (mis. PGRST116 "multiple rows" kalau akun ini
@@ -131,6 +136,7 @@ export function useBusiness(session: Session | null) {
         timezone: input.timezone,
         min_rental_days: input.min_rental_days,
         max_rental_days: input.max_rental_days,
+        reschedule_deadline_days: input.reschedule_deadline_days,
       })
       .eq('id', business.id);
 

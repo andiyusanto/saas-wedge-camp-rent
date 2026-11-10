@@ -18,6 +18,11 @@ export function computeAvailabilityStatus(remaining: number, totalUnits: number)
 export type BookingItemRow = {
   item_id: string;
   quantity: number;
+  // booking_id (Tahap 2, migration 055) -- supaya caller bisa mengecualikan
+  // booking yang SEDANG diubah (Ubah Jadwal/Perpanjang) dari hitungan stok
+  // tanggal baru (booking itu sendiri tidak boleh bersaing dengan dirinya
+  // sendiri untuk stok yang sama).
+  booking_id: string;
   bookings: { start_date: string; end_date: string; status: string; actual_return_at: string | null } | null;
 };
 
@@ -29,7 +34,7 @@ const ACTIVE_STATUSES = new Set(['dipesan', 'aktif', 'telat', 'selesai']);
 export async function fetchActiveBookingItems(supabase: SupabaseClient): Promise<BookingItemRow[]> {
   const { data, error } = await supabase
     .from('booking_items')
-    .select('item_id, quantity, bookings(start_date, end_date, status, actual_return_at)');
+    .select('item_id, quantity, booking_id, bookings(start_date, end_date, status, actual_return_at)');
 
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as BookingItemRow[];
@@ -65,6 +70,11 @@ export function usedUnitsOn(
   // Zona rental (migration 053) — dipakai membaca hari sungguhan barang
   // kembali. Harus sama dengan get_public_availability (053).
   timezone: string | null = null,
+  // Tahap 2 (migration 055) — booking yang SEDANG diubah (Ubah Jadwal/
+  // Perpanjang) dikecualikan dari hitungan, supaya tidak bersaing dengan
+  // stok dirinya sendiri di tanggal baru. undefined (default) = perilaku
+  // lama, tidak mengecualikan apa pun (POST /bookings & Etalase publik).
+  excludeBookingId?: string,
 ): number {
   const readinessDays = readinessHours > 0 ? Math.ceil(readinessHours / 24) : 0;
 
@@ -72,6 +82,7 @@ export function usedUnitsOn(
     .filter((bi) => {
       const booking = bi.bookings;
       if (!booking || bi.item_id !== itemId) return false;
+      if (excludeBookingId && bi.booking_id === excludeBookingId) return false;
       if (!ACTIVE_STATUSES.has(booking.status)) return false;
 
       // 'aktif' = barang sudah diambil fisik (langsung saat dibuat kalau
