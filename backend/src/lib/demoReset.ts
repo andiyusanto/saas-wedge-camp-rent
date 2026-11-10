@@ -362,14 +362,44 @@ export async function resetDemoData(): Promise<DemoResetResult> {
     businessId = businesses[0].id;
   }
 
-  // Idempotent di setiap reset (bukan cuma saat pertama dibuat) — supaya
-  // business demo yang sudah ada dari SEBELUM migration 035 ikut kebagian
-  // logo tanpa perlu intervensi manual, dan logo tetap terpasang kalau
-  // sempat dihapus/diganti manual saat sesi demo sebelumnya.
+  // Kota Malang — dipakai sebagai baku businesses.regency_id DAN
+  // public_pages.regency_id di bawah (lihat juga blok Etalase Online).
+  const [malangRegency] = await rest<{ id: string }[]>(
+    `regencies?select=id&name=eq.Kota Malang`,
+    ownerToken,
+  );
+
+  // Idempotent di setiap reset (bukan cuma saat pertama dibuat) — SELALU
+  // dipatch ulang ke nilai BAKU, tidak cuma logo. Bug 10 Nov 2026: Info
+  // Usaha (nama, nama pemilik, telepon, alamat, kota/kecamatan, toleransi
+  // telat) dan pengaturan rental (min/maks paket, batas H-N ubah jadwal)
+  // bisa diubah pengunjung demo lewat tab Kelola Usaha, dan sebelum ini
+  // TIDAK PERNAH direset — pengunjung berikutnya melihat data pribadi
+  // orang lain. timezone/rental_day_mode/min/maks/H-N kebetulan sudah
+  // null/default di DB kalau belum pernah disentuh (makanya baru ketahuan
+  // lewat Info Usaha dulu), tapi tetap dipatch eksplisit di sini supaya
+  // reset genuinely idempotent terlepas dari drift apa pun yang terjadi.
+  // late_tolerance_hours baku = default kolom asli (migration 003, 6
+  // jam) -- BUKAN nilai yang sempat kelihatan di demo (3 jam ternyata
+  // juga drift dari pengunjung, bukan baku).
   await rest(`businesses?id=eq.${businessId}`, ownerToken, {
     method: 'PATCH',
     headers: { Prefer: 'return=minimal' },
-    body: JSON.stringify({ logo_url: DEMO_LOGO_URL }),
+    body: JSON.stringify({
+      name: BUSINESS_NAME,
+      owner_name: 'Pemilik Demo',
+      phone: '081234567890',
+      address: 'Jl. Coba Sewalog No. 1, Malang',
+      regency_id: malangRegency?.id ?? null,
+      district_id: null,
+      timezone: 'Asia/Jakarta',
+      late_tolerance_hours: 6,
+      rental_day_mode: DEMO_RENTAL_DAY_MODE,
+      min_rental_days: null,
+      max_rental_days: null,
+      reschedule_deadline_days: null,
+      logo_url: DEMO_LOGO_URL,
+    }),
   });
 
   // --- Pastikan akun karyawan demo tergabung di business yang sama ---
@@ -437,22 +467,43 @@ export async function resetDemoData(): Promise<DemoResetResult> {
 
   // --- Etalase Online contoh (published, supaya verifikasi hidup /toko/{slug}
   // bisa langsung dilakukan sehabis reset, tanpa perlu isi manual dulu) ---
-  const [malangRegency] = await rest<{ id: string }[]>(
-    `regencies?select=id&name=eq.Kota Malang`,
-    ownerToken,
-  );
   const existingPublicPage = await rest<{ business_id: string }[]>(
     `public_pages?select=business_id&business_id=eq.${businessId}`,
     ownerToken,
   );
+  // Bug 10 Nov 2026 (sama alasan dengan blok businesses di atas): SEMUA
+  // field di bawah ini dipatch ulang ke baku tiap reset, termasuk
+  // district_id dan konfigurasi Pesanan Online (accept_online_orders +
+  // cara bayar) -- sebelumnya cuma sebagian field (deskripsi/alamat/dst)
+  // yang di-reset, field pembayaran sama sekali tidak disentuh. Nilai
+  // "Bank Contoh"/dst di bawah BUKAN data vendor asli — placeholder demo
+  // yang sudah berlaku sejak Pesanan Online dibangun (lihat
+  // CLAUDE.md bagian 6), supaya pengunjung bisa langsung coba alur
+  // pesanan online tanpa perlu setup manual dulu.
   const publicPagePayload = {
     published: true,
     slug: 'demo-coba-sewalog',
     description: 'Rental alat camping & outdoor terlengkap di Malang — tenda, sleeping bag, kompor, hingga carrier. Siap sewa harian, alat terawat.',
     address: 'Jl. Coba Sewalog No. 1, Malang',
     regency_id: malangRegency?.id ?? null,
+    district_id: null,
     operating_hours: 'SENIN: 12.00–22.00 WIB\nSELASA-SABTU: 09.00–22.00 WIB\nMINGGU: 12.00–22.00 WIB',
     public_phone: '081234567890',
+    accept_online_orders: true,
+    confirmation_message: 'Terima kasih sudah pesan!',
+    confirmation_deadline_hours: 24,
+    pay_transfer_enabled: true,
+    bank_name: 'Bank Contoh',
+    bank_account_number: '000-111-222',
+    bank_account_holder: 'Demo Sewalog',
+    pay_qris_enabled: false,
+    qris_image_url: null,
+    pay_cash_enabled: true,
+    dp_mode: 'none',
+    dp_value: null,
+    order_admin_phone_1: null,
+    order_admin_phone_2: null,
+    order_admin_phone_3: null,
   };
   if (existingPublicPage.length === 0) {
     await rest('public_pages', ownerToken, {

@@ -219,11 +219,34 @@ async function main() {
     console.log('OK business demo sudah ada:', businessId);
   }
 
-  // Idempotent di setiap reset — lihat komentar sama di demoReset.ts.
+  // Kota Malang — dipakai sebagai baku businesses.regency_id DAN
+  // public_pages.regency_id di bawah.
+  const [malangRegency] = await rest(
+    `regencies?select=id&name=eq.Kota Malang`,
+    ownerToken,
+  );
+
+  // Idempotent di setiap reset, SELURUH Info Usaha + pengaturan rental
+  // dipatch ulang ke baku (bukan cuma logo) — lihat komentar sama di
+  // demoReset.ts untuk alasan lengkap (bug 10 Nov 2026).
   await rest(`businesses?id=eq.${businessId}`, ownerToken, {
     method: 'PATCH',
     headers: { Prefer: 'return=minimal' },
-    body: JSON.stringify({ logo_url: DEMO_LOGO_URL }),
+    body: JSON.stringify({
+      name: BUSINESS_NAME,
+      owner_name: 'Pemilik Demo',
+      phone: '081234567890',
+      address: 'Jl. Coba Sewalog No. 1, Malang',
+      regency_id: malangRegency?.id ?? null,
+      district_id: null,
+      timezone: 'Asia/Jakarta',
+      late_tolerance_hours: 6,
+      rental_day_mode: DEMO_RENTAL_DAY_MODE,
+      min_rental_days: null,
+      max_rental_days: null,
+      reschedule_deadline_days: null,
+      logo_url: DEMO_LOGO_URL,
+    }),
   });
 
   // --- Pastikan akun karyawan demo tergabung di business yang sama ---
@@ -450,16 +473,33 @@ async function main() {
   // demoReset.ts — supaya verifikasi hidup /toko/{slug} bisa langsung
   // dilakukan sehabis seed, tanpa perlu isi manual dulu) ---
   console.log('-- Mengaktifkan Etalase Online demo --');
-  const [malangRegency] = await rest(`regencies?select=id&name=eq.Kota Malang`, ownerToken);
   const existingPublicPage = await rest(`public_pages?select=business_id&business_id=eq.${businessId}`, ownerToken);
+  // Field pembayaran/Pesanan Online juga dipatch ulang ke baku (placeholder
+  // demo, bukan data vendor asli) — lihat komentar sama di demoReset.ts.
   const publicPagePayload = {
     published: true,
     slug: 'demo-coba-sewalog',
     description: 'Rental alat camping & outdoor terlengkap di Malang — tenda, sleeping bag, kompor, hingga carrier. Siap sewa harian, alat terawat.',
     address: 'Jl. Coba Sewalog No. 1, Malang',
     regency_id: malangRegency?.id ?? null,
+    district_id: null,
     operating_hours: 'SENIN: 12.00–22.00 WIB\nSELASA-SABTU: 09.00–22.00 WIB\nMINGGU: 12.00–22.00 WIB',
     public_phone: '081234567890',
+    accept_online_orders: true,
+    confirmation_message: 'Terima kasih sudah pesan!',
+    confirmation_deadline_hours: 24,
+    pay_transfer_enabled: true,
+    bank_name: 'Bank Contoh',
+    bank_account_number: '000-111-222',
+    bank_account_holder: 'Demo Sewalog',
+    pay_qris_enabled: false,
+    qris_image_url: null,
+    pay_cash_enabled: true,
+    dp_mode: 'none',
+    dp_value: null,
+    order_admin_phone_1: null,
+    order_admin_phone_2: null,
+    order_admin_phone_3: null,
   };
   if (existingPublicPage.length === 0) {
     await rest('public_pages', ownerToken, {
