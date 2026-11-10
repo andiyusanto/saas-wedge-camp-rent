@@ -17,11 +17,13 @@ const TABS: { id: Tab; label: string; icon: typeof Calendar; ownerOnly?: boolean
   { id: 'tracking', label: 'Transaksi Aktif', icon: ShieldAlert },
   { id: 'alat', label: 'Katalog & Stok Alat', icon: Package },
   { id: 'riwayat', label: 'Riwayat Transaksi', icon: History, ownerOnly: true },
+  { id: 'tim', label: 'Kelola Usaha', icon: Users, ownerOnly: true },
   // Dua tab ini SENGAJA dipisah, bukan digabung — "Etalase" (lihat-lihat,
   // sudah bisa dipakai sekarang, gratis) vs "Toko" (transaksi sungguhan,
   // masih rencana masa depan yang dievaluasi) — lihat komentar di
   // OnlineStoreScreen.tsx & EtalaseOnlineScreen.tsx. Ditaruh berdekatan
-  // di navbar supaya hubungannya tetap terasa tanpa disatukan.
+  // di navbar (urutan ditukar ke setelah Kelola Usaha, permintaan Andi
+  // 10 Nov 2026) supaya hubungannya tetap terasa tanpa disatukan.
   //
   // Label tab ini sengaja "Etalase & Pesanan Online" (direvisi Andi 2
   // Nov 2026 dari "Etalase & Pesanan", permintaan asli 31 Okt 2026
@@ -33,7 +35,6 @@ const TABS: { id: Tab; label: string; icon: typeof Calendar; ownerOnly?: boolean
   // etalase pasif. Diverifikasi tetap muat satu baris di scroller tab
   // HP pada lebar 390px.
   { id: 'etalase-online', label: 'Etalase & Pesanan Online', icon: Store, ownerOnly: true },
-  { id: 'tim', label: 'Kelola Usaha', icon: Users, ownerOnly: true },
   { id: 'toko-online', label: 'Toko Online', icon: Globe, ownerOnly: true },
   { id: 'langganan', label: 'Langganan', icon: CreditCard, ownerOnly: true },
   { id: 'panduan', label: 'Panduan', icon: BookOpen },
