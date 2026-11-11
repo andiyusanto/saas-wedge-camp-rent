@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Smartphone, Tablet, Laptop } from 'lucide-react';
 import { formatIDR } from '../utils/formatters';
 import {
   LATE_FEE_EXAMPLE,
@@ -215,6 +216,35 @@ export function RescheduleVsExtendIllustration() {
             Cuma tanggal kembali yang maju — batas telat ikut bergeser ke tanggal baru.
           </p>
         </div>
+      </div>
+    </IllustrationFrame>
+  );
+}
+
+// 7. Pasang Sewalog di Layar Utama — 4 kartu perangkat (bukan screenshot
+// browser asli, murni ikon + langkah singkat, token warna bagian 5).
+const INSTALL_DEVICES: { icon: typeof Smartphone; device: string; steps: string[] }[] = [
+  { icon: Smartphone, device: 'Android (Chrome)', steps: ['Ketuk menu ⋮', 'Tambahkan ke layar utama / Instal aplikasi'] },
+  { icon: Smartphone, device: 'iPhone / iPad (wajib Safari)', steps: ['Ketuk tombol Bagikan', 'Tambah ke Layar Utama'] },
+  { icon: Tablet, device: 'Tablet Android', steps: ['Ketuk menu ⋮', 'Tambahkan ke layar utama / Instal aplikasi'] },
+  { icon: Laptop, device: 'Laptop (Chrome/Edge)', steps: ['Buka address bar', 'Ketuk ikon instal ⊕'] },
+];
+
+export function InstallDeviceIllustration() {
+  return (
+    <IllustrationFrame title="Langkah pasang per perangkat">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {INSTALL_DEVICES.map((d) => (
+          <div key={d.device} className="bg-[#FBFAF4] border border-[#DBD5C1] rounded-lg p-2.5 flex flex-col gap-1.5">
+            <d.icon className="w-5 h-5 text-[#2B4739]" />
+            <p className="text-[10px] font-bold text-[#26302B] leading-tight">{d.device}</p>
+            <ol className="text-[10px] text-[#6E6853] leading-snug list-decimal pl-3 space-y-0.5">
+              {d.steps.map((s) => (
+                <li key={s}>{s}</li>
+              ))}
+            </ol>
+          </div>
+        ))}
       </div>
     </IllustrationFrame>
   );

@@ -197,6 +197,16 @@ function App() {
     return () => navigator.serviceWorker?.removeEventListener('message', handleSwMessage);
   }, []);
 
+  // Daftarkan service worker sejak awal untuk SEMUA user (bukan cuma yang
+  // sempat buka tab Transaksi Aktif, lihat usePushNotifications.ts) --
+  // beforeinstallprompt (tombol "Pasang Aplikasi", Navbar.tsx) butuh SW
+  // terdaftar untuk dianggap installable oleh browser. register() idempoten,
+  // tidak konflik dengan registrasi di usePushNotifications.ts. sw.js sendiri
+  // TIDAK diubah -- tetap cuma handler push/notificationclick, tanpa fetch/cache.
+  useEffect(() => {
+    navigator.serviceWorker?.register('/sw.js').catch(() => {});
+  }, []);
+
   const [isNewBookingOpen, setIsNewBookingOpen] = useState(false);
   const [preselectedItemId, setPreselectedItemId] = useState<string | null>(null);
   const [preselectedStartDate, setPreselectedStartDate] = useState<string | null>(null);

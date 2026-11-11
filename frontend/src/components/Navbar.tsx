@@ -1,5 +1,6 @@
 import { Calendar, ShieldAlert, Package, Plus, LogOut, Users, BookOpen, Store, History, Globe, ShieldCheck, CreditCard } from 'lucide-react';
 import { ScrollableRow } from './ScrollableRow';
+import { InstallAppButton } from './InstallAppButton';
 import type { MemberRole } from '../hooks/useBusiness';
 
 export type Tab = 'kalender' | 'tracking' | 'alat' | 'tim' | 'riwayat' | 'etalase-online' | 'toko-online' | 'panduan' | 'admin' | 'langganan';
@@ -114,6 +115,7 @@ export function Navbar({
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Catat Transaksi</span>
             </button>
+            <InstallAppButton />
             <button
               onClick={onLogout}
               title="Keluar"
