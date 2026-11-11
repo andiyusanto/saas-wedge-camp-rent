@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { createRequestClient } from '../lib/supabaseClient.js';
-import { fetchActiveBookingItems, usedUnitsOn, computeAvailabilityStatus } from '../lib/availability.js';
+import { fetchActiveBookingItems, usedUnitsOn, computeAvailabilityStatus, marginDaysFromReadinessHours } from '../lib/availability.js';
 import { todayInTz, addDays } from '../lib/dates.js';
 
 const router = Router();
@@ -18,16 +18,25 @@ router.get('/availability', async (req, res) => {
 
   // Zona rental (migration 053) — RLS cuma memperlihatkan business milik
   // pemanggil (pola sama seperti routes/trackings.ts). Gagal baca = WIB.
-  const { data: business } = await supabase.from('businesses').select('timezone').maybeSingle();
+  // id diambil juga supaya bisa dipakai filter EKSPLISIT di bawah (brief
+  // skala data 2026-11-11), bukan cuma andalkan RLS.
+  const { data: business } = await supabase.from('businesses').select('id, timezone').maybeSingle();
   const timezone: string | null = business?.timezone ?? null;
+
+  if (!business) {
+    res.status(400).json({ error: 'Business tidak ditemukan' });
+    return;
+  }
 
   const requestedStart = typeof req.query.start_date === 'string' ? req.query.start_date : '';
   const startDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedStart) ? requestedStart : todayInTz(timezone);
   const dateList: string[] = Array.from({ length: days }, (_, i) => addDays(startDate, i));
+  const endDate = dateList[dateList.length - 1];
 
   const { data: items, error: itemsError } = await supabase
     .from('items')
     .select('id, code, name, category, image_url, total_units, price_per_day, readiness_hours')
+    .eq('business_id', business.id)
     .is('deactivated_at', null)
     .order('name');
 
@@ -38,7 +47,11 @@ router.get('/availability', async (req, res) => {
 
   let bookingItems;
   try {
-    bookingItems = await fetchActiveBookingItems(supabase);
+    bookingItems = await fetchActiveBookingItems(supabase, business.id, {
+      windowStart: startDate,
+      windowEnd: endDate,
+      marginDays: marginDaysFromReadinessHours((items ?? []).map((i) => i.readiness_hours)),
+    });
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
     return;

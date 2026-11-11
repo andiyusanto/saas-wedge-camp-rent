@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { createRequestClient } from '../lib/supabaseClient.js';
-import { fetchActiveBookingItems, usedUnitsOn } from '../lib/availability.js';
+import { fetchActiveBookingItems, usedUnitsOn, marginDaysFromReadinessHours } from '../lib/availability.js';
 import { dateRange, todayInTz, tzOffsetIso, rentalDuration } from '../lib/dates.js';
 import { logBookingStatus } from '../lib/audit.js';
 import { isBusinessWritable, SUBSCRIPTION_LOCKED_MESSAGE } from '../lib/subscription.js';
@@ -150,15 +150,19 @@ router.post('/bookings', async (req, res) => {
     return;
   }
 
+  const days = dateRange(start_date, end_date);
+
   let existingBookingItems;
   try {
-    existingBookingItems = await fetchActiveBookingItems(supabase);
+    existingBookingItems = await fetchActiveBookingItems(supabase, businessId, {
+      windowStart: start_date,
+      windowEnd: end_date,
+      marginDays: marginDaysFromReadinessHours((itemRows ?? []).map((i) => i.readiness_hours)),
+    });
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
     return;
   }
-
-  const days = dateRange(start_date, end_date);
 
   for (const requested of requestedItems) {
     const itemRow = itemRows?.find((i) => i.id === requested.item_id);
@@ -217,7 +221,6 @@ router.post('/bookings', async (req, res) => {
   // Jalan diambil hari ini -> langsung 'aktif' (alur walk-in biasa).
   // Tanggal ambil di masa depan -> 'dipesan' (reservasi, belum diambil fisik).
   const status = start_date <= todayInTz(bizRow.timezone) ? 'aktif' : 'dipesan';
-  const bookingNumber = await generateBookingNumber(supabase, businessId, bizRow.timezone);
   // 'aktif' di sini berarti diambil LANGSUNG saat dicatat (walk-in, staff
   // ngetik sambil pelanggan menunggu) — created_at praktis = jam ambil
   // sungguhan, tapi disimpan eksplisit di kolom sendiri (bukan cuma
@@ -240,25 +243,52 @@ router.post('/bookings', async (req, res) => {
       ? customer_photo_key
       : null;
 
-  const { data: bookingRow, error: bookingError } = await supabase
-    .from('bookings')
-    .insert({
-      business_id: businessId,
-      customer_id: customerId,
-      customer_photo_key: safeCustomerPhotoKey,
-      booking_number: bookingNumber,
-      start_date,
-      end_date,
-      status,
-      picked_up_at: pickedUpAt,
-      total_price: Number(total_price) || 0,
-      dp_paid: Number(dp_paid) || 0,
-      rental_day_mode: bizRow.rental_day_mode,
-      min_rental_days: bizRow.min_rental_days,
-      max_rental_days: bizRow.max_rental_days,
-    })
-    .select('id, booking_number, status')
-    .single();
+  // generateBookingNumber() pakai count+1 (bukan sequence Postgres) -- dua
+  // request hampir bersamaan bisa menghitung nomor yang SAMA sebelum
+  // keduanya sempat insert, lalu bentrok di unique index
+  // bookings_business_booking_number_key (migration 006). Daripada gagal
+  // total ke klien (brief skala data 2026-11-11, P4 ringan), nomor
+  // di-generate ULANG dan insert dicoba lagi beberapa kali kalau errornya
+  // SPESIFIK unique-violation (kode Postgres 23505) pada kolom ini --
+  // error lain (mis. kolom wajib kosong) tetap langsung gagal seperti
+  // biasa, tidak ikut di-retry.
+  const MAX_BOOKING_NUMBER_ATTEMPTS = 5;
+  let bookingRow: { id: string; booking_number: string | null; status: string } | null = null;
+  let bookingError: { code?: string; message: string } | null = null;
+
+  for (let attempt = 0; attempt < MAX_BOOKING_NUMBER_ATTEMPTS; attempt++) {
+    const bookingNumber = await generateBookingNumber(supabase, businessId, bizRow.timezone);
+    const result = await supabase
+      .from('bookings')
+      .insert({
+        business_id: businessId,
+        customer_id: customerId,
+        customer_photo_key: safeCustomerPhotoKey,
+        booking_number: bookingNumber,
+        start_date,
+        end_date,
+        status,
+        picked_up_at: pickedUpAt,
+        total_price: Number(total_price) || 0,
+        dp_paid: Number(dp_paid) || 0,
+        rental_day_mode: bizRow.rental_day_mode,
+        min_rental_days: bizRow.min_rental_days,
+        max_rental_days: bizRow.max_rental_days,
+      })
+      .select('id, booking_number, status')
+      .single();
+
+    if (!result.error) {
+      bookingRow = result.data;
+      bookingError = null;
+      break;
+    }
+
+    bookingError = result.error;
+    const isBookingNumberConflict = result.error.code === '23505' && result.error.message.includes('booking_number');
+    if (!isBookingNumberConflict) break;
+    // lanjut ke iterasi berikutnya -- generate nomor baru dan coba lagi
+  }
 
   if (bookingError || !bookingRow) {
     if (createdNewCustomer) await supabase.from('customers').delete().eq('id', customerId);

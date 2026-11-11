@@ -2,7 +2,7 @@ import ExcelJS from 'exceljs';
 import JSZip from 'jszip';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ItemDayRates } from './pricing.js';
-import { fetchActiveBookingItems, usedUnitsOn } from './availability.js';
+import { fetchActiveBookingItems, usedUnitsOn, marginDaysFromReadinessHours } from './availability.js';
 import { todayInWIB, addDays } from './dates.js';
 
 // Impor data alat lewat Excel/CSV (menu Katalog & Stok Alat) — disetujui
@@ -563,14 +563,19 @@ export type UnitWarning = { rowNumber: number; name: string; itemId: string | nu
 // yang akan kena dampak penurunan stok.
 export async function computeUnitWarnings(
   supabase: SupabaseClient,
+  businessId: string,
   rowResults: ImportRowResult[],
 ): Promise<UnitWarning[]> {
   const toCheck = rowResults.filter((r) => r.match.kind === 'update') as { row: ParsedRow; match: Extract<ImportMatch, { kind: 'update' }> }[];
   if (toCheck.length === 0) return [];
 
-  const bookingItems = await fetchActiveBookingItems(supabase);
   const today = todayInWIB();
   const dateWindow = Array.from({ length: 30 }, (_, i) => addDays(today, i));
+  const bookingItems = await fetchActiveBookingItems(supabase, businessId, {
+    windowStart: today,
+    windowEnd: dateWindow[dateWindow.length - 1],
+    marginDays: marginDaysFromReadinessHours(toCheck.map((r) => r.row.readiness_hours)),
+  });
 
   const warnings: UnitWarning[] = [];
   for (const { row, match } of toCheck) {

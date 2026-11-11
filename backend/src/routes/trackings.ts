@@ -3,7 +3,7 @@ import { createRequestClient } from '../lib/supabaseClient.js';
 import { computeDueAt, hoursLate, computeLateFee, computeTieredLateFee, lateDaysEquivalent } from '../lib/penalty.js';
 import { rentalDuration, dateRange, todayInTz, addDays } from '../lib/dates.js';
 import { logBookingStatus, logBookingReschedule, resolveActorName } from '../lib/audit.js';
-import { fetchActiveBookingItems, usedUnitsOn } from '../lib/availability.js';
+import { fetchActiveBookingItems, usedUnitsOn, marginDaysFromReadinessHours } from '../lib/availability.js';
 import { computeItemRentalPrice, computeBookingTotalPrice } from '../lib/pricing.js';
 import type { ItemDayRates } from '../lib/pricing.js';
 import { isValidDateStr, validateOptionalTotalPriceAndReason } from '../lib/validation.js';
@@ -507,6 +507,7 @@ async function updateBookingItemSubtotals(
 // cukup, atau null kalau semua cukup.
 async function checkStockForNewDates(
   supabase: ReturnType<typeof createRequestClient>,
+  businessId: string,
   bookingId: string,
   newStart: string,
   newEnd: string,
@@ -518,8 +519,12 @@ async function checkStockForNewDates(
     .select('id, name, total_units, readiness_hours')
     .in('id', itemIds);
 
-  const { data: bizRow } = await supabase.from('businesses').select('timezone').maybeSingle();
-  const existingBookingItems = await fetchActiveBookingItems(supabase);
+  const { data: bizRow } = await supabase.from('businesses').select('timezone').eq('id', businessId).maybeSingle();
+  const existingBookingItems = await fetchActiveBookingItems(supabase, businessId, {
+    windowStart: newStart,
+    windowEnd: newEnd,
+    marginDays: marginDaysFromReadinessHours((catalogItems ?? []).map((i) => i.readiness_hours)),
+  });
   const days = dateRange(newStart, newEnd);
 
   for (const requested of itemRows) {
@@ -627,7 +632,7 @@ router.patch('/bookings/:id/reschedule', async (req, res) => {
   }
 
   const bookingItems = (booking.booking_items ?? []) as unknown as RescheduleBookingItem[];
-  const stockError = await checkStockForNewDates(supabase, id, start_date, end_date, bookingItems);
+  const stockError = await checkStockForNewDates(supabase, booking.business_id, id, start_date, end_date, bookingItems);
   if (stockError) {
     res.status(409).json({ error: stockError });
     return;
@@ -728,7 +733,7 @@ router.patch('/bookings/:id/extend', async (req, res) => {
   }
 
   const bookingItems = (booking.booking_items ?? []) as unknown as RescheduleBookingItem[];
-  const stockError = await checkStockForNewDates(supabase, id, booking.start_date, end_date, bookingItems);
+  const stockError = await checkStockForNewDates(supabase, booking.business_id, id, booking.start_date, end_date, bookingItems);
   if (stockError) {
     res.status(409).json({ error: stockError });
     return;

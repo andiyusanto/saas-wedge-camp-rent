@@ -113,14 +113,39 @@ export function useHistory(businessId: string | undefined, from: string, to: str
     setLoading(true);
     setError(null);
 
-    const [bookingsResult, dueTodayResult] = await Promise.all([
-      supabase
-        .from('bookings')
-        .select(SELECT_FIELDS)
-        .eq('business_id', businessId)
-        .gte('start_date', from)
-        .lte('start_date', to)
-        .order('start_date', { ascending: false }),
+    // Supabase/PostgREST memotong respons ke max_rows (1.000 di project ini)
+    // TANPA error — periode dengan lebih dari 1.000 transaksi akan
+    // terpotong diam-diam (total omset/piutang & ekspor Excel ikut salah)
+    // kalau cuma satu query. Diambil per halaman lewat .range() sampai
+    // habis (brief skala data 2026-11-11). Urutan WAJIB deterministik+unik
+    // (start_date lalu id sebagai tiebreaker) — tanpa itu PostgREST tidak
+    // menjamin urutan antar-halaman tetap sama, baris bisa dobel/terlompati.
+    const PAGE_SIZE = 1000;
+    async function fetchAllBookings(): Promise<{ rows: RawBooking[]; error: { message: string } | null }> {
+      const rows: RawBooking[] = [];
+      let offset = 0;
+      for (;;) {
+        const { data, error } = await supabase!
+          .from('bookings')
+          .select(SELECT_FIELDS)
+          .eq('business_id', businessId!)
+          .gte('start_date', from)
+          .lte('start_date', to)
+          .order('start_date', { ascending: false })
+          .order('id', { ascending: false })
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) return { rows, error };
+        const page = (data ?? []) as unknown as RawBooking[];
+        rows.push(...page);
+        if (page.length < PAGE_SIZE) break;
+        offset += PAGE_SIZE;
+      }
+      return { rows, error: null };
+    }
+
+    const [{ rows: allRows, error: pageError }, dueTodayResult] = await Promise.all([
+      fetchAllBookings(),
       supabase
         .from('bookings')
         .select('id', { count: 'exact', head: true })
@@ -129,13 +154,13 @@ export function useHistory(businessId: string | undefined, from: string, to: str
         .eq('end_date', todayStr()),
     ]);
 
-    if (bookingsResult.error) {
-      setError(bookingsResult.error.message);
+    if (pageError) {
+      setError(pageError.message);
       setLoading(false);
       return;
     }
 
-    setBookings((bookingsResult.data as unknown as RawBooking[]).map(mapBooking));
+    setBookings(allRows.map(mapBooking));
     setDueTodayCount(dueTodayResult.count ?? 0);
     setLoading(false);
   }, [businessId, from, to]);

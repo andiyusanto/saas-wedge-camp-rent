@@ -31,13 +31,156 @@ export type BookingItemRow = {
 // tidak pernah dimasukkan.
 const ACTIVE_STATUSES = new Set(['dipesan', 'aktif', 'telat', 'selesai']);
 
-export async function fetchActiveBookingItems(supabase: SupabaseClient): Promise<BookingItemRow[]> {
-  const { data, error } = await supabase
-    .from('booking_items')
-    .select('item_id, quantity, booking_id, bookings(start_date, end_date, status, actual_return_at)');
+const PAGE_SIZE = 1000;
+// Supabase/PostgREST membatasi respons ke max_rows (1.000 di project ini,
+// dikonfirmasi lewat Settings -> API) TANPA error -- query yang melebihi
+// batas ini diam-diam terpotong, bukan gagal. Brief skala data 2026-11-11.
+const ID_CHUNK_SIZE = 200;
 
-  if (error) throw new Error(error.message);
-  return (data ?? []) as unknown as BookingItemRow[];
+type RawBookingRow = {
+  id: string;
+  start_date: string;
+  end_date: string;
+  status: string;
+  actual_return_at: string | null;
+};
+
+// Jalankan query sampai benar2 habis lewat .range() berulang -- jaring
+// pengaman TERAKHIR terhadap max_rows, independen dari seberapa tepat
+// filter tanggal/margin di bawah. WAJIB .order() dengan kolom unik+
+// deterministik (di sini selalu 'id') -- tanpa itu, PostgREST tidak
+// menjamin urutan antar-halaman tetap sama, dan baris bisa dobel atau
+// terlompati (koreksi review koordinator 2026-11-11).
+async function fetchAllPages<T>(
+  supabase: SupabaseClient,
+  build: () => any,
+): Promise<T[]> {
+  const rows: T[] = [];
+  let offset = 0;
+  for (;;) {
+    const { data, error } = await build().range(offset, offset + PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+    const page = (data ?? []) as T[];
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) break;
+    offset += PAGE_SIZE;
+  }
+  return rows;
+}
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+// Margin hari dari readiness_hours TERBESAR di antara alat yang relevan
+// untuk panggilan ini -- dipakai melebarkan jendela tanggal fetchActiveBookingItems
+// supaya booking yang "nyenggol" lewat jeda persiapan tidak kelewatan.
+export function marginDaysFromReadinessHours(readinessHoursList: number[]): number {
+  const maxHours = Math.max(0, ...readinessHoursList);
+  return maxHours > 0 ? Math.ceil(maxHours / 24) + 1 : 0;
+}
+
+// businessId: filter EKSPLISIT (bukan cuma andalkan RLS) -- menutup celah
+// yang sama dengan pola "query businesses tanpa .eq(id)" yang sudah
+// diketahui, dan membuat Postgres bisa pakai indeks business_id (migration
+// 058) alih-alih full table scan + filter RLS.
+//
+// window: jendela tanggal yang SUNGGUHAN relevan untuk pemanggil (mis.
+// rentang Kalender yang ditampilkan, atau rentang booking yang sedang
+// divalidasi) + marginDays (dari readiness_hours terbesar milik business
+// ini, sudah dibulatkan ke hari) supaya booking yang baru "nyenggol" jendela
+// lewat jeda persiapan tidak ketinggalan. Ini MURNI optimasi ukuran hasil
+// (booking_items bisa jutaan baris lintas tahun) -- kebenaran akhir tetap
+// dijamin fetchAllPages() di atas, bukan oleh ketepatan margin ini.
+//
+// Dipecah per KELOMPOK STATUS (bukan satu .or() bersarang) supaya gampang
+// dibaca & diverifikasi:
+// - 'aktif' tidak dibatasi end_date (blokir tanpa batas atas sampai Proses
+//   Pengembalian, lihat usedUnitsOn()) -- TAPI tetap dibatasi business_id
+//   dan tetap lewat fetchAllPages(), jadi tidak ada risiko silent-drop
+//   meski suatu saat ada >1.000 booking 'aktif' bersamaan (skenario sangat
+//   tidak realistis untuk skala pilot saat ini).
+// - 'dipesan': start_date <= windowEnd+margin DAN end_date >= windowStart-margin.
+// - 'telat'/'selesai': dua kemungkinan jangkar (end_date TERJADWAL atau
+//   actual_return_at SUNGGUHAN, mana saja yang lebih besar) harus beririsan
+//   dengan jendela -- bukan cuma actual_return_at (koreksi review
+//   koordinator: baris lama bisa null, dan pengembalian bisa dicatat mundur
+//   lewat tanggal yang sudah lewat). usedUnitsOn() sendiri tidak berubah,
+//   ini cuma filter PENGAMBILAN DATA yang lebih longgar dari logika aslinya.
+export async function fetchActiveBookingItems(
+  supabase: SupabaseClient,
+  businessId: string,
+  window: { windowStart: string; windowEnd: string; marginDays: number },
+): Promise<BookingItemRow[]> {
+  const marginDays = Math.max(0, window.marginDays);
+  const expandedStart = addDays(window.windowStart, -marginDays);
+  const expandedEnd = addDays(window.windowEnd, marginDays);
+
+  const bookingCols = 'id, start_date, end_date, status, actual_return_at';
+
+  // Tiga kelompok status tidak saling bergantung -- jalankan paralel
+  // (Promise.all), bukan berurutan, supaya latency total bukan jumlah
+  // ketiga round-trip tapi cuma yang paling lambat (koreksi review
+  // koordinator 2026-11-11: latency ~2 detik didominasi round-trip
+  // berurutan, bukan waktu eksekusi query di sisi Postgres).
+  const [aktifRows, dipesanRows, telatSelesaiRows] = await Promise.all([
+    fetchAllPages<RawBookingRow>(supabase, () =>
+      supabase.from('bookings').select(bookingCols).eq('business_id', businessId).eq('status', 'aktif').order('id'),
+    ),
+    fetchAllPages<RawBookingRow>(supabase, () =>
+      supabase
+        .from('bookings')
+        .select(bookingCols)
+        .eq('business_id', businessId)
+        .eq('status', 'dipesan')
+        .lte('start_date', expandedEnd)
+        .gte('end_date', expandedStart)
+        .order('id'),
+    ),
+    fetchAllPages<RawBookingRow>(supabase, () =>
+      supabase
+        .from('bookings')
+        .select(bookingCols)
+        .eq('business_id', businessId)
+        .in('status', ['telat', 'selesai'])
+        .lte('start_date', expandedEnd)
+        .or(`end_date.gte.${expandedStart},actual_return_at.gte.${expandedStart}`)
+        .order('id'),
+    ),
+  ]);
+
+  const bookingRows = [...aktifRows, ...dipesanRows, ...telatSelesaiRows];
+  if (bookingRows.length === 0) return [];
+
+  const bookingsById = new Map(bookingRows.map((b) => [b.id, b]));
+  const bookingIds = [...bookingsById.keys()];
+
+  // Chunk booking_items juga paralel, dibatasi CHUNK_CONCURRENCY sekaligus
+  // supaya tidak membanjiri koneksi PostgREST kalau bookingIds sangat
+  // banyak (puluhan ribu id -> ratusan chunk).
+  const idChunks = chunk(bookingIds, ID_CHUNK_SIZE);
+  const bookingItemRows: { item_id: string; quantity: number; booking_id: string }[] = [];
+  const CHUNK_CONCURRENCY = 4;
+  for (let i = 0; i < idChunks.length; i += CHUNK_CONCURRENCY) {
+    const batch = idChunks.slice(i, i + CHUNK_CONCURRENCY);
+    const batchResults = await Promise.all(
+      batch.map((idChunk) =>
+        fetchAllPages<{ item_id: string; quantity: number; booking_id: string }>(supabase, () =>
+          supabase.from('booking_items').select('item_id, quantity, booking_id').in('booking_id', idChunk).order('id'),
+        ),
+      ),
+    );
+    for (const rows of batchResults) bookingItemRows.push(...rows);
+  }
+
+  return bookingItemRows.map((bi) => ({
+    item_id: bi.item_id,
+    quantity: bi.quantity,
+    booking_id: bi.booking_id,
+    bookings: bookingsById.get(bi.booking_id) ?? null,
+  }));
 }
 
 // readinessHours = jeda persiapan per-alat (items.readiness_hours, migration

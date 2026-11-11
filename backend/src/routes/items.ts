@@ -147,7 +147,7 @@ async function buildPreview(req: Parameters<typeof createRequestClient>[0], busi
   if (error) throw new Error(error.message);
 
   const matched = matchExistingItems(parseResult.rows, (existingItems ?? []) as ExistingItemForMatch[]);
-  const warnings = await computeUnitWarnings(supabase, matched);
+  const warnings = await computeUnitWarnings(supabase, businessId, matched);
 
   return { fileLevelErrors: [] as string[], rows: matched, warnings };
 }
