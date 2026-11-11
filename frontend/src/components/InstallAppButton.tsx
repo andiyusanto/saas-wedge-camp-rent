@@ -19,6 +19,7 @@ export function InstallAppButton() {
       <button
         onClick={() => (canInstall ? promptInstall() : setShowIosHint((v) => !v))}
         title="Pasang Aplikasi"
+        aria-label="Pasang Aplikasi"
         className="p-2 rounded-xl bg-[#1E3429] hover:bg-[#15251D] border border-[#3A5C4A] text-[#DBD5C1] transition"
       >
         <Download className="w-4 h-4" />

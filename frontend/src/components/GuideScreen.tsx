@@ -241,7 +241,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         kicker="Sekali dipasang, Sewalog dibuka seperti aplikasi — bukan lewat browser setiap kali, dan notifikasi (bagian 8c) di iPhone butuh ini dulu."
       >
         <InstallDeviceIllustration />
-        <p>
+        <p className="text-xs text-[#26302B] leading-relaxed">
           Android/laptop bisa juga lewat tombol <Ui>Pasang Aplikasi</Ui> di navbar (ikon unduh di dekat tombol Keluar)
           — tombol itu otomatis hilang kalau Sewalog sudah terpasang, atau kalau browsernya tidak mendukung instal.
         </p>

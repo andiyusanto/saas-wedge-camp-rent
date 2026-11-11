@@ -18,7 +18,13 @@ export function useInstallPrompt() {
   const [deferredEvent, setDeferredEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [isStandalone, setIsStandalone] = useState(isStandaloneDisplay());
 
-  const isIos = typeof window !== 'undefined' && /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+  // iPadOS 13+ Safari mengirim UA desktop ("Macintosh"), jadi "ipad" di UA
+  // tidak kedeteksi -- dibedakan dari Mac asli lewat touch points (Mac tidak
+  // ada touchscreen, iPad multi-touch) -- review -c1 (2026-11-11).
+  const isIos =
+    typeof window !== 'undefined' &&
+    (/iphone|ipad|ipod/i.test(window.navigator.userAgent) ||
+      (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1));
 
   useEffect(() => {
     function handleBeforeInstallPrompt(e: Event) {
