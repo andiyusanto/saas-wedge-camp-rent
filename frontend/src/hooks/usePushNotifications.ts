@@ -86,7 +86,12 @@ export function usePushNotifications(session: Session, businessId: string) {
       const permissionResult = await Notification.requestPermission();
       setPermission(permissionResult);
       if (permissionResult !== 'granted') {
-        setError('Izin notifikasi ditolak. Buka pengaturan browser untuk mengizinkan notifikasi dari situs ini.');
+        // Pesan untuk permission 'denied' sudah ditampilkan terpisah di
+        // TrackingScreen.tsx lewat push.permission === 'denied' — set error di sini
+        // dulu bikin dua pesan nyaris identik muncul bareng (ditemukan via screenshot 2026-11-11).
+        if (permissionResult !== 'denied') {
+          setError('Izin notifikasi tidak diberikan. Coba lagi untuk mengaktifkan notifikasi.');
+        }
         return;
       }
 
