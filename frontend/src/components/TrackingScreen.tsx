@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import type { Business } from '../hooks/useBusiness';
 import { useBookingRequests } from '../hooks/useBookingRequests';
 import { usePushNotifications } from '../hooks/usePushNotifications';
+import { useInstallPrompt } from '../hooks/useInstallPrompt';
 import type { BookingRequest } from '../hooks/useBookingRequests';
 import { NewBookingModal } from './NewBookingModal';
 import { apiFetch } from '../lib/api';
@@ -55,6 +56,7 @@ export function TrackingScreen({
   businessAddress,
   businessLogoUrl,
   writable = true,
+  onNavigateToGuide,
 }: {
   session: Session;
   business: Business;
@@ -65,6 +67,7 @@ export function TrackingScreen({
   // dikunci kalau hanya-baca — Tolak/return/cancel/denda TIDAK disentuh
   // (tetap terbuka, lihat migration 044 bagian 6).
   writable?: boolean;
+  onNavigateToGuide: (sectionId: string) => void;
 }) {
   const {
     bookings,
@@ -285,7 +288,7 @@ export function TrackingScreen({
         </p>
       )}
 
-      <PushNotificationCard push={push} />
+      <PushNotificationCard push={push} onNavigateToGuide={onNavigateToGuide} />
 
       {!pendingLoading && pendingRequests.length > 0 && (
         <div className="bg-[#F9EFE7] rounded-2xl border border-[#A65C2A]/40 shadow-xs overflow-hidden">
@@ -588,7 +591,17 @@ function FilterButton({
 // Notifikasi push: Pesanan Online baru (v1) — research/brief-notifikasi-push-2026-11.md.
 // Opt-in PER PERANGKAT (bukan per akun) — anggota yang login di HP dan
 // laptop harus mengaktifkan di masing-masing.
-function PushNotificationCard({ push }: { push: ReturnType<typeof usePushNotifications> }) {
+function PushNotificationCard({
+  push,
+  onNavigateToGuide,
+}: {
+  push: ReturnType<typeof usePushNotifications>;
+  onNavigateToGuide: (sectionId: string) => void;
+}) {
+  // isStandalone/isIos dipakai cuma untuk pilih SATU pesan "izin ditolak" yang
+  // paling sesuai (brief 2026-11-11, review -c1 untuk 60dbdde) -- address bar
+  // ("ikon gembok") tidak ada kalau Sewalog dibuka sebagai aplikasi terpasang.
+  const { isStandalone, isIos } = useInstallPrompt();
   if (push.loading) return null;
   // Env VAPID belum diisi di server — kartu ini tidak ditampilkan sama
   // sekali (bukan ditampilkan disabled), sesuai brief #6.
@@ -644,8 +657,19 @@ function PushNotificationCard({ push }: { push: ReturnType<typeof usePushNotific
       </div>
       {push.permission === 'denied' && (
         <p className="text-xs text-[#A8412E]">
-          Izin notifikasi ditolak browser. Buka pengaturan situs di browser (ikon gembok di address bar) untuk mengizinkan notifikasi,
-          lalu coba lagi.
+          {isStandalone && isIos
+            ? 'Izin notifikasi ditolak. Buka Pengaturan HP (bukan di dalam Sewalog) → Notifikasi → Sewalog → Izinkan Notifikasi.'
+            : isStandalone
+              ? 'Izin notifikasi ditolak. Tekan lama ikon Sewalog di layar utama → Info aplikasi → Notifikasi → Aktifkan.'
+              : 'Izin notifikasi ditolak browser. Buka pengaturan situs di browser (ikon gembok di address bar) untuk mengizinkan notifikasi, lalu coba lagi.'}
+          {' '}
+          <button
+            type="button"
+            onClick={() => onNavigateToGuide('g-notifikasi-denied')}
+            className="underline font-semibold"
+          >
+            Lihat panduan
+          </button>
         </p>
       )}
       {push.error && <p className="text-xs text-[#A8412E]">{push.error}</p>}

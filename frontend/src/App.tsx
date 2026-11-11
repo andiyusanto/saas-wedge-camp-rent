@@ -10,6 +10,7 @@ import { SubscriptionBanner } from './components/SubscriptionBanner';
 import { AdminScreen } from './components/AdminScreen';
 import { LanggananScreen } from './components/LanggananScreen';
 import { isDemoAccountEmail } from './utils/demo';
+import { requestGuideScroll } from './lib/guideNavigation';
 import { AuthScreen } from './components/AuthScreen';
 import { ResetPasswordScreen } from './components/ResetPasswordScreen';
 import { OnboardingScreen } from './components/OnboardingScreen';
@@ -347,6 +348,10 @@ function App() {
             businessAddress={business.address}
             businessLogoUrl={business.logo_url}
             writable={subscription?.writable ?? true}
+            onNavigateToGuide={(sectionId) => {
+              requestGuideScroll(sectionId);
+              setTab('panduan');
+            }}
           />
         )}
         {tab === 'alat' && <ItemsScreen businessId={business.id} session={session} role={role} writable={subscription?.writable ?? true} />}

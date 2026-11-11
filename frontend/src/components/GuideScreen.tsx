@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { BookOpen, MessageCircle } from 'lucide-react';
 import { getWhatsAppShareUrl } from '../utils/formatters';
+import { peekPendingGuideScroll, clearPendingGuideScroll } from '../lib/guideNavigation';
 import { SHOW_TOKO_ONLINE_TAB } from './Navbar';
 import {
   LateFeeIllustration,
@@ -171,6 +172,22 @@ const TOC: { id: string; num: string; title: string }[] = [
 export function GuideScreen({ businessName }: { businessName: string }) {
   const feedbackMessage = `Halo Sewalog, saya dari usaha "${businessName}" mau kasih masukan/keluhan soal aplikasi:\n\n`;
   const feedbackUrl = getWhatsAppShareUrl(SEWALOG_SUPPORT_WHATSAPP, feedbackMessage);
+
+  // Dipicu dari tombol "Lihat panduan" di kartu Notifikasi (TrackingScreen.tsx)
+  // lewat requestGuideScroll -- tunggu satu frame supaya section-nya sudah
+  // ter-render dulu sebelum discroll.
+  useEffect(() => {
+    const pending = peekPendingGuideScroll();
+    if (!pending) return;
+    // Baru dihapus SAAT benar-benar discroll (bukan di awal efek) supaya
+    // double-invoke StrictMode tidak saling menghabiskan nilainya -- lihat
+    // catatan di guideNavigation.ts.
+    const t = setTimeout(() => {
+      clearPendingGuideScroll();
+      scrollToGuideSection(pending);
+    }, 50);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -759,10 +776,32 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           <Ui>Tambah ke Layar Utama</Ui>) — kartu di atas akan menunjukkan petunjuk ini otomatis kalau terdeteksi
           dibuka dari Safari biasa.
         </p>
-        <Note>
-          Kalau browser menolak izin notifikasi, kartu ini akan menunjukkan cara membukanya lagi lewat pengaturan
-          situs di browser (ikon gembok di address bar).
-        </Note>
+        <div id="g-notifikasi-denied">
+          <p className="font-bold text-xs mt-2">Kalau izin terlanjur ditolak</p>
+          <p className="text-xs text-[#6E6853] mb-1">
+            Begitu browser/HP menolak izin notifikasi, kartu di atas tidak akan bertanya lagi secara otomatis —
+            harus diizinkan ulang manual lewat pengaturan, caranya beda tergantung cara Sewalog dibuka:
+          </p>
+          <FieldsTable
+            rows={[
+              { label: 'Android, lewat Chrome', desc: 'Ikon gembok/⋮ di address bar → Setelan situs → Notifikasi → Izinkan.' },
+              {
+                label: 'Android, sudah dipasang',
+                desc: 'Tekan lama ikon Sewalog di layar utama → Info aplikasi → Notifikasi → Aktifkan.',
+              },
+              {
+                label: 'iPhone, sudah dipasang',
+                desc: 'Pengaturan (bukan di dalam Sewalog) → Notifikasi → Sewalog → Izinkan Notifikasi.',
+              },
+              { label: 'Laptop (Chrome/Edge)', desc: 'Ikon gembok di address bar → Notifikasi → Izinkan.' },
+            ]}
+          />
+          <Note>
+            Kartu <Ui>Notifikasi Pesanan Online</Ui> otomatis menampilkan salah satu petunjuk di atas yang paling
+            sesuai begitu izin ditolak, lengkap dengan tautan balik ke sini. Setelah diizinkan lewat pengaturan,
+            kembali ke tab <Ui>Transaksi Aktif</Ui> dan tekan <Ui>Aktifkan</Ui> lagi.
+          </Note>
+        </div>
       </Section>
 
       {SHOW_TOKO_ONLINE_TAB && (
