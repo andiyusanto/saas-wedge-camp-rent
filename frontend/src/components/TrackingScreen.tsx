@@ -651,7 +651,12 @@ function PushNotificationCard({
             onClick={push.enable}
             className="shrink-0 px-3 py-2 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-semibold text-xs transition"
           >
-            Aktifkan
+            {/* Browser tidak akan menampilkan dialog izin lagi selama 'denied' --
+                klik di sini cuma mengecek ulang Notification.permission (lewat
+                push.enable yang sama), bukan mencoba minta izin baru. Label beda
+                supaya tidak kelihatan seperti tombol "Aktifkan" yang berfungsi
+                normal -- review koordinator (2026-11-11). */}
+            {push.permission === 'denied' ? 'Coba Lagi' : 'Aktifkan'}
           </button>
         )}
       </div>
