@@ -25,6 +25,7 @@ import {
   ChevronUp,
   Printer,
   CalendarClock,
+  Loader2,
 } from 'lucide-react';
 import { useTrackings, buildReceiptData } from '../hooks/useTrackings';
 import type { TrackingBooking } from '../hooks/useTrackings';
@@ -642,21 +643,29 @@ function PushNotificationCard({
         {push.subscribed ? (
           <button
             onClick={push.disable}
-            className="shrink-0 px-3 py-2 rounded-xl bg-[#1E3429]/10 hover:bg-[#1E3429]/20 text-[#2B4739] font-semibold text-xs transition"
+            disabled={push.disabling}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#1E3429]/10 hover:bg-[#1E3429]/20 text-[#2B4739] font-semibold text-xs transition disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            Matikan
+            {/* Jeda beberapa detik di HP (lepas langganan di pushManager +
+                hapus di server) tanpa umpan balik apa pun -- dilaporkan Andi
+                12 Nov 2026 -- spinner + disabled supaya tidak kelihatan diam
+                dan tidak bisa diklik dobel. */}
+            {push.disabling && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {push.disabling ? 'Mematikan...' : 'Matikan'}
           </button>
         ) : (
           <button
             onClick={push.enable}
-            className="shrink-0 px-3 py-2 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-semibold text-xs transition"
+            disabled={push.enabling}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-semibold text-xs transition disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {/* Browser tidak akan menampilkan dialog izin lagi selama 'denied' --
                 klik di sini cuma mengecek ulang Notification.permission (lewat
                 push.enable yang sama), bukan mencoba minta izin baru. Label beda
                 supaya tidak kelihatan seperti tombol "Aktifkan" yang berfungsi
                 normal -- review koordinator (2026-11-11). */}
-            {push.permission === 'denied' ? 'Coba Lagi' : 'Aktifkan'}
+            {push.enabling && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {push.enabling ? 'Mengaktifkan...' : push.permission === 'denied' ? 'Coba Lagi' : 'Aktifkan'}
           </button>
         )}
       </div>

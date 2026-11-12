@@ -39,6 +39,12 @@ export function usePushNotifications(session: Session, businessId: string) {
   // untuk 'denied', lihat komentar di enable() di bawah), bikin tombol
   // kelihatan tidak bereaksi. Dilaporkan Andi dari HP Android, 12 Nov 2026.
   const [retryStillBlocked, setRetryStillBlocked] = useState(false);
+  // Status loading terpisah untuk tombol Aktifkan/Coba Lagi/Matikan --
+  // dilaporkan Andi dari HP 12 Nov 2026: ada jeda beberapa detik di HP
+  // (requestPermission -> pushManager.subscribe -> simpan ke server) tanpa
+  // umpan balik apa pun, jadi kelihatan tidak bereaksi/bisa diklik dobel.
+  const [enabling, setEnabling] = useState(false);
+  const [disabling, setDisabling] = useState(false);
 
   const supported =
     typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
@@ -109,6 +115,7 @@ export function usePushNotifications(session: Session, businessId: string) {
       return;
     }
 
+    setEnabling(true);
     try {
       const permissionResult = await Notification.requestPermission();
       setPermission(permissionResult);
@@ -151,11 +158,14 @@ export function usePushNotifications(session: Session, businessId: string) {
       setSubscribed(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal mengaktifkan notifikasi');
+    } finally {
+      setEnabling(false);
     }
   }, [session, businessId, supported, vapidPublicKey]);
 
   const disable = useCallback(async () => {
     setError(null);
+    setDisabling(true);
     try {
       const reg = await navigator.serviceWorker.getRegistration();
       const sub = await reg?.pushManager.getSubscription();
@@ -169,6 +179,8 @@ export function usePushNotifications(session: Session, businessId: string) {
       setSubscribed(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal menonaktifkan notifikasi');
+    } finally {
+      setDisabling(false);
     }
   }, [session]);
 
@@ -194,6 +206,8 @@ export function usePushNotifications(session: Session, businessId: string) {
     loading,
     error,
     retryStillBlocked,
+    enabling,
+    disabling,
     enable,
     disable,
     testSending,
