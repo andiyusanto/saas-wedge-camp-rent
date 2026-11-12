@@ -295,8 +295,14 @@ export function BusinessInfoSection({
 
         <div className="flex flex-col gap-2 pt-2 border-t border-[#E6E1D2]">
           <p className="text-sm font-semibold text-[#26302B]">Paket Minimal/Maksimal Hari Sewa</p>
+          {/* min-w-0 di label + w-full di input -- tanpa ini, lebar bawaan
+              <input type="number"> (tidak otomatis menyusut) melebarkan baris
+              flex ini sampai terpotong di HP (360-390px), dilaporkan Andi dari
+              HP Android 12 Nov 2026 (scrollWidth 501/360). Label "Maksimal
+              hari (paket)" juga diperpendek jadi "Maksimal hari" -- kata
+              "paket" sudah dijelaskan di teks bantuan di bawah. */}
           <div className="flex gap-3">
-            <label className="flex-1 flex flex-col gap-1 text-sm text-[#6E6853]">
+            <label className="flex-1 min-w-0 flex flex-col gap-1 text-sm text-[#6E6853]">
               <span>Minimal hari</span>
               <input
                 type="number"
@@ -304,18 +310,18 @@ export function BusinessInfoSection({
                 value={minRentalDays}
                 onChange={(e) => setMinRentalDays(e.target.value)}
                 placeholder="Tanpa batas"
-                className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+                className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
               />
             </label>
-            <label className="flex-1 flex flex-col gap-1 text-sm text-[#6E6853]">
-              <span>Maksimal hari (paket)</span>
+            <label className="flex-1 min-w-0 flex flex-col gap-1 text-sm text-[#6E6853]">
+              <span>Maksimal hari</span>
               <input
                 type="number"
                 min={1}
                 value={maxRentalDays}
                 onChange={(e) => setMaxRentalDays(e.target.value)}
                 placeholder="Tanpa batas"
-                className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+                className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
               />
             </label>
           </div>

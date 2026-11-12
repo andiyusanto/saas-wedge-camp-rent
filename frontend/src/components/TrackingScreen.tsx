@@ -677,6 +677,11 @@ function PushNotificationCard({
           </button>
         </p>
       )}
+      {push.retryStillBlocked && (
+        <p className="text-xs font-semibold text-[#A8412E]">
+          Masih diblokir — izinnya belum berubah. Ikuti langkah di atas dulu, lalu coba lagi.
+        </p>
+      )}
       {push.error && <p className="text-xs text-[#A8412E]">{push.error}</p>}
       {push.subscribed && (
         <div className="flex items-center gap-2">

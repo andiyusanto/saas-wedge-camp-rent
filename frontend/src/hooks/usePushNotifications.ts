@@ -32,6 +32,13 @@ export function usePushNotifications(session: Session, businessId: string) {
   const [error, setError] = useState<string | null>(null);
   const [testSending, setTestSending] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
+  // "Coba Lagi" diklik tapi izin TETAP 'denied' setelah requestPermission()
+  // (browser tidak menampilkan dialog lagi begitu pernah ditolak, jadi
+  // requestPermission() langsung resolve 'denied' lagi) -- sebelumnya tidak
+  // ada umpan balik SAMA SEKALI di kasus ini (setError() sengaja di-skip
+  // untuk 'denied', lihat komentar di enable() di bawah), bikin tombol
+  // kelihatan tidak bereaksi. Dilaporkan Andi dari HP Android, 12 Nov 2026.
+  const [retryStillBlocked, setRetryStillBlocked] = useState(false);
 
   const supported =
     typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
@@ -75,8 +82,28 @@ export function usePushNotifications(session: Session, businessId: string) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Bonus brief 12 Nov 2026: deteksi otomatis begitu pengguna kembali dari
+  // Pengaturan HP/browser (mis. baru saja mengizinkan notifikasi di sana),
+  // tanpa perlu klik "Coba Lagi" lagi -- CUMA memperbarui status `permission`
+  // (tombol balik jadi "Aktifkan" kalau sudah granted), TIDAK PERNAH
+  // subscribe otomatis -- subscribe tetap wajib lewat klik pengguna sendiri
+  // (koreksi review koordinator 12 Nov 2026).
+  useEffect(() => {
+    if (!supported) return;
+    function syncPermission() {
+      if (document.visibilityState !== 'visible') return;
+      const current = Notification.permission;
+      setPermission((prev) => (prev === current ? prev : current));
+      if (current !== 'denied') setRetryStillBlocked(false);
+    }
+    document.addEventListener('visibilitychange', syncPermission);
+    return () => document.removeEventListener('visibilitychange', syncPermission);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supported]);
+
   const enable = useCallback(async () => {
     setError(null);
+    setRetryStillBlocked(false);
     if (!supported || !vapidPublicKey) {
       setError('Notifikasi push tidak tersedia di perangkat/browser ini.');
       return;
@@ -91,6 +118,15 @@ export function usePushNotifications(session: Session, businessId: string) {
         // dulu bikin dua pesan nyaris identik muncul bareng (ditemukan via screenshot 2026-11-11).
         if (permissionResult !== 'denied') {
           setError('Izin notifikasi tidak diberikan. Coba lagi untuk mengaktifkan notifikasi.');
+        } else {
+          // "Coba Lagi" diklik tapi browser TIDAK menampilkan dialog lagi
+          // (sudah pernah ditolak) -- requestPermission() cuma resolve
+          // 'denied' lagi tanpa ada yang berubah, jadi tanpa ini klik
+          // kelihatan tidak bereaksi sama sekali. Pesan statis di
+          // TrackingScreen.tsx (push.permission==='denied') TIDAK berubah
+          // teksnya di sini, cuma ditambah satu baris transient supaya klik
+          // tetap terasa "melakukan sesuatu".
+          setRetryStillBlocked(true);
         }
         return;
       }
@@ -157,6 +193,7 @@ export function usePushNotifications(session: Session, businessId: string) {
     subscribed,
     loading,
     error,
+    retryStillBlocked,
     enable,
     disable,
     testSending,
