@@ -11,6 +11,7 @@ import { AdminScreen } from './components/AdminScreen';
 import { LanggananScreen } from './components/LanggananScreen';
 import { isDemoAccountEmail } from './utils/demo';
 import { requestGuideScroll } from './lib/guideNavigation';
+import { loadActiveTab, saveActiveTab } from './lib/tabStorage';
 import { AuthScreen } from './components/AuthScreen';
 import { ResetPasswordScreen } from './components/ResetPasswordScreen';
 import { OnboardingScreen } from './components/OnboardingScreen';
@@ -24,7 +25,7 @@ import { HistoryScreen } from './components/HistoryScreen';
 import { GuideScreen } from './components/GuideScreen';
 import { OnlineStoreScreen } from './components/OnlineStoreScreen';
 import { EtalaseOnlineScreen } from './components/EtalaseOnlineScreen';
-import { Navbar } from './components/Navbar';
+import { Navbar, SHOW_TOKO_ONLINE_TAB } from './components/Navbar';
 import type { Tab } from './components/Navbar';
 
 // Bug nyata ditemukan 2 Nov 2026 (lihat RedeemInviteScreen.tsx untuk
@@ -154,7 +155,12 @@ function App() {
     refresh: refreshBusiness,
     updateBusiness,
   } = useBusiness(session);
-  const [tab, setTab] = useState<Tab>('kalender');
+  // Ingat tab terakhir dibuka lintas refresh (brief disetujui Andi 12 Nov
+  // 2026, lihat lib/tabStorage.ts) -- lazy initializer supaya cuma dibaca
+  // sekali saat mount, bukan tiap render. Tab/jendela baru atau login ulang
+  // sengaja tidak mewarisi ini (sessionStorage per-tab + dihapus saat logout,
+  // lihat useAuth.ts), jatuh balik ke 'kalender'.
+  const [tab, setTab] = useState<Tab>(() => loadActiveTab() ?? 'kalender');
   const [refreshSignal, setRefreshSignal] = useState(0);
   // Badge tab + banner Kalender (rencana 2.4 bagian B+C) — instance
   // terpisah dari yang dipakai TrackingScreen sendiri (poll ringan
@@ -167,8 +173,13 @@ function App() {
   const isDemoAccount = isDemoAccountEmail(session?.user.email);
 
   // Jaring pengaman kalau karyawan sempat berada di tab owner-only (mis.
-  // baru saja diturunkan dari owner ke karyawan oleh pemilik lain) — Navbar
+  // baru saja diturunkan dari owner ke karyawan oleh pemilik lain, atau tab
+  // tersimpan dari lib/tabStorage.ts milik role/business sebelumnya) — Navbar
   // sendiri sudah menyembunyikan tab-nya, ini cuma jaga-jaga isi <main>.
+  // role===null (masih dimuat, lihat useBusiness.ts) sengaja TIDAK memicu
+  // reset -- mencegah tab tersimpan yang sah (mis. 'riwayat' milik owner)
+  // sempat "kelihatan" di-reset ke Kalender sekejap pas mount, sebelum role
+  // sungguhan sempat termuat.
   useEffect(() => {
     if (
       (tab === 'tim' || tab === 'riwayat' || tab === 'etalase-online' || tab === 'toko-online' || tab === 'langganan') &&
@@ -176,14 +187,30 @@ function App() {
       role !== 'owner'
     ) {
       setTab('kalender');
+      return;
+    }
+    // Tab Toko Online disembunyikan lewat SHOW_TOKO_ONLINE_TAB (Navbar.tsx)
+    // independen dari role -- tab tersimpan dari sebelum flag ini dimatikan
+    // (atau sesi dev lama) tidak boleh tetap terbuka.
+    if (tab === 'toko-online' && !SHOW_TOKO_ONLINE_TAB) {
+      setTab('kalender');
+      return;
     }
     // Admin bisa diturunkan dari app_admins sewaktu-waktu — kalau sedang
-    // di tab Alat Admin dan statusnya sudah dipastikan bukan admin,
-    // jangan diam-diam ditinggal di tab yang isinya sudah tidak relevan.
-    if (tab === 'admin' && !isAppAdmin) {
+    // di tab Alat Admin dan statusnya sudah DIPASTIKAN bukan admin (tunggu
+    // isAppAdminLoading selesai dulu -- isAppAdmin mulai sebagai false
+    // selama loading, lihat useIsAppAdmin.ts, jadi tanpa menunggu ini admin
+    // yang refresh di tab 'admin' akan sempat terlempar ke Kalender).
+    if (tab === 'admin' && !isAppAdminLoading && !isAppAdmin) {
       setTab('kalender');
     }
-  }, [tab, role, isAppAdmin]);
+  }, [tab, role, isAppAdmin, isAppAdminLoading]);
+
+  // Simpan tab aktif supaya refresh di tab/jendela yang sama membuka menu
+  // yang sama lagi (bukan selalu kembali ke Kalender) -- lihat lib/tabStorage.ts.
+  useEffect(() => {
+    saveActiveTab(tab);
+  }, [tab]);
 
   // Klik notifikasi push (sw.js) — service worker tidak bisa langsung
   // mengubah state React, jadi mengirim postMessage ke tab yang sedang

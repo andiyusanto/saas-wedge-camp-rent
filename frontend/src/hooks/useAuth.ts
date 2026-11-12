@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
+import { clearActiveTab } from '../lib/tabStorage';
 
 export function useAuth() {
   const [session, setSession] = useState<Session | null>(null);
@@ -26,6 +27,12 @@ export function useAuth() {
       // langsung masuk ke app dengan sesi itu.
       if (event === 'PASSWORD_RECOVERY') {
         setIsPasswordRecovery(true);
+      }
+      // Tab terakhir (lib/tabStorage.ts) sengaja TIDAK ikut ke sesi login
+      // berikutnya di device yang sama (mis. owner lupa logout, staf lain
+      // login) -- login ulang selalu mulai dari Kalender.
+      if (event === 'SIGNED_OUT') {
+        clearActiveTab();
       }
     });
 
