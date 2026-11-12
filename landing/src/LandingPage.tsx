@@ -69,6 +69,11 @@ const FAQ_ITEMS: { question: string; answer: string }[] = [
     answer:
       'Bisa. Menu Riwayat Transaksi (khusus akun pemilik) menampilkan jumlah transaksi, uang yang sudah diterima, dan piutang untuk rentang tanggal yang kamu pilih. Ada juga tombol Unduh Excel yang menghasilkan file berisi daftar transaksi (denda telat dan kerusakan dipisah), ringkasan, dan pendapatan per alat.',
   },
+  {
+    question: 'Apakah Sewalog tetap cepat kalau transaksinya sudah ribuan?',
+    answer:
+      'Sudah kami uji dengan 5.000 transaksi dan 600 unit alat dalam satu rental. Kalender ketersediaan tetap terbuka dalam waktu kurang dari 2 detik, dan rekap setahun penuh tetap lengkap tanpa ada transaksi yang terlewat.',
+  },
 ];
 
 // Klip video singkat yang relevan untuk FAQ tertentu, key harus sama persis
