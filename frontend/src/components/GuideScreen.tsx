@@ -880,7 +880,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
             <br />
             Tips (khusus pemilik): ekspor <SectionLink id="g-riwayat">Riwayat</SectionLink> ke Excel sebulan sekali dan simpan di HP atau Google Drive-mu sendiri sebagai cadangan pribadi.
             <br />
-            Kalau Sewalog sedang tidak bisa dibuka, catat transaksi sementara di kertas atau WA, lalu masukkan lagi setelah normal. Kabari kami lewat{' '}
+            Kalau Sewalog sedang tidak bisa dibuka, kabari kami lewat{' '}
             <a
               href={getWhatsAppShareUrl(SEWALOG_SUPPORT_WHATSAPP, 'Halo, saya mau laporan Sewalog sedang tidak bisa dibuka.')}
               target="_blank"
