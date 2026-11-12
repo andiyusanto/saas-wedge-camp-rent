@@ -9,6 +9,9 @@ export type AdminBusinessRow = {
   plan: string | null;
   status: 'aktif' | 'tenggang' | 'hanya-baca';
   signed_up_at: string;
+  // Harga Pendiri (migration 060) — lihat lib/subscriptionConfig.ts.
+  founder_override: boolean | null;
+  founder_price_until: string | null;
 };
 
 // RPC admin_list_businesses (migration 045) — satu-satunya jalur lintas-

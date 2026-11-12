@@ -37,34 +37,51 @@ export const PERIOD_DAYS: Record<BillingPeriod, number> = {
   yearly: 365,
 };
 
-// Vendor yang daftar sebelum tanggal ini berhak harga Pendiri — tapi
-// HANYA untuk masa aktif yang MULAI di tahun 2027 (lihat isFounderPricing).
+// Batas eligibility OTOMATIS pendiri (keputusan Andi 12 Nov 2026) —
+// vendor yang daftar sebelum tanggal ini LANGSUNG eligible pendiri,
+// tanpa perlu ditandai admin. Peserta wawancara yang baru daftar
+// SETELAH tanggal ini (mis. Januari 2027) tidak otomatis eligible —
+// admin menandainya manual lewat Alat Admin (`founder_override`,
+// migration 060), ditolak kalau penandaan BARU dilakukan setelah 31 Jan
+// 2027 23:59 WIB (lihat `set_founder_override` di migration itu).
 export const FOUNDER_CUTOFF_ISO = '2027-01-01T00:00:00+07:00';
 
 // Sebelum tanggal ini, app belum boleh menampilkan angka harga ATAU
 // status Pendiri sama sekali (review -c1: bisa membocorkan rencana
-// harga/skema Pendiri sebelum pengumuman resmi 9 Des 2026) — tetap
-// tampilkan kalimat "harga diumumkan sebelum 31 Desember" yang sudah
-// ada. Dibandingkan lewat Date lokal browser biasa (bukan helper
+// harga/skema Pendiri sebelum pengumuman resmi). Tetap tampilkan
+// kalimat "harga diumumkan sebelum 31 Desember" yang sudah ada.
+// Dibandingkan lewat Date lokal browser biasa (bukan helper
 // WIB-eksplisit) — disetujui -c1 2 Nov 2026: angka yang tampil di app
 // cuma display/saran, jam tangan browser yang salah tidak bisa membuat
 // pembayaran sungguhan lebih murah karena satu-satunya jalur tulis
 // (record_subscription_payment) selalu diisi admin setelah verifikasi
-// manual transfer.
-export const PRICING_ANNOUNCE_AT_ISO = '2026-12-09T00:00:00+07:00';
+// manual transfer. Tanggal diupdate 12 Nov 2026 ke embargo final 4 Des
+// 2026 (sebelumnya 9 Des, placeholder lama).
+export const PRICING_ANNOUNCE_AT_ISO = '2026-12-04T00:00:00+07:00';
 
 export function pricingAnnounced(now: Date = new Date()): boolean {
   return now.getTime() >= new Date(PRICING_ANNOUNCE_AT_ISO).getTime();
 }
 
-// `createdAt` = businesses.created_at (kapan vendor daftar). `periodStart`
-// = tanggal (YYYY-MM-DD) mulai masa aktif yang SEDANG dibayar, bukan hari
-// ini — review -c1: eligibility ditentukan oleh kapan masa aktifnya
-// MULAI, bukan kapan transaksi dicatat. Vendor Pendiri yang bayar
-// tahunan di Jan 2027 tetap dapat harga Pendiri meski masa aktifnya
-// nyambung sampai 2028.
-export function isFounderPricing(createdAt: string, periodStart: string): boolean {
-  const createdBeforeCutoff = new Date(createdAt).getTime() < new Date(FOUNDER_CUTOFF_ISO).getTime();
-  const periodStartYear = new Date(`${periodStart}T00:00:00+07:00`).getFullYear();
-  return createdBeforeCutoff && periodStartYear === 2027;
+// Eligibility pendiri: `founderOverride` non-null (ditandai/dibatalkan
+// manual admin, migration 060) SELALU menang atas aturan otomatis.
+// `founderOverride === null` (belum pernah disentuh admin) jatuh balik
+// ke aturan otomatis: `createdAt` (businesses.created_at) sebelum
+// FOUNDER_CUTOFF_ISO.
+export function isFounderEligible(createdAt: string, founderOverride: boolean | null): boolean {
+  if (founderOverride !== null) return founderOverride;
+  return new Date(createdAt).getTime() < new Date(FOUNDER_CUTOFF_ISO).getTime();
+}
+
+// Masa berlaku harga pendiri: `founderPriceUntil` (subscriptions.
+// founder_price_until, migration 060) diisi OTOMATIS oleh
+// record_subscription_payment() saat pembayaran PERTAMA (12 bulan dari
+// tanggal mulai periode itu) — null berarti belum pernah bayar sama
+// sekali, tetap tampilkan harga pendiri sebagai SARAN pembayaran
+// pertama. `periodStart` = tanggal mulai masa aktif yang SEDANG
+// dibayar/disarankan (YYYY-MM-DD), bukan hari ini.
+export function isFounderPricing(eligible: boolean, founderPriceUntil: string | null, periodStart: string): boolean {
+  if (!eligible) return false;
+  if (founderPriceUntil === null) return true;
+  return periodStart <= founderPriceUntil;
 }

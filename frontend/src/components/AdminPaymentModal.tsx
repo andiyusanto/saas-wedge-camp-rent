@@ -2,7 +2,14 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import type { AdminBusinessRow } from '../hooks/useAdminBusinesses';
-import { PRICING, PERIOD_DAYS, pricingAnnounced, isFounderPricing, type BillingPeriod } from '../lib/subscriptionConfig';
+import {
+  PRICING,
+  PERIOD_DAYS,
+  pricingAnnounced,
+  isFounderEligible,
+  isFounderPricing,
+  type BillingPeriod,
+} from '../lib/subscriptionConfig';
 import { todayStr, addDaysStr } from '../utils/formatters';
 
 const PERIOD_LABEL: Record<BillingPeriod, string> = { monthly: 'Bulanan (30 hari)', yearly: 'Tahunan (365 hari)' };
@@ -31,7 +38,8 @@ export function AdminPaymentModal({
   const today = todayStr();
   const periodStart =
     business.active_until && business.active_until > today ? addDaysStr(business.active_until, 1) : today;
-  const founder = announced && isFounderPricing(business.signed_up_at, periodStart);
+  const founderEligible = isFounderEligible(business.signed_up_at, business.founder_override);
+  const founder = announced && isFounderPricing(founderEligible, business.founder_price_until, periodStart);
 
   function applySuggestion(period: BillingPeriod) {
     setAmount(String(PRICING[founder ? 'founder' : 'normal'][period]));

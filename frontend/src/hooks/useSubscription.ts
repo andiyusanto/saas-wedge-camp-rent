@@ -14,6 +14,10 @@ export type Subscription = {
   // satu sumber kebenaran — review -c1: jangan duplikasi aturan
   // tenggang 7 hari di JS).
   daysUntilActiveUntil: number;
+  // Harga Pendiri (migration 060) — lihat lib/subscriptionConfig.ts
+  // isFounderEligible()/isFounderPricing().
+  founderOverride: boolean | null;
+  founderPriceUntil: string | null;
 };
 
 // todayStr() ala frontend/src/utils/formatters.ts — waktu LOKAL BROWSER
@@ -41,7 +45,11 @@ export function useSubscription(businessId: string | null) {
       setLoading(true);
 
       const [{ data: subRow }, { data: writable }] = await Promise.all([
-        supabase.from('subscriptions').select('plan, active_until').eq('business_id', businessId).maybeSingle(),
+        supabase
+          .from('subscriptions')
+          .select('plan, active_until, founder_override, founder_price_until')
+          .eq('business_id', businessId)
+          .maybeSingle(),
         supabase.rpc('business_is_writable', { p_business_id: businessId }),
       ]);
 
@@ -62,7 +70,15 @@ export function useSubscription(businessId: string | null) {
       else if (diffDays < 0) status = 'tenggang';
       else status = 'aktif';
 
-      setSubscription({ plan: subRow?.plan ?? null, activeUntil, writable: isWritable, status, daysUntilActiveUntil: diffDays });
+      setSubscription({
+        plan: subRow?.plan ?? null,
+        activeUntil,
+        writable: isWritable,
+        status,
+        daysUntilActiveUntil: diffDays,
+        founderOverride: subRow?.founder_override ?? null,
+        founderPriceUntil: subRow?.founder_price_until ?? null,
+      });
       setLoading(false);
     }
 

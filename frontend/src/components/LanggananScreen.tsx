@@ -8,6 +8,7 @@ import {
   SUBSCRIPTION_CONFIG,
   PRICING,
   pricingAnnounced,
+  isFounderEligible,
   isFounderPricing,
   type BillingPeriod,
 } from '../lib/subscriptionConfig';
@@ -38,10 +39,10 @@ const METHOD_LABEL: Record<string, string> = {
 // pembayaran, tombol konfirmasi via WA, dan riwayat pembayaran (baca-saja,
 // satu-satunya jalur tulis adalah RPC admin record_subscription_payment).
 // Harga final sudah diputuskan (Rp49rb/bulan, Rp490rb/tahun, harga Pendiri
-// Rp39rb/Rp390rb untuk vendor daftar sebelum 2027 — berlaku sepanjang 2027
-// saja, lihat lib/subscriptionConfig.ts) tapi TIDAK BOLEH ditampilkan sama
-// sekali (angka ATAU status Pendiri) sebelum PRICING_ANNOUNCE_AT_ISO (9
-// Des 2026) — keputusan -c1, supaya tidak membocorkan skema sebelum
+// Rp39rb/Rp390rb berlaku 12 bulan dari pembayaran pertama — lihat
+// lib/subscriptionConfig.ts & migration 060) tapi TIDAK BOLEH ditampilkan
+// sama sekali (angka ATAU status Pendiri) sebelum PRICING_ANNOUNCE_AT_ISO
+// (4 Des 2026) — keputusan -c1, supaya tidak membocorkan skema sebelum
 // pengumuman resmi. Sebelum itu tetap tampilkan teks "harga diumumkan".
 export function LanggananScreen({
   businessId,
@@ -74,7 +75,8 @@ export function LanggananScreen({
   // bukan hari ini (review -c1).
   const today = todayStr();
   const periodStart = subscription && subscription.activeUntil > today ? addDaysStr(subscription.activeUntil, 1) : today;
-  const isFounder = announced && isFounderPricing(businessCreatedAt, periodStart);
+  const founderEligible = isFounderEligible(businessCreatedAt, subscription?.founderOverride ?? null);
+  const isFounder = announced && isFounderPricing(founderEligible, subscription?.founderPriceUntil ?? null, periodStart);
   const price = announced ? PRICING[isFounder ? 'founder' : 'normal'][period] : null;
 
   const waUrl = getWhatsAppShareUrl(
@@ -151,7 +153,9 @@ export function LanggananScreen({
               </p>
               {isFounder && (
                 <p className="text-xs text-[#6E6853] mt-0.5">
-                  Berlaku sepanjang 2027, mulai 2028 {formatIDR(PRICING.normal[period])}/{period === 'monthly' ? 'bulan' : 'tahun'}.
+                  {subscription?.founderPriceUntil
+                    ? `Berlaku sampai ${formatDateIndo(subscription.founderPriceUntil)}, setelah itu ${formatIDR(PRICING.normal[period])}/${period === 'monthly' ? 'bulan' : 'tahun'}.`
+                    : 'Berlaku 12 bulan sejak pembayaran pertama.'}
                 </p>
               )}
             </div>

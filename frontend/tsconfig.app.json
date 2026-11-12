@@ -22,5 +22,11 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // Test di src/lib/__tests__ dijalankan lewat tsx (npm test), BUKAN
+  // dikompilasi lewat tsc -b/build produksi -- dikecualikan di sini,
+  // pola sama backend/tsconfig.json (insiden 10 Nov 2026: test pakai
+  // node:test/node:assert, tipe Node yang sengaja tidak di-include di
+  // tsconfig frontend yang pakai DOM lib untuk kode app).
+  "exclude": ["src/**/__tests__"]
 }

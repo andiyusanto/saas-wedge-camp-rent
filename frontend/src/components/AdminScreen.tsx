@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Search, ShieldCheck, Wallet } from 'lucide-react';
+import { Search, ShieldCheck, Wallet, Star } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { useAdminBusinesses } from '../hooks/useAdminBusinesses';
 import type { AdminBusinessRow } from '../hooks/useAdminBusinesses';
 import { AdminPaymentModal } from './AdminPaymentModal';
 import { formatDateIndo } from '../utils/formatters';
-import { FOUNDER_CUTOFF_ISO } from '../lib/subscriptionConfig';
+import { FOUNDER_CUTOFF_ISO, isFounderEligible } from '../lib/subscriptionConfig';
 
 // Paket final (keputusan Andi 3 Nov 2026) — ganti nama lama "Trial"/
 // "Dasar" yang tidak pernah jadi harga sungguhan (lihat subscriptionConfig.ts:
@@ -61,6 +61,7 @@ export function AdminScreen() {
   const [query, setQuery] = useState('');
   const [paymentTarget, setPaymentTarget] = useState<AdminBusinessRow | null>(null);
   const [planSavingId, setPlanSavingId] = useState<string | null>(null);
+  const [founderSavingId, setFounderSavingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   async function handlePlanChange(businessId: string, plan: string) {
@@ -69,6 +70,46 @@ export function AdminScreen() {
     setActionError(null);
     const { error: err } = await supabase.rpc('set_subscription_plan', { p_business_id: businessId, p_plan: plan });
     setPlanSavingId(null);
+    if (err) {
+      setActionError(err.message);
+      return;
+    }
+    search(query);
+  }
+
+  // Tandai/batalkan status Pendiri manual (migration 060) — untuk
+  // peserta wawancara yang baru daftar di bulan Januari (tidak lolos
+  // aturan otomatis created_at < FOUNDER_CUTOFF_ISO). p_clear mengembalikan
+  // ke otomatis; menandai BARU (p_override=true, p_clear=false) ditolak
+  // server-side kalau sudah lewat 31 Jan 2027.
+  async function handleFounderOverride(businessId: string, override: boolean, clear: boolean) {
+    if (!supabase) return;
+    setFounderSavingId(businessId);
+    setActionError(null);
+    const { error: err } = await supabase.rpc('set_founder_override', {
+      p_business_id: businessId,
+      p_override: override,
+      p_clear: clear,
+    });
+    setFounderSavingId(null);
+    if (err) {
+      setActionError(err.message);
+      return;
+    }
+    search(query);
+  }
+
+  // Override manual founder_price_until — kasus khusus (mis. koreksi
+  // tanggal), admin isi langsung tanggalnya.
+  async function handleFounderPriceUntilChange(businessId: string, until: string) {
+    if (!supabase) return;
+    setFounderSavingId(businessId);
+    setActionError(null);
+    const { error: err } = await supabase.rpc('set_founder_price_until', {
+      p_business_id: businessId,
+      p_until: until || null,
+    });
+    setFounderSavingId(null);
     if (err) {
       setActionError(err.message);
       return;
@@ -144,6 +185,49 @@ export function AdminScreen() {
               <p className="text-xs text-[#6E6853]">
                 Aktif sampai {row.active_until ? formatDateIndo(row.active_until) : '-'} · sejak {formatDateIndo(row.signed_up_at.slice(0, 10))}
               </p>
+              {/* Harga Pendiri (migration 060) — badge eligibility + kontrol
+                  override manual admin, dan tanggal masa berlaku kalau sudah
+                  pernah bayar (null = belum, masih saran pembayaran pertama). */}
+              <div className="flex items-center gap-2 flex-wrap mt-1">
+                {isFounderEligible(row.signed_up_at, row.founder_override) && (
+                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border bg-[#2B4739]/10 text-[#2B4739] border-[#2B4739]/30 flex items-center gap-1">
+                    <Star className="w-3 h-3" />
+                    Pendiri{row.founder_override === true && ' (manual)'}
+                  </span>
+                )}
+                <button
+                  disabled={founderSavingId === row.business_id}
+                  onClick={() =>
+                    handleFounderOverride(
+                      row.business_id,
+                      !isFounderEligible(row.signed_up_at, row.founder_override),
+                      false,
+                    )
+                  }
+                  className="text-[10px] font-semibold px-2 py-0.5 rounded-full border border-[#DBD5C1] text-[#6E6853] hover:bg-[#F1EEE2] transition disabled:opacity-50"
+                >
+                  {isFounderEligible(row.signed_up_at, row.founder_override) ? 'Batalkan Pendiri' : 'Tandai Pendiri'}
+                </button>
+                {row.founder_override !== null && (
+                  <button
+                    disabled={founderSavingId === row.business_id}
+                    onClick={() => handleFounderOverride(row.business_id, false, true)}
+                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full border border-[#DBD5C1] text-[#6E6853] hover:bg-[#F1EEE2] transition disabled:opacity-50"
+                  >
+                    Kembalikan ke otomatis
+                  </button>
+                )}
+                <label className="text-[10px] text-[#6E6853] flex items-center gap-1">
+                  Berlaku s/d
+                  <input
+                    type="date"
+                    defaultValue={row.founder_price_until ?? ''}
+                    disabled={founderSavingId === row.business_id}
+                    onBlur={(e) => handleFounderPriceUntilChange(row.business_id, e.target.value)}
+                    className="px-1.5 py-0.5 rounded border border-[#DBD5C1] text-[10px]"
+                  />
+                </label>
+              </div>
             </div>
 
             {/* shrink-0 lama diganti flex-wrap — select+tombol dulu
