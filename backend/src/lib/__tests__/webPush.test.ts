@@ -14,7 +14,7 @@ test('buildNewOrderPayload: format dd-mm, tanpa nomor WA/harga/alamat', () => {
     endDate: '2026-11-18',
   });
 
-  assert.equal(payload.title, 'Pesanan baru dari Etalase');
+  assert.equal(payload.title, 'Pesanan baru dari Etalase Online');
   assert.equal(payload.body, 'Budi Santoso · 3 alat · 15-11 → 18-11');
   assert.doesNotMatch(payload.body, /\d{8,}/); // tidak ada nomor telepon
   assert.doesNotMatch(payload.body, /rp|rupiah/i); // tidak ada harga

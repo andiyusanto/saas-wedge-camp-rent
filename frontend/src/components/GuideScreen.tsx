@@ -760,7 +760,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         id="g-notifikasi"
         num="8c"
         title="Notifikasi Pesanan Online"
-        kicker="Diberi tahu di perangkatmu sendiri begitu ada pesanan baru dari Etalase, walau Sewalog tidak sedang dibuka."
+        kicker="Diberi tahu di perangkatmu sendiri begitu ada pesanan baru dari Etalase Online, walau Sewalog tidak sedang dibuka."
       >
         <p>
           Kartu <Ui>Notifikasi Pesanan Online</Ui> ada di tab <Ui>Transaksi Aktif</Ui>, di dekat bagian "Pesanan

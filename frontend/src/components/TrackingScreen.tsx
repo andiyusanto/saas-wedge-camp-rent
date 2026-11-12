@@ -648,8 +648,8 @@ function PushNotificationCard({
           <p className="font-bold text-[#26302B] text-sm">Notifikasi Pesanan Online</p>
           <p className="text-xs text-[#6E6853]">
             {push.subscribed
-              ? 'Aktif di perangkat ini — pemberitahuan muncul saat ada pesanan baru dari Etalase.'
-              : 'Dapat pemberitahuan di perangkat ini saat ada pesanan baru dari Etalase, walau Sewalog tidak dibuka.'}
+              ? 'Aktif di perangkat ini — pemberitahuan muncul saat ada pesanan baru dari Etalase Online.'
+              : 'Dapat pemberitahuan di perangkat ini saat ada pesanan baru dari Etalase Online, walau Sewalog tidak dibuka.'}
           </p>
         </div>
         {push.subscribed ? (

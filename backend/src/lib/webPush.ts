@@ -51,7 +51,7 @@ export function buildNewOrderPayload(params: {
 }): NewOrderPushPayload {
   return {
     type: 'new_booking_request',
-    title: 'Pesanan baru dari Etalase',
+    title: 'Pesanan baru dari Etalase Online',
     body: `${params.customerName} · ${params.itemCount} alat · ${ddmm(params.startDate)} → ${ddmm(params.endDate)}`,
   };
 }
