@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Calendar, ShieldAlert, Package, Plus, LogOut, Users, BookOpen, Store, History, Globe, ShieldCheck, CreditCard } from 'lucide-react';
 import { ScrollableRow } from './ScrollableRow';
 import { InstallAppButton } from './InstallAppButton';
@@ -80,6 +81,48 @@ export function Navbar({
   const visibleTabs = TABS.filter(
     (t) => (!t.ownerOnly || role === 'owner') && (!t.adminOnly || isAppAdmin) && (t.id !== 'toko-online' || SHOW_TOKO_ONLINE_TAB),
   );
+
+  // Bug lanjutan dari tab-persist (lib/tabStorage.ts, dilaporkan Andi 12 Nov
+  // 2026): sorotan activeTab sudah benar tapi baris tab bisa tergulir di
+  // posisi lama (mis. paling kiri/Kalender) kalau tab yang dipulihkan ada di
+  // sebelah kanan (Panduan, Riwayat, dst) -- pengguna tidak melihat tombol
+  // aktifnya sama sekali. Digulir manual lewat scrollContainerRef.scrollTo
+  // (BUKAN scrollIntoView) supaya tidak ikut menggulir window secara
+  // vertikal -- cuma kontainer horizontal ScrollableRow yang bergerak.
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const buttonRefs = useRef(new Map<Tab, HTMLButtonElement>());
+  // Tab SEBELUMNYA (bukan cuma flag "pertama kali") -- role/isAppAdmin
+  // (dan karenanya visibleTabs) baru selesai dimuat SETELAH mount, jadi
+  // efek ini bisa jalan beberapa kali untuk activeTab yang SAMA begitu
+  // daftar tab owner-only muncul belakangan dan posisi tombol bergeser.
+  // Kalau activeTab-nya sama dengan run sebelumnya (bukan user mengklik
+  // tab baru), itu cuma koreksi posisi akibat layout yang baru stabil --
+  // tetap 'auto' supaya tidak kelihatan "meloncat" sendiri tanpa sebab.
+  const prevActiveTabRef = useRef<Tab | null>(null);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    const button = buttonRefs.current.get(activeTab);
+    if (!container || !button) return;
+    // getBoundingClientRect(), BUKAN button.offsetLeft -- header (Navbar.tsx)
+    // punya `sticky top-0` yang membuatnya jadi offsetParent tombol ini
+    // (posisinya jadi dihitung relatif ke seluruh header, bukan ke
+    // kontainer gulir ini), bikin perhitungan target salah total (ditemukan
+    // lewat Playwright: tombol aktif tetap tidak terlihat penuh meski target
+    // dihitung, lihat knowladge/review-tab-refresh-2026-11/).
+    const containerRect = container.getBoundingClientRect();
+    const buttonRect = button.getBoundingClientRect();
+    const buttonOffsetWithinContainer = buttonRect.left - containerRect.left + container.scrollLeft;
+    const target = buttonOffsetWithinContainer - (container.clientWidth - button.clientWidth) / 2;
+    const clamped = Math.max(0, Math.min(target, container.scrollWidth - container.clientWidth));
+    const isTabChangedByUser = prevActiveTabRef.current !== null && prevActiveTabRef.current !== activeTab;
+    container.scrollTo({ left: clamped, behavior: isTabChangedByUser ? 'smooth' : 'auto' });
+    prevActiveTabRef.current = activeTab;
+    // visibleTabs.length sengaja ikut dipantau -- role/isAppAdmin baru
+    // final belakangan (lihat komentar di atas), membuat tombol owner-
+    // only muncul/hilang dan menggeser posisi tombol yang lain.
+  }, [activeTab, role, isAppAdmin, visibleTabs.length]);
+
   return (
     <header className="sticky top-0 z-30 bg-[#2B4739] text-white shadow-md border-b border-[#1E3429]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -129,10 +172,14 @@ export function Navbar({
 
       <div className="bg-[#1E3429] border-t border-[#3A5C4A]/50">
         <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 py-2">
-          <ScrollableRow variant="dark">
+          <ScrollableRow variant="dark" ref={scrollContainerRef}>
             {visibleTabs.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
+                ref={(el) => {
+                  if (el) buttonRefs.current.set(id, el);
+                  else buttonRefs.current.delete(id);
+                }}
                 onClick={() => setActiveTab(id)}
                 className={`relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap shrink-0 transition ${
                   activeTab === id
