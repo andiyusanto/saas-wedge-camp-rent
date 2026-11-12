@@ -35,6 +35,16 @@ test('bulan ke-13 setelah pembayaran pertama -> normal (lewat founder_price_unti
   assert.equal(isFounderPricing(true, founderPriceUntil, '2028-02-01'), false);
 });
 
+test('periodStart tepat = periodStart pembayaran pertama + 12 bulan -> SUDAH normal (inklusif hari terakhir bulan ke-12)', () => {
+  // periodStart pembayaran pertama 2027-01-10 -> founder_price_until
+  // 2028-01-09 (migration 060: period_start + 12 bulan - 1 hari).
+  // periodStart 2028-01-10 (persis setahun kemudian) harus SUDAH lewat
+  // founder_price_until, bukan masih pendiri.
+  const founderPriceUntil = '2028-01-09';
+  assert.equal(isFounderPricing(true, founderPriceUntil, '2028-01-10'), false);
+  assert.equal(isFounderPricing(true, founderPriceUntil, '2028-01-09'), true);
+});
+
 test('jeda di dalam 12 bulan -> tetap pendiri (founder_price_until tidak berubah oleh jeda)', () => {
   const founderPriceUntil = '2028-01-09';
   // periodStart pembayaran kedua mundur karena sempat jeda/telat, tapi

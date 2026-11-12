@@ -158,8 +158,13 @@ begin
     select created_at into biz_created_at from businesses where id = p_business_id;
     is_founder_now := coalesce(sub_row.founder_override, biz_created_at < timestamptz '2027-01-01 00:00:00+07');
     if is_founder_now then
+      -- Inklusif: hari TERAKHIR bulan ke-12, bukan hari pertama bulan
+      -- ke-13 (periodStart 2027-01-10 -> founder_price_until 2028-01-09,
+      -- bukan 2028-01-10) -- isFounderPricing() di frontend memakai
+      -- `periodStart <= founder_price_until`, jadi pembayaran yang
+      -- periodStart-nya persis setahun kemudian harus SUDAH normal.
       update subscriptions
-      set founder_price_until = (period_start_date + interval '12 months')::date
+      set founder_price_until = (period_start_date + interval '12 months' - interval '1 day')::date
       where business_id = p_business_id;
     end if;
   end if;
@@ -177,7 +182,13 @@ grant execute on function record_subscription_payment(uuid, numeric, int, text, 
 -- admin_list_businesses — tambah founder_override, founder_price_until
 -- --------------------------------------------------------------
 -- create or replace ulang persis isi migration 045, nambah 2 kolom
--- return — logika pencarian/dedupe/status lama TIDAK diubah.
+-- return — logika pencarian/dedupe/status lama TIDAK diubah. DROP dulu
+-- -- Postgres menolak `create or replace` yang mengubah daftar kolom
+-- return table ("cannot change return type of existing function"), jadi
+-- tanpa drop ini migration akan GAGAL DI TENGAH JALAN (semua statement
+-- sebelumnya di atas sudah committed per-statement, cuma bagian ini yang
+-- gagal) kalau dijalankan langsung tanpa drop dulu.
+drop function if exists admin_list_businesses(text);
 create or replace function admin_list_businesses(p_query text default null)
 returns table (
   business_id       uuid,
