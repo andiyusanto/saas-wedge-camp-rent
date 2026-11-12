@@ -875,6 +875,21 @@ export function GuideScreen({ businessName }: { businessName: string }) {
             Sewalog untuk detail lengkap soal data yang disimpan dan cara kami memperlakukannya.
           </li>
           <li><strong>Wilayah</strong>: bisa dipakai rental di seluruh Indonesia (WIB, WITA, dan WIT — atur zona waktu di Kelola Usaha).</li>
+          <li>
+            <strong>Keamanan &amp; keandalan data</strong> — datamu disimpan di server cloud di luar Indonesia (Asia Tenggara), terenkripsi, dan terpisah per rental. Rental lain tidak bisa melihat datamu.
+            <br />
+            Tips (khusus pemilik): ekspor <SectionLink id="g-riwayat">Riwayat</SectionLink> ke Excel sebulan sekali dan simpan di HP atau Google Drive-mu sendiri sebagai cadangan pribadi.
+            <br />
+            Kalau Sewalog sedang tidak bisa dibuka, catat transaksi sementara di kertas atau WA, lalu masukkan lagi setelah normal. Kabari kami lewat{' '}
+            <a
+              href={getWhatsAppShareUrl(SEWALOG_SUPPORT_WHATSAPP, 'Halo, saya mau laporan Sewalog sedang tidak bisa dibuka.')}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-[#2B4739]"
+            >
+              WhatsApp 0896-4945-4000
+            </a>.
+          </li>
         </ul>
       </Section>
 
