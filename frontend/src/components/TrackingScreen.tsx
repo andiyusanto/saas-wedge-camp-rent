@@ -6,7 +6,11 @@ import { usePushNotifications } from '../hooks/usePushNotifications';
 import { useInstallPrompt } from '../hooks/useInstallPrompt';
 import type { BookingRequest } from '../hooks/useBookingRequests';
 import { NewBookingModal } from './NewBookingModal';
-import { apiFetch } from '../lib/api';
+import { apiFetch, API_BASE_URL } from '../lib/api';
+
+// Sama persis pola TOKO_BASE_URL di EtalaseOnlineScreen.tsx -- VITE_TOKO_PUBLIC_BASE_URL
+// HARUS konsisten dengan TOKO_PUBLIC_HOST di backend (lib/publicUrls.ts).
+const TOKO_BASE_URL = import.meta.env.VITE_TOKO_PUBLIC_BASE_URL ?? `${API_BASE_URL}/toko`;
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import {
   ShieldAlert,
@@ -74,6 +78,7 @@ export function TrackingScreen({
     bookings,
     toleranceHours,
     rescheduleDeadlineDays,
+    publicPageSlug,
     loading,
     error,
     refresh,
@@ -203,8 +208,15 @@ export function TrackingScreen({
     refreshPendingRequests();
   }
 
+  // Brief 12 Nov 2026: halaman status sekarang satu jalur di bawah Etalase
+  // (toko.sewalog.com/{slug}/pesanan/{token}). publicPageSlug null untuk
+  // karyawan di business tanpa Etalase disetel (RPC get_public_page_slug,
+  // migration 059, tetap mengembalikan null kalau Etalase memang belum
+  // pernah dibuat) -- jatuh balik ke format lama, tetap benar lewat
+  // redirect 301 di backend (routes/etalase.ts).
   function buildStatusLink(token: string) {
-    return `${import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001'}/pesanan/${token}`;
+    if (publicPageSlug) return `${TOKO_BASE_URL}/${publicPageSlug}/pesanan/${token}`;
+    return `${API_BASE_URL}/pesanan/${token}`;
   }
 
   async function handleRejectSubmit() {

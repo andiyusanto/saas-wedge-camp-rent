@@ -12,6 +12,7 @@ function pad2(n: number): string {
 }
 import { buildWhatsAppUrl } from '../lib/whatsapp.js';
 import { getShareCard, shareCardHash, type ShareCardInput } from '../lib/shareCard.js';
+import { TOKO_PUBLIC_HOST, resolveTokoPageUrl, resolveStatusPageUrl } from '../lib/publicUrls.js';
 
 const router = Router();
 
@@ -82,15 +83,8 @@ function formatIDR(amount: number): string {
 // Static Site) — render HTML string on-demand di sini per request selalu
 // mencerminkan data ter-update, dan tetap memenuhi syarat OG-tanpa-JS
 // karena responsenya HTML mentah biasa, bukan hasil client-side render.
-// TOKO_PUBLIC_HOST = hostname custom domain (mis. "toko.sewalog.com") yang
-// dihubungkan ke Web Service backend ini di Render, KHUSUS buat Etalase
-// Online — supaya link yang dibagikan vendor ke pelanggannya berbentuk
-// "toko.sewalog.com/{slug}", bukan "api.sewalog.com/toko/{slug}" (subdomain
-// "api" salah kesan buat halaman yang justru dilihat pelanggan, bukan
-// dipanggil programatik). SATU Web Service Express yang sama tetap
-// menjawab kedua domain (bisa dua Custom Domain sekaligus di Render), jadi
-// dibedakan lewat host, bukan proses/deploy terpisah.
-const TOKO_PUBLIC_HOST = process.env.TOKO_PUBLIC_HOST;
+// TOKO_PUBLIC_HOST sekarang diimpor dari lib/publicUrls.ts (dipakai bareng
+// routes/trackings.ts) -- lihat komentar di sana.
 
 async function handleTokoRequest(req: import('express').Request, res: import('express').Response, slug: string) {
   const supabase = createAnonClient();
@@ -321,12 +315,35 @@ type BookingRequestStatus = {
 // gambar QRIS di halaman ini sendiri, jangan sampai mesin pencari
 // mengindeksnya, dan jangan sampai browser men-cache versi lama (status
 // berubah tiap vendor konfirmasi/tolak).
-router.get('/pesanan/:token', async (req, res) => {
+// handleStatusRequest -- satu handler dipakai oleh TIGA rute (brief 12 Nov
+// 2026, pindah URL halaman status pesanan ke bawah Etalase rental itu
+// sendiri): jalur lama /pesanan/:token (requestedSlug=null, SELALU
+// redirect 301 ke bentuk baru kalau slug-nya diketahui -- link yang sudah
+// terkirim lewat WA sebelum perubahan ini tetap jalan), jalur fallback
+// /toko/:slug/pesanan/:token, dan jalur utama /:slug/pesanan/:token
+// (digerbangi TOKO_PUBLIC_HOST, lihat rute di bawah).
+//
+// Validasi slug<->token (poin keamanan brief): token TETAP satu-satunya
+// kunci akses -- dicek PALING AWAL, sebelum apa pun soal slug, supaya
+// "token salah" dan "token benar tapi slug salah" menghasilkan respons
+// yang SAMA SEKALI tidak bisa dibedakan nondeterministically dari luar.
+// Kalau token valid tapi requestedSlug beda dari slug pemilik token
+// (termasuk vendor yang sudah ganti slug-nya setelah link ini dibagikan),
+// redirect 301 ke slug yang benar -- URL tujuan dibangun dari data.slug
+// (koreksi review koordinator 12 Nov 2026): kalau data.slug null (Etalase
+// belum/tidak lagi punya slug sama sekali) redirect DILEWATI, halaman
+// dirender langsung di URL yang diminta, supaya tidak ada redirect loop
+// atau redirect ke undefined.
+async function handleStatusRequest(
+  req: import('express').Request,
+  res: import('express').Response,
+  token: string,
+  requestedSlug: string | null,
+): Promise<void> {
   res.set('Referrer-Policy', 'no-referrer');
   res.set('Cache-Control', 'no-store');
   res.set('X-Robots-Tag', 'noindex, nofollow');
 
-  const token = req.params.token;
   const supabase = createAnonClient();
   const { data, error } = await supabase.rpc('get_booking_request_status', { p_token: token });
 
@@ -335,7 +352,47 @@ router.get('/pesanan/:token', async (req, res) => {
     return;
   }
 
-  res.type('html').send(renderStatusPage(data as BookingRequestStatus, req, token));
+  const statusData = data as BookingRequestStatus;
+  if (statusData.slug && statusData.slug !== requestedSlug) {
+    res.redirect(301, resolveStatusPageUrl(req, statusData.slug, token));
+    return;
+  }
+
+  res.type('html').send(renderStatusPage(statusData, req, token));
+}
+
+// Review -c1 (tahap 3, poin 1): link ini dibagikan lewat tombol WA
+// pre-filled DAN muncul di URL bar browser pelanggan — kalau diteruskan
+// ke orang lain atau dibuka dari link WA, jangan sampai URL (yang berisi
+// token identitas pesanan) bocor lewat header Referer ke tombol WA/
+// gambar QRIS di halaman ini sendiri, jangan sampai mesin pencari
+// mengindeksnya, dan jangan sampai browser men-cache versi lama (status
+// berubah tiap vendor konfirmasi/tolak). Ketiga hal ini ditegakkan di
+// handleStatusRequest() di atas, dipakai sama oleh ketiga rute di bawah.
+
+// Jalur LAMA (sebelum perubahan 12 Nov 2026) -- TETAP aktif di semua host
+// supaya link yang sudah terkirim ke pelanggan tidak rusak, tapi SELALU
+// redirect 301 ke bentuk baru begitu slug-nya diketahui.
+router.get('/pesanan/:token', async (req, res) => {
+  await handleStatusRequest(req, res, req.params.token, null);
+});
+
+// Jalur fallback dev/host lain -- sama seperti /toko/:slug untuk Etalase.
+router.get('/toko/:slug/pesanan/:token', async (req, res) => {
+  await handleStatusRequest(req, res, req.params.token, req.params.slug);
+});
+
+// Jalur publik utama produksi, satu tingkat di bawah Etalase rental itu
+// sendiri -- digerbangi host PERSIS seperti /:slug (Etalase) di atas.
+// Beda jumlah segmen dari /:slug (1 segmen) membuat dua-duanya tidak
+// pernah bentrok secara struktural di Express, termasuk kalau ada vendor
+// bernama slug "pesanan" sekalipun.
+router.get('/:slug/pesanan/:token', async (req, res, next) => {
+  if (!TOKO_PUBLIC_HOST || req.hostname !== TOKO_PUBLIC_HOST) {
+    next();
+    return;
+  }
+  await handleStatusRequest(req, res, req.params.token, req.params.slug);
 });
 
 function renderStatusNotFound(): string {
@@ -389,21 +446,19 @@ function formatDeadline(expiresAtIso: string, timezone: string | null | undefine
 // katalog publik.
 // URL halaman status ini sendiri — dipakai di teks pesan WA (migration
 // 051, poin "order code/link") supaya admin lain yang menerima pesan
-// bisa langsung klik untuk melihat detail pesanan yang sama. SENGAJA
-// tidak lewat TOKO_PUBLIC_HOST seperti resolvePageUrl() — /pesanan/:token
-// bukan bagian dari gerbang domain custom toko, selalu dijawab di host
-// manapun Express ini jalan.
-function resolveStatusPageUrl(req: import('express').Request, token: string): string {
-  const baseUrl = (process.env.PUBLIC_BASE_URL ?? `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
-  return `${baseUrl}/pesanan/${token}`;
-}
-
+// bisa langsung klik untuk melihat detail pesanan yang sama. Sejak brief
+// 12 Nov 2026, satu jalur di bawah Etalase (resolveStatusPageUrl dari
+// lib/publicUrls.ts, butuh slug) -- fallback ke bentuk lama /pesanan/
+// {token} kalau entah kenapa data.slug null (defensif, seharusnya tidak
+// pernah terjadi untuk pesanan normal).
 function renderStatusPage(data: BookingRequestStatus, req: import('express').Request, token: string): string {
   // reuse resolvePageUrl() (dipakai juga di renderPage Etalase) supaya
   // link "Lihat katalog" ini benar di kedua domain (toko.sewalog.com vs
   // /toko/{slug} fallback) — bukan hardcode "/toko/" di sini.
   const catalogUrl = data.slug ? resolvePageUrl(req, data.slug) : null;
-  const statusPageUrl = resolveStatusPageUrl(req, token);
+  const statusPageUrl = data.slug
+    ? resolveStatusPageUrl(req, data.slug, token)
+    : `${(process.env.PUBLIC_BASE_URL ?? `${req.protocol}://${req.get('host')}`).replace(/\/$/, '')}/pesanan/${token}`;
   const statusLabel: Record<BookingRequestStatus['status'], { text: string; color: string; bg: string }> = {
     menunggu: { text: 'Menunggu konfirmasi', color: '#A65C2A', bg: 'rgba(166,92,42,0.12)' },
     dikonfirmasi: { text: 'Dikonfirmasi', color: '#2B4739', bg: 'rgba(43,71,57,0.12)' },
@@ -708,22 +763,10 @@ function renderNotFound(): string {
 </html>`;
 }
 
-// Canonical/og:url SENGAJA selalu mengarah ke SATU bentuk URL (bukan ikut
-// persis bagaimana request ini datang) — kalau halaman yang sama bisa
-// diakses dari toko.sewalog.com/{slug} MAUPUN api.sewalog.com/toko/{slug}
-// (jalur dev/fallback, lihat komentar TOKO_PUBLIC_HOST di atas), canonical
-// yang ikut-ikutan berubah per request itu sendiri kontradiktif dengan
-// konsep "canonical". Kalau TOKO_PUBLIC_HOST sudah di-set (production),
-// selalu pakai bentuk toko.sewalog.com/{slug} apapun jalur yang benar-benar
-// dipakai pengunjung. Kalau belum (dev lokal, custom domain belum
-// disambungkan), fallback ke bentuk /toko/{slug} di host request saat ini.
-function resolvePageUrl(req: import('express').Request, slug: string): string {
-  if (TOKO_PUBLIC_HOST) {
-    return `https://${TOKO_PUBLIC_HOST}/${slug}`;
-  }
-  const baseUrl = (process.env.PUBLIC_BASE_URL ?? `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
-  return `${baseUrl}/toko/${slug}`;
-}
+// resolvePageUrl = alias lokal ke resolveTokoPageUrl (lib/publicUrls.ts) --
+// dipertahankan supaya pemanggilnya di bawah tidak perlu diganti semua,
+// lihat komentar lengkap soal canonical di sana.
+const resolvePageUrl = resolveTokoPageUrl;
 
 function locationLabelOf(page: PublicPageData): string {
   return [page.district_name ? `Kec. ${page.district_name}` : null, page.regency_name].filter(Boolean).join(', ');
@@ -1960,7 +2003,13 @@ document.addEventListener('keydown', function (e) {
           errorEl.style.display = 'block';
           return;
         }
-        window.location.href = '/pesanan/' + res.body.token;
+        // Brief 12 Nov 2026: halaman status sekarang satu jalur di bawah
+        // Etalase ini sendiri, bukan lagi di root. Bentuk jalur ikut
+        // halaman Etalase yang sedang dibuka (var slug sudah ada di
+        // scope luar) -- /toko/{slug}/... di jalur fallback, /{slug}/...
+        // di domain custom toko.sewalog.com.
+        var statusPathPrefix = window.location.pathname.indexOf('/toko/') === 0 ? '/toko/' + slug : '/' + slug;
+        window.location.href = statusPathPrefix + '/pesanan/' + res.body.token;
       })
       .catch(function () {
         submitBtn.disabled = false;

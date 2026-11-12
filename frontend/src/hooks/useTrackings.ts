@@ -61,6 +61,12 @@ type TrackingsResponse = {
   bookings: TrackingBooking[];
   tolerance_hours: number;
   reschedule_deadline_days: number | null;
+  // Slug Etalase business ini, null untuk karyawan (RLS public_pages cuma
+  // owner, lihat komentar di routes/trackings.ts) atau Etalase yang belum
+  // pernah disetel -- dipakai TrackingScreen.tsx membangun link status
+  // pesanan bentuk baru (brief 12 Nov 2026), fallback ke format lama kalau
+  // null.
+  public_page_slug: string | null;
 };
 
 // Dipakai bareng oleh struk WA dan Nota Sewa (cetak/PDF) — satu sumber
@@ -156,6 +162,7 @@ export function useTrackings(session: Session | null) {
     bookings: data?.bookings ?? [],
     toleranceHours: data?.tolerance_hours ?? 6,
     rescheduleDeadlineDays: data?.reschedule_deadline_days ?? null,
+    publicPageSlug: data?.public_page_slug ?? null,
     loading,
     error,
     refresh,

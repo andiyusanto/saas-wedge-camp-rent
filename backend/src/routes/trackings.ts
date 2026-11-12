@@ -80,13 +80,25 @@ router.get('/trackings', async (req, res) => {
 
   const { data: business, error: bizError } = await supabase
     .from('businesses')
-    .select('late_tolerance_hours, timezone, reschedule_deadline_days')
+    .select('id, late_tolerance_hours, timezone, reschedule_deadline_days')
     .maybeSingle();
 
   if (bizError || !business) {
     res.status(400).json({ error: bizError?.message ?? 'Business tidak ditemukan' });
     return;
   }
+
+  // Slug Etalase milik business ini -- dipakai TrackingScreen.tsx membangun
+  // link status pesanan bentuk baru (toko.sewalog.com/{slug}/pesanan/
+  // {token}, brief 12 Nov 2026). public_pages SELECT RLS (migration 019)
+  // SENGAJA cuma is_owner_of() (kolom info bayar owner-only), bukan
+  // is_member_of() -- jadi dipanggil lewat RPC get_public_page_slug()
+  // (migration 059) yang CUMA mengembalikan kolom slug, dibatasi
+  // is_member_of() (owner MAUPUN karyawan dapat), bukan query tabel
+  // langsung. null kalau Etalase belum pernah disetel -- frontend jatuh
+  // balik ke format lama /pesanan/{token}, yang tetap benar lewat
+  // redirect 301 (lihat routes/etalase.ts).
+  const { data: publicPageSlug } = await supabase.rpc('get_public_page_slug', { p_business_id: business.id });
 
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
@@ -199,6 +211,7 @@ router.get('/trackings', async (req, res) => {
   res.json({
     tolerance_hours: business.late_tolerance_hours,
     reschedule_deadline_days: business.reschedule_deadline_days,
+    public_page_slug: publicPageSlug ?? null,
     bookings: result,
   });
 });
