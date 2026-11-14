@@ -58,7 +58,7 @@ export function UbahAlatModal({
   businessLogoUrl: string | null;
   onDone: () => void;
 }) {
-  const { items } = useItems(businessId);
+  const { items, inactiveItems } = useItems(businessId);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [itemSearchQuery, setItemSearchQuery] = useState('');
   const [reason, setReason] = useState('');
@@ -74,16 +74,30 @@ export function UbahAlatModal({
   // (React "change in the order of Hooks"): saat isOpen=false, render
   // sebelumnya ini lewati useMemo sama sekali (return null duluan),
   // menggeser urutan hook antar render.
+  //
+  // Review -c2 (14 Nov 2026): daftar alat = aktif + alat NONAKTIF yang
+  // SUDAH ADA di booking ini (`booking?.items`, dioptionalchain karena
+  // `booking` bisa null di titik ini, sebelum early return di bawah) --
+  // vendor tetap bisa melihat/mengubah jumlah/menghapusnya, tapi alat
+  // nonaktif yang BELUM pernah ada di booking ini TIDAK ditawarkan
+  // sebagai pilihan tambah (server/RPC juga menegakkan ini, migration
+  // 061 -c2 -- lihat apply_booking_item_changes).
+  const pickerItems = useMemo(() => {
+    const existingIds = new Set((booking?.items ?? []).map((bi) => bi.item_id));
+    const existingInactive = inactiveItems.filter((i) => existingIds.has(i.id));
+    return [...items, ...existingInactive];
+  }, [items, inactiveItems, booking]);
+
   const filteredItems = useMemo(() => {
     const q = itemSearchQuery.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter(
+    if (!q) return pickerItems;
+    return pickerItems.filter(
       (item) =>
         item.name.toLowerCase().includes(q) ||
         (item.category ?? '').toLowerCase().includes(q) ||
         (item.variant ?? '').toLowerCase().includes(q),
     );
-  }, [items, itemSearchQuery]);
+  }, [pickerItems, itemSearchQuery]);
 
   if (!isOpen || !booking) return null;
 
@@ -255,6 +269,9 @@ export function UbahAlatModal({
                             <p className="font-bold text-[#26302B] truncate">
                               {item.name}
                               {isExisting && <span className="ml-1.5 text-[9px] font-semibold text-[#2B4739] uppercase">Sudah ada</span>}
+                              {item.deactivated_at && (
+                                <span className="ml-1.5 text-[9px] font-semibold text-[#A8412E] uppercase">Nonaktif</span>
+                              )}
                             </p>
                             <p className="text-[11px] text-[#6E6853]">
                               {!checked && <>{formatIDR(item.price_per_day)}/hr</>}

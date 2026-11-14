@@ -150,29 +150,31 @@ begin
   end if;
 
   -- Review -c1 poin 1: tiap item_id WAJIB milik business yang sama
-  -- dengan booking ini DAN masih aktif (items.deactivated_at is null,
-  -- kolom soft-delete yang sudah ada -- koreksi dari draft awal migration
-  -- ini yang sempat salah bilang items tidak punya kolom aktif/nonaktif
-  -- sama sekali), dan quantity WAJIB bilangan bulat >= 1. Diterapkan ke
-  -- SEMUA item di p_new_items, termasuk yang sebenarnya alat EXISTING
-  -- yang cuma dipertahankan tanpa perubahan -- efek sampingnya: kalau
-  -- satu alat di booking ini dinonaktifkan SETELAH dipesan, vendor jadi
-  -- tidak bisa Ubah Alat sama sekali (termasuk untuk mengubah alat LAIN
-  -- di booking yang sama) sampai alat itu dihapus dari daftar atau
-  -- diaktifkan ulang -- kasus tepi yang diketahui, didokumentasikan di
-  -- sini, bukan ditutupi diam-diam.
+  -- dengan booking ini (items.business_id), dan quantity WAJIB bilangan
+  -- bulat >= 1 -- ini berlaku untuk SEMUA item di p_new_items, tanpa
+  -- kecuali.
+  --
+  -- Review -c2 (14 Nov 2026): cek "masih aktif" (items.deactivated_at is
+  -- null) DILONGGARKAN supaya cuma berlaku untuk alat BARU (item_id yang
+  -- belum ada di booking_items booking ini SAAT INI, sebelum di-delete di
+  -- bawah) -- alat yang SUDAH ADA di booking (dipesan sebelum sempat
+  -- dinonaktifkan vendor) boleh dipertahankan atau diubah jumlahnya tanpa
+  -- terhalang. Draft -c1 sebelumnya menerapkan cek aktif ke SEMUA item
+  -- (termasuk existing tak berubah) -- itu berarti satu alat dinonaktifkan
+  -- bisa mengunci SELURUH booking lama yang memuat alat itu dari Ubah
+  -- Alat sama sekali, yang tidak masuk akal buat vendor.
   if exists (
     select 1
     from jsonb_to_recordset(p_new_items) as x(item_id uuid, quantity int)
+    left join items i on i.id = x.item_id and i.business_id = v_booking.business_id
+    left join booking_items bi_existing on bi_existing.booking_id = p_booking_id and bi_existing.item_id = x.item_id
     where x.item_id is null
        or x.quantity is null
        or x.quantity < 1
-       or not exists (
-            select 1 from items i
-            where i.id = x.item_id and i.business_id = v_booking.business_id and i.deactivated_at is null
-          )
+       or i.id is null -- tidak ditemukan, atau bukan milik business ini
+       or (bi_existing.item_id is null and i.deactivated_at is not null) -- alat BARU yang nonaktif
   ) then
-    raise exception 'apply_booking_item_changes: ada alat yang tidak valid, bukan milik usaha ini, nonaktif, atau jumlah tidak valid';
+    raise exception 'apply_booking_item_changes: ada alat yang tidak valid, bukan milik usaha ini, alat baru yang nonaktif, atau jumlah tidak valid';
   end if;
 
   -- Snapshot OLD items dari booking_items + nama items SAAT INI,
