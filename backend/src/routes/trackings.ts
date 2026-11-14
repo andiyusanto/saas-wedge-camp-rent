@@ -4,8 +4,10 @@ import { computeDueAt, hoursLate, computeLateFee, computeTieredLateFee, lateDays
 import { rentalDuration, dateRange, todayInTz, addDays } from '../lib/dates.js';
 import { logBookingStatus, logBookingReschedule, resolveActorName } from '../lib/audit.js';
 import { fetchActiveBookingItems, usedUnitsOn, marginDaysFromReadinessHours } from '../lib/availability.js';
-import { computeItemRentalPrice, computeBookingTotalPrice } from '../lib/pricing.js';
-import type { ItemDayRates } from '../lib/pricing.js';
+import { computeBookingTotalPrice, computeBookingItemSubtotal } from '../lib/pricing.js';
+import { mergeBookingItemsForUpdate } from '../lib/bookingItems.js';
+import type { ExistingBookingItemRow, CatalogItemRow } from '../lib/bookingItems.js';
+import { isBusinessWritable, SUBSCRIPTION_LOCKED_MESSAGE } from '../lib/subscription.js';
 import { isValidDateStr, validateOptionalTotalPriceAndReason } from '../lib/validation.js';
 
 const router = Router();
@@ -69,6 +71,18 @@ type RescheduleHistoryJoin = {
   changed_by_name: string;
   created_at: string;
 };
+// Riwayat Ubah Alat (migration 061, brief 14 Nov 2026) — old_items/
+// new_items sudah snapshot {item_id,name,quantity,subtotal} dari RPC
+// apply_booking_item_changes, dikirim apa adanya ke frontend.
+type ItemChangeHistoryJoin = {
+  old_items: { item_id: string; name: string; quantity: number; subtotal: number }[];
+  new_items: { item_id: string; name: string; quantity: number; subtotal: number }[];
+  old_total_price: number;
+  new_total_price: number;
+  reason: string | null;
+  changed_by_name: string;
+  created_at: string;
+};
 
 router.get('/trackings', async (req, res) => {
   if (!req.headers.authorization) {
@@ -103,7 +117,7 @@ router.get('/trackings', async (req, res) => {
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select(
-      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_key, rental_day_mode, min_rental_days, max_rental_days, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_status_history(status, changed_by_name, created_at), booking_reschedules(action, old_start_date, old_end_date, new_start_date, new_end_date, reason, past_deadline, changed_by_name, created_at)',
+      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_key, rental_day_mode, min_rental_days, max_rental_days, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_status_history(status, changed_by_name, created_at), booking_reschedules(action, old_start_date, old_end_date, new_start_date, new_end_date, reason, past_deadline, changed_by_name, created_at), booking_item_changes(old_items, new_items, old_total_price, new_total_price, reason, changed_by_name, created_at)',
     )
     .in('status', ['dipesan', 'aktif'])
     .order('end_date');
@@ -198,6 +212,11 @@ router.get('/trackings', async (req, res) => {
       // Tahap 2 (migration 055) — riwayat Ubah Jadwal/Perpanjang,
       // ditampilkan terpisah dari riwayat status (TrackingScreen.tsx).
       reschedule_history: ((b.booking_reschedules ?? []) as unknown as RescheduleHistoryJoin[])
+        .slice()
+        .sort((x, y) => x.created_at.localeCompare(y.created_at)),
+      // Ubah Alat (migration 061) — riwayat terpisah dari Ubah Jadwal,
+      // ditampilkan di TrackingScreen.tsx sendiri-sendiri.
+      item_change_history: ((b.booking_item_changes ?? []) as unknown as ItemChangeHistoryJoin[])
         .slice()
         .sort((x, y) => x.created_at.localeCompare(y.created_at)),
       total_price: b.total_price,
@@ -495,21 +514,7 @@ async function updateBookingItemSubtotals(
   newDays: number,
 ): Promise<void> {
   for (const bi of bookingItems) {
-    const newSubtotal =
-      bi.day2_rate_at_booking == null
-        ? bi.quantity * bi.price_at_booking * newDays
-        : bi.quantity *
-          computeItemRentalPrice(
-            {
-              price_per_day: bi.price_at_booking,
-              day2_rate: bi.day2_rate_at_booking,
-              day3_rate: bi.day3_rate_at_booking!,
-              day4_rate: bi.day4_rate_at_booking!,
-              day5_rate: bi.day5_rate_at_booking!,
-              extra_day_rate: bi.extra_day_rate_at_booking!,
-            } satisfies ItemDayRates,
-            newDays,
-          );
+    const newSubtotal = computeBookingItemSubtotal(bi, newDays);
     await supabase.from('booking_items').update({ subtotal: newSubtotal }).eq('booking_id', bookingId).eq('item_id', bi.item_id);
   }
 }
@@ -789,6 +794,154 @@ router.patch('/bookings/:id/extend', async (req, res) => {
   }
 
   res.json({ ok: true, end_date, total_price: newTotalPrice });
+});
+
+// ------------------------------------------------------------
+// Ubah Alat (migration 061, brief 14 Nov 2026) — booking berstatus
+// 'dipesan' saja. Tanggal TIDAK berubah (beda dari Ubah Jadwal) —
+// tambah/ubah jumlah/hapus alat. Beda dari reschedule/extend di atas:
+// mutasi tabelnya (hapus+insert booking_items, update total, catat
+// riwayat) dilakukan ATOMIK lewat satu RPC (apply_booking_item_changes),
+// bukan beberapa request Supabase terpisah — brief eksplisit minta ini
+// karena mengganti ISI booking_items lebih berisiko gagal di tengah
+// jalan (bisa menyisakan booking tanpa alat) dibanding update satu
+// kolom scalar. Keputusan Andi 14 Nov 2026: SELURUH aksi ini dikunci
+// kalau business hanya-baca (business_is_writable) — beda dari
+// reschedule/extend yang TIDAK dikunci — karena mengubah isi pesanan
+// dianggap "kerja baru", bukan menyelesaikan transaksi berjalan.
+router.patch('/bookings/:id/items', async (req, res) => {
+  if (!req.headers.authorization) {
+    res.status(401).json({ error: 'Belum login' });
+    return;
+  }
+
+  const { id } = req.params;
+  const { items, total_price, reason } = req.body ?? {};
+
+  const requestedItems = items as { item_id: string; quantity: number }[] | undefined;
+  if (!Array.isArray(requestedItems) || requestedItems.length === 0) {
+    res.status(400).json({ error: 'Minimal satu alat harus tersisa.' });
+    return;
+  }
+  const inputError = validateOptionalTotalPriceAndReason(total_price, reason);
+  if (inputError) {
+    res.status(400).json({ error: inputError });
+    return;
+  }
+
+  const supabase = createRequestClient(req);
+
+  const { data: booking, error: bookingError } = await supabase
+    .from('bookings')
+    .select(
+      'id, business_id, status, start_date, end_date, rental_day_mode, total_price, booking_items(item_id, quantity, price_at_booking, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, items(name))',
+    )
+    .eq('id', id)
+    .maybeSingle();
+
+  if (bookingError || !booking) {
+    res.status(404).json({ error: 'Transaksi tidak ditemukan' });
+    return;
+  }
+  if (booking.status !== 'dipesan') {
+    res.status(400).json({ error: 'Ubah Alat cuma berlaku untuk transaksi berstatus "Siap Diambil" (belum diambil).' });
+    return;
+  }
+
+  // Pesan ramah di sini (sebelum panggil RPC) — RPC sendiri MENGULANG
+  // pengecekan ini sebagai jaring pengaman (SECURITY DEFINER bypass RLS,
+  // lihat migration 061), bukan cuma andalan cek di Express ini.
+  if (!(await isBusinessWritable(supabase, booking.business_id))) {
+    res.status(403).json({ error: SUBSCRIPTION_LOCKED_MESSAGE });
+    return;
+  }
+
+  const existingItemsJoin = (booking.booking_items ?? []) as unknown as (ExistingBookingItemRow & { items: { name: string } | null })[];
+  const existingItems: ExistingBookingItemRow[] = existingItemsJoin;
+  const existingNameById = new Map(existingItemsJoin.map((e) => [e.item_id, e.items?.name ?? '']));
+
+  // Alat yang BENAR-BENAR BARU (belum pernah ada di booking ini) perlu
+  // tarif katalog SAAT INI — fetch cuma untuk item_id yang belum ada di
+  // existingItems (pola sama POST /bookings, trust katalog server-side,
+  // bukan dari klien). `name` ikut diambil di sini — dipakai bareng
+  // existingNameById di bawah untuk membangun respons `items` (nama
+  // alat), supaya frontend bisa langsung susun struk WA tanpa refetch
+  // terpisah (pola sama RescheduleModal.tsx, yang membangun struk dari
+  // field hasil PATCH langsung).
+  const existingIds = new Set(existingItems.map((e) => e.item_id));
+  const newItemIds = requestedItems.map((r) => r.item_id).filter((itemId) => !existingIds.has(itemId));
+  const { data: catalogRows } =
+    newItemIds.length > 0
+      ? await supabase
+          .from('items')
+          .select('id, name, price_per_day, day2_rate, day3_rate, day4_rate, day5_rate, extra_day_rate')
+          .in('id', newItemIds)
+          .is('deactivated_at', null)
+      : { data: [] as (CatalogItemRow & { name: string })[] };
+  const newNameById = new Map((catalogRows ?? []).map((c) => [c.id, c.name]));
+
+  const days = rentalDuration(booking.start_date, booking.end_date, booking.rental_day_mode);
+  const merged = mergeBookingItemsForUpdate(requestedItems, existingItems, (catalogRows ?? []) as CatalogItemRow[], days);
+  if (!merged.ok) {
+    res.status(400).json({ error: merged.error });
+    return;
+  }
+
+  // Stok di tanggal booking INI (tidak berubah) — excludeBookingId
+  // mengecualikan booking ini sendiri dari hitungan stoknya sendiri,
+  // reuse checkStockForNewDates yang sudah ada untuk Ubah Jadwal/Perpanjang.
+  const stockError = await checkStockForNewDates(
+    supabase,
+    booking.business_id,
+    id,
+    booking.start_date,
+    booking.end_date,
+    requestedItems,
+  );
+  if (stockError) {
+    res.status(409).json({ error: stockError });
+    return;
+  }
+
+  const newTotalPrice = total_price != null ? Number(total_price) : merged.items.reduce((sum, it) => sum + it.subtotal, 0);
+
+  const { data: actorData } = await supabase.auth.getUser();
+  if (!actorData.user) {
+    res.status(401).json({ error: 'Sesi tidak valid' });
+    return;
+  }
+  const actorEmail = actorData.user.email ?? actorData.user.id;
+  const actorName = await resolveActorName(supabase, booking.business_id, actorData.user.id, actorEmail);
+
+  const { error: rpcError } = await supabase.rpc('apply_booking_item_changes', {
+    p_booking_id: id,
+    p_new_items: merged.items,
+    p_new_total_price: newTotalPrice,
+    p_reason: String(reason ?? '').trim() || null,
+    p_changed_by_name: actorName,
+  });
+
+  if (rpcError) {
+    res.status(400).json({ error: rpcError.message });
+    return;
+  }
+
+  // items ikut dikembalikan (bukan cuma total_price) -- bentuknya SAMA
+  // PERSIS TrackingBooking.items (useTrackings.ts), supaya frontend bisa
+  // langsung susun struk WA dari respons ini tanpa refetch GET /trackings
+  // terpisah (pola sama RescheduleModal.tsx membangun struk langsung
+  // dari field hasil PATCH /bookings/:id/reschedule).
+  res.json({
+    ok: true,
+    total_price: newTotalPrice,
+    items: merged.items.map((it) => ({
+      item_id: it.item_id,
+      name: existingNameById.get(it.item_id) ?? newNameById.get(it.item_id) ?? '',
+      quantity: it.quantity,
+      price_per_day: it.price_at_booking,
+      subtotal: it.subtotal,
+    })),
+  });
 });
 
 export default router;

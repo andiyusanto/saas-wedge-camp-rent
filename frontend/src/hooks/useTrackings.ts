@@ -47,6 +47,17 @@ export type TrackingBooking = {
     changed_by_name: string;
     created_at: string;
   }[];
+  // Riwayat Ubah Alat (migration 061, brief 14 Nov 2026) — terpisah dari
+  // reschedule_history, ditampilkan sendiri-sendiri di TrackingScreen.tsx.
+  item_change_history: {
+    old_items: { item_id: string; name: string; quantity: number; subtotal: number }[];
+    new_items: { item_id: string; name: string; quantity: number; subtotal: number }[];
+    old_total_price: number;
+    new_total_price: number;
+    reason: string | null;
+    changed_by_name: string;
+    created_at: string;
+  }[];
   total_price: number;
   dp_paid: number;
   // Snapshot (migration 049) — mode saat booking ini DIBUAT, null untuk
@@ -158,6 +169,28 @@ export function useTrackings(session: Session | null) {
     }
   }
 
+  // Ubah Alat (migration 061, brief 14 Nov 2026) — booking 'dipesan'
+  // saja, tanggal tidak berubah. `items` kembali dari respons (bentuk
+  // sama TrackingBooking.items) supaya pemanggil (UbahAlatModal.tsx)
+  // bisa langsung susun struk WA tanpa refetch terpisah, pola sama
+  // rescheduleBooking/extendBooking di atas.
+  async function updateBookingItems(
+    bookingId: string,
+    body: { items: { item_id: string; quantity: number }[]; total_price?: number; reason?: string },
+  ) {
+    if (!session) return { error: 'Belum login', data: null };
+    try {
+      const result = await apiFetch<{
+        total_price: number;
+        items: { item_id: string; name: string; quantity: number; price_per_day: number; subtotal: number }[];
+      }>(session, `/api/bookings/${bookingId}/items`, { method: 'PATCH', body: JSON.stringify(body) });
+      await refresh();
+      return { error: null, data: result };
+    } catch (err) {
+      return { error: (err as Error).message, data: null };
+    }
+  }
+
   return {
     bookings: data?.bookings ?? [],
     toleranceHours: data?.tolerance_hours ?? 6,
@@ -170,5 +203,6 @@ export function useTrackings(session: Session | null) {
     pickupBooking,
     rescheduleBooking,
     extendBooking,
+    updateBookingItems,
   };
 }

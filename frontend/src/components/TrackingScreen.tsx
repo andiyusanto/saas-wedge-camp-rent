@@ -30,12 +30,14 @@ import {
   Printer,
   CalendarClock,
   Loader2,
+  Wrench,
 } from 'lucide-react';
 import { useTrackings, buildReceiptData } from '../hooks/useTrackings';
 import type { TrackingBooking } from '../hooks/useTrackings';
 import { ReturnModal } from './ReturnModal';
 import { AddFineModal } from './AddFineModal';
 import { RescheduleModal } from './RescheduleModal';
+import { UbahAlatModal } from './UbahAlatModal';
 import { ConfirmModal } from './ConfirmModal';
 import { InvoiceModal } from './InvoiceModal';
 import { ScrollableRow } from './ScrollableRow';
@@ -86,6 +88,7 @@ export function TrackingScreen({
     pickupBooking,
     rescheduleBooking,
     extendBooking,
+    updateBookingItems,
   } = useTrackings(session);
   const {
     requests: pendingRequests,
@@ -102,6 +105,7 @@ export function TrackingScreen({
   const [returnTarget, setReturnTarget] = useState<TrackingBooking | null>(null);
   const [fineTarget, setFineTarget] = useState<TrackingBooking | null>(null);
   const [rescheduleTarget, setRescheduleTarget] = useState<{ booking: TrackingBooking; mode: 'ubah_jadwal' | 'perpanjang' } | null>(null);
+  const [ubahAlatTarget, setUbahAlatTarget] = useState<TrackingBooking | null>(null);
   // Rencana tahap 4, bagian "Pesanan masuk" — alur Konfirmasi.
   const [confirmPrefillTarget, setConfirmPrefillTarget] = useState<BookingRequest | null>(null);
   const [confirmPrecheckError, setConfirmPrecheckError] = useState<string | null>(null);
@@ -452,11 +456,27 @@ export function TrackingScreen({
               onReturn={() => setReturnTarget(b)}
               onCancel={() => setCancelTarget(b)}
               onReschedule={() => setRescheduleTarget({ booking: b, mode: b.is_pending_pickup ? 'ubah_jadwal' : 'perpanjang' })}
+              onUbahAlat={() => setUbahAlatTarget(b)}
               rescheduleDeadlineDays={rescheduleDeadlineDays}
             />
           ))
         )}
       </div>
+
+      <UbahAlatModal
+        isOpen={ubahAlatTarget !== null}
+        onClose={() => setUbahAlatTarget(null)}
+        booking={ubahAlatTarget}
+        businessId={business.id}
+        updateBookingItems={updateBookingItems}
+        businessName={businessName}
+        businessAddress={businessAddress}
+        businessLogoUrl={businessLogoUrl}
+        onDone={() => {
+          setUbahAlatTarget(null);
+          refresh();
+        }}
+      />
 
       <RescheduleModal
         isOpen={rescheduleTarget !== null}
@@ -763,6 +783,7 @@ function BookingCard({
   onReturn,
   onCancel,
   onReschedule,
+  onUbahAlat,
   rescheduleDeadlineDays,
 }: {
   session: Session;
@@ -774,6 +795,7 @@ function BookingCard({
   onReturn: () => void;
   onCancel: () => void;
   onReschedule: () => void;
+  onUbahAlat: () => void;
   rescheduleDeadlineDays: number | null;
 }) {
   const lateFines = b.penalties.filter((p) => p.type === 'keterlambatan');
@@ -970,6 +992,28 @@ function BookingCard({
         </div>
       )}
 
+      {b.item_change_history.length > 0 && (
+        <div className="pt-3 mt-3 border-t border-[#E6E1D2]">
+          <p className="flex items-center gap-1.5 text-[11px] font-bold text-[#6E6853] mb-2">
+            <Wrench className="w-3.5 h-3.5" />
+            <span>Riwayat Ubah Alat ({b.item_change_history.length})</span>
+          </p>
+          <ol className="space-y-1.5">
+            {b.item_change_history.map((h, idx) => (
+              <li key={idx} className="text-[11px] text-[#26302B] bg-[#F1EEE2] border border-[#DBD5C1] rounded-lg p-2">
+                <strong>Sebelum</strong>: {h.old_items.map((it) => `${it.name} ×${it.quantity}`).join(', ') || '(tidak ada)'}{' '}
+                ({formatIDR(h.old_total_price)})
+                <br />
+                <strong>Sesudah</strong>: {h.new_items.map((it) => `${it.name} ×${it.quantity}`).join(', ') || '(tidak ada)'}{' '}
+                ({formatIDR(h.new_total_price)})
+                <span className="text-[#6E6853]"> · oleh {h.changed_by_name} · {formatDateTimeIndo(h.created_at)}</span>
+                {h.reason && <p className="text-[#6E6853] italic mt-0.5">Alasan: {h.reason}</p>}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center justify-between pt-3 mt-3 border-t border-[#E6E1D2] gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -1026,6 +1070,16 @@ function BookingCard({
             <CalendarClock className="w-3.5 h-3.5 text-[#2B4739]" />
             {b.is_pending_pickup ? 'Ubah Jadwal' : 'Perpanjang'}
           </button>
+
+          {b.is_pending_pickup && (
+            <button
+              onClick={onUbahAlat}
+              className="px-3 py-1.5 rounded-lg bg-white border border-[#DBD5C1] hover:bg-[#F1EEE2] text-[#26302B] text-xs font-bold transition flex items-center gap-1"
+            >
+              <Wrench className="w-3.5 h-3.5 text-[#2B4739]" />
+              Ubah Alat
+            </button>
+          )}
 
           <button
             onClick={onCancel}

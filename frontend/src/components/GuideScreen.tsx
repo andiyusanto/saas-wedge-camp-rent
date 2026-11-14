@@ -341,6 +341,15 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           Semua perubahan tercatat di <Ui>Riwayat Perubahan Jadwal</Ui> di kartu transaksi, lengkap dengan siapa,
           kapan, dan alasannya — lalu ada tombol <Ui>Kirim Jadwal Baru via WA</Ui> untuk kabari pelanggan.
         </Note>
+        <p className="font-bold text-xs mt-2">Ubah Alat</p>
+        <p>
+          Tombol <Ui>Ubah Alat</Ui> (transaksi <Ui>Siap Diambil</Ui> saja — tanggal tidak ikut berubah di sini)
+          untuk menambah, mengurangi jumlah, atau menghapus alat sebelum barang diambil. Alat yang sudah ada tetap
+          pakai harga saat transaksi dibuat, alat baru pakai harga katalog sekarang, dan stok dicek ulang otomatis.
+          Minimal satu alat harus tersisa — kalau mau membatalkan seluruh pesanan, pakai tombol <Ui>Batalkan</Ui>.
+          Semua perubahan tercatat di <Ui>Riwayat Ubah Alat</Ui>, lalu ada tombol{' '}
+          <Ui>Kirim Rincian Baru via WA</Ui> untuk kabari pelanggan.
+        </p>
         <Note>
           Tombol <Ui>Cetak Nota</Ui> di tiap kartu transaksi membuka versi nota yang bisa langsung dicetak atau
           disimpan sebagai PDF lewat dialog print browser (pilih tujuan "Simpan sebagai PDF") — tidak perlu aplikasi

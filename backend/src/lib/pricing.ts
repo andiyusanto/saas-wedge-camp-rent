@@ -56,18 +56,26 @@ export type BookingItemRatesSnapshot = {
 };
 
 export function computeBookingTotalPrice(items: BookingItemRatesSnapshot[], days: number): number {
-  return items.reduce((sum, bi) => {
-    if (bi.day2_rate_at_booking == null) {
-      return sum + bi.quantity * bi.price_at_booking * days;
-    }
-    const rates: ItemDayRates = {
-      price_per_day: bi.price_at_booking,
-      day2_rate: bi.day2_rate_at_booking,
-      day3_rate: bi.day3_rate_at_booking!,
-      day4_rate: bi.day4_rate_at_booking!,
-      day5_rate: bi.day5_rate_at_booking!,
-      extra_day_rate: bi.extra_day_rate_at_booking!,
-    };
-    return sum + bi.quantity * computeItemRentalPrice(rates, days);
-  }, 0);
+  return items.reduce((sum, bi) => sum + computeBookingItemSubtotal(bi, days), 0);
+}
+
+// Subtotal SATU baris booking_items untuk N hari — diekstrak dari
+// computeBookingTotalPrice() (Tahap 2, migration 055) supaya tidak ada
+// dua tempat yang menduplikasi rumus "day2_rate_at_booking null ->
+// fallback flat" yang sama. Dipakai `updateBookingItemSubtotals`
+// (Ubah Jadwal/Perpanjang, routes/trackings.ts) dan `mergeBookingItemsForUpdate`
+// (Ubah Alat, lib/bookingItems.ts, brief 14 Nov 2026).
+export function computeBookingItemSubtotal(item: BookingItemRatesSnapshot, days: number): number {
+  if (item.day2_rate_at_booking == null) {
+    return item.quantity * item.price_at_booking * days;
+  }
+  const rates: ItemDayRates = {
+    price_per_day: item.price_at_booking,
+    day2_rate: item.day2_rate_at_booking,
+    day3_rate: item.day3_rate_at_booking!,
+    day4_rate: item.day4_rate_at_booking!,
+    day5_rate: item.day5_rate_at_booking!,
+    extra_day_rate: item.extra_day_rate_at_booking!,
+  };
+  return item.quantity * computeItemRentalPrice(rates, days);
 }
