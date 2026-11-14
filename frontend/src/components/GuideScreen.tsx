@@ -287,10 +287,20 @@ export function GuideScreen({ businessName }: { businessName: string }) {
 
       <Section id="g-transaksi-aktif" num="3" title="Transaksi Aktif" kicker="Daftar transaksi aktif — status pengambilan barang, jaminan yang ditahan, dan dua jenis denda dipisah eksplisit.">
         <p>Empat kartu ringkasan di atas: Sewa Terlambat, Jaminan Ditahan, Sedang Disewa, dan Tunggakan Denda. Bisa difilter per status transaksi di bawahnya.</p>
+        <Note>
+          Jaminan untuk transaksi <Ui>Siap Diambil</Ui> belum sungguhan diterima (barang+identitas belum diserahkan)
+          — tampil netral "Rencana saat ambil", BUKAN "Ditahan", dan TIDAK ikut dihitung di kartu{' '}
+          <Ui>Jaminan Ditahan</Ui>. Baru berubah jadi "Ditahan" setelah dikonfirmasi lewat dialog saat{' '}
+          <Ui>Tandai Barang Diambil</Ui> ditekan.
+        </Note>
         <p className="font-bold text-xs mt-2">Alur satu transaksi</p>
         <Steps
           items={[
-            <>Saat pelanggan mengambil barang: tekan <Ui>Tandai Barang Diambil</Ui>.</>,
+            <>
+              Saat pelanggan mengambil barang: tekan <Ui>Tandai Barang Diambil</Ui> — muncul dialog pengingat
+              jaminan, wajib dicentang sebelum lanjut (bisa ganti jenis jaminan kalau pelanggan bawa yang beda, mis.
+              SIM bukan KTP, atau pilih jaminan kalau transaksinya belum punya sama sekali).
+            </>,
             <>Saat barang dikembalikan: tekan <Ui>Kembalikan</Ui> — kalkulator denda keterlambatan otomatis menyarankan nominal sesuai tanggal jatuh tempo, dan jaminan bisa langsung dilepas dari layar yang sama.</>,
             <>Kalau ada kerusakan/kehilangan alat: tekan <Ui>Tambah Denda</Ui> kapan saja sebelum transaksi selesai — dipisah dari denda keterlambatan, karena keduanya bisa muncul bersamaan dalam satu transaksi.</>,
           ]}
@@ -373,6 +383,11 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           Memilih pelanggan lama dari daftar saran menautkan transaksi baru ke data pelanggan yang sama (bukan bikin
           baris baru) — muncul catatan kecil "Pernah sewa Nx" sebagai konfirmasi. Kalau salah satu field diedit manual
           setelah memilih, pilihan itu otomatis dilepas dan dianggap pelanggan baru saat disimpan.
+        </Note>
+        <Note>
+          Untuk transaksi yang langsung <Ui>Sedang Disewa</Ui> (ambil hari ini, bukan dipesan dulu) dan tidak pilih
+          jaminan sama sekali — muncul kotak centang tambahan "Konfirmasi: tidak ada jaminan untuk transaksi ini",
+          wajib dicentang sebelum bisa disimpan, supaya tidak kelupaan tanpa sadar.
         </Note>
         <Note>
           Catatan Identitas Jaminan (opsional) cukup jenis &amp; nama saja, mis. "KTP a.n. Budi" — JANGAN tulis nomor
@@ -764,7 +779,10 @@ export function GuideScreen({ businessName }: { businessName: string }) {
 
         <p className="font-bold text-[#26302B] text-sm pt-1">Syarat &amp; Ketentuan sewa</p>
         <p>
-          Kalau diisi, pelanggan WAJIB centang setuju sebelum bisa kirim pesanan — teksnya juga muncul di halaman
+          Kalau diisi, pelanggan WAJIB centang setuju sebelum bisa kirim pesanan — kotak centangnya di formulir
+          pelanggan HANYA muncul kalau Syarat &amp; Ketentuan sudah diisi. Kalau Pesanan Online aktif tapi belum
+          diisi sama sekali, muncul pengingat oranye "Belum ada Syarat &amp; Ketentuan..." di kartu ini dengan
+          tombol <Ui>Isi sekarang</Ui> yang langsung menggulir ke bagian ini. Teksnya juga muncul di halaman
           Etalase (bagian "Syarat Sewa", terlihat siapa saja meski Pesanan Online sedang mati) supaya calon penyewa
           bisa baca duluan sebelum datang. Tiap kali kamu ubah teksnya, Sewalog menyimpan <strong>versi mana yang
           disetujui pelanggan saat itu</strong> sebagai bukti — kalau nanti kamu edit lagi teksnya, pesanan-pesanan
@@ -817,8 +835,10 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           />
           <Note>
             Kartu <Ui>Notifikasi Pesanan Online</Ui> otomatis menampilkan salah satu petunjuk di atas yang paling
-            sesuai begitu izin ditolak, lengkap dengan tautan balik ke sini. Setelah diizinkan lewat pengaturan,
-            kembali ke tab <Ui>Transaksi Aktif</Ui> dan tekan <Ui>Aktifkan</Ui> lagi.
+            sesuai begitu izin ditolak, lengkap dengan tautan balik ke sini. Selama izinnya masih diblokir, menekan{' '}
+            <Ui>Coba Lagi</Ui> cuma menampilkan pesan "Masih diblokir..." (browser tidak bisa menanyakan ulang izin
+            yang sudah ditolak) — begitu diizinkan lewat pengaturan dan kamu kembali ke Sewalog, status diperbarui
+            OTOMATIS (tidak perlu muat ulang halaman) dan tombol <Ui>Aktifkan</Ui> muncul lagi.
           </Note>
         </div>
       </Section>

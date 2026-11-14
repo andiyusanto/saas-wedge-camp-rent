@@ -272,7 +272,16 @@ DP Terbayar: ${formatIDR(data.dpPaid)}
 *Sisa Pembayaran: ${formatIDR(remaining)}*
 ${
   data.depositType
-    ? `\n*JAMINAN SEWA:*\nTipe: *${depositLabel(data.depositType)}*\nCatatan Jaminan: ${data.depositNote || '-'}\nStatus Jaminan: *${data.depositStatus === 'dikembalikan' ? 'SUDAH DIKEMBALIKAN' : 'DITAHAN DI KASIR'}*`
+    ? `\n*JAMINAN SEWA:*\nTipe: *${depositLabel(data.depositType)}*\nCatatan Jaminan: ${data.depositNote || '-'}\nStatus Jaminan: *${
+        // Brief 15 Nov 2026: booking 'dipesan' belum sungguhan menerima
+        // jaminan (barang+KTP belum diserahkan) -- jangan sebut "DITAHAN"
+        // sebelum dikonfirmasi lewat dialog Ambil.
+        data.depositStatus === 'dikembalikan'
+          ? 'SUDAH DIKEMBALIKAN'
+          : data.status === 'dipesan'
+            ? 'AKAN DIMINTA SAAT AMBIL'
+            : 'DITAHAN DI KASIR'
+      }*`
     : ''
 }${finesText}${totalFines > 0 ? `\nTotal Denda: *${formatIDR(totalFines)}*` : ''}
 

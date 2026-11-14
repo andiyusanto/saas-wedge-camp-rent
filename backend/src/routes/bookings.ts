@@ -420,6 +420,7 @@ router.post('/bookings/:id/pickup', async (req, res) => {
   }
 
   const { id } = req.params;
+  const { deposit } = (req.body ?? {}) as { deposit?: { type: string; amount?: number; note?: string | null } | null };
   const supabase = createRequestClient(req);
 
   const { data: booking, error: bookingError } = await supabase
@@ -438,11 +439,61 @@ router.post('/bookings/:id/pickup', async (req, res) => {
     return;
   }
 
+  // Dialog konfirmasi jaminan saat Ambil (brief 15 Nov 2026, Bagian B) —
+  // validasi payload SEBELUM menulis apa pun, pola sama POST /bookings.
+  if (deposit?.type === 'uang' && !(Number(deposit.amount) > 0)) {
+    res.status(400).json({ error: 'Jumlah Deposit Uang wajib diisi (lebih dari 0) untuk jenis jaminan Uang.' });
+    return;
+  }
+
+  // Review -c1 poin 1: tulis/ubah jaminan DULU, baru ubah status ke
+  // 'aktif' — kalau update status di bawah gagal, transaksi tetap
+  // 'dipesan' dengan jaminan yang sudah benar tersimpan (aman diulang,
+  // staf cukup tekan Ambil lagi). Urutan terbalik (status dulu) bisa
+  // meninggalkan transaksi 'aktif' tanpa jaminan tercatat kalau tulis
+  // jaminan gagal belakangan — lebih berisiko daripada sebaliknya.
+  //
+  // Baris deposits existing (dari Catat Transaksi, "rencana" jaminan)
+  // DI-UPDATE kalau vendor ganti jenisnya di dialog — bukan insert baris
+  // baru. Booking yang belum punya jaminan sama sekali (mis. dari
+  // Pesanan Online tanpa jaminan) dapat baris baru. "Tanpa jaminan"
+  // (deposit null/tidak dikirim) kalau SUDAH ada baris existing TIDAK
+  // menghapusnya — tidak ada jalur hapus deposit di aplikasi ini sama
+  // sekali, di luar cakupan brief ini (keputusan Andi 15 Nov 2026).
+  if (deposit?.type) {
+    const { data: existingDeposit } = await supabase
+      .from('deposits')
+      .select('id')
+      .eq('booking_id', id)
+      .eq('status', 'ditahan')
+      .maybeSingle();
+
+    const depositPayload = {
+      type: deposit.type,
+      amount: deposit.type === 'uang' ? Number(deposit.amount) || 0 : null,
+      note: deposit.note ?? null,
+    };
+
+    const { error: depositError } = existingDeposit
+      ? await supabase.from('deposits').update(depositPayload).eq('id', existingDeposit.id)
+      : await supabase.from('deposits').insert({ booking_id: id, status: 'ditahan', ...depositPayload });
+
+    if (depositError) {
+      res.status(400).json({ error: depositError.message });
+      return;
+    }
+  }
+
   // Jam pengambilan sungguhan (migration 027) — sebelumnya endpoint ini
   // cuma pindah status, tidak pernah menyimpan momen ambil fisik yang
   // nyata, jadi computeDueAt() (lib/penalty.ts) terpaksa jatuh balik ke
   // created_at (jam booking DICATAT, bisa berhari-hari sebelum pengambilan
   // sungguhan untuk booking yang dipesan duluan) — celah yang ditutup di sini.
+  //
+  // TIDAK ada cek business_is_writable di sini (keputusan Andi, migration
+  // 044: pickup/return/cancel + SEMUA operasi deposits termasuk
+  // "selesaikan transaksi berjalan" yang TETAP terbuka walau akun
+  // hanya-baca) — jangan tambahkan cek writable baru di jalur ini.
   const { error: updateError } = await supabase
     .from('bookings')
     .update({ status: 'aktif', picked_up_at: new Date().toISOString() })

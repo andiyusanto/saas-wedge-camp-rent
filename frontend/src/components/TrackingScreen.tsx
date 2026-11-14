@@ -38,6 +38,7 @@ import { ReturnModal } from './ReturnModal';
 import { AddFineModal } from './AddFineModal';
 import { RescheduleModal } from './RescheduleModal';
 import { UbahAlatModal } from './UbahAlatModal';
+import { PickupConfirmModal } from './PickupConfirmModal';
 import { ConfirmModal } from './ConfirmModal';
 import { InvoiceModal } from './InvoiceModal';
 import { ScrollableRow } from './ScrollableRow';
@@ -106,6 +107,7 @@ export function TrackingScreen({
   const [fineTarget, setFineTarget] = useState<TrackingBooking | null>(null);
   const [rescheduleTarget, setRescheduleTarget] = useState<{ booking: TrackingBooking; mode: 'ubah_jadwal' | 'perpanjang' } | null>(null);
   const [ubahAlatTarget, setUbahAlatTarget] = useState<TrackingBooking | null>(null);
+  const [pickupTarget, setPickupTarget] = useState<TrackingBooking | null>(null);
   // Rencana tahap 4, bagian "Pesanan masuk" — alur Konfirmasi.
   const [confirmPrefillTarget, setConfirmPrefillTarget] = useState<BookingRequest | null>(null);
   const [confirmPrecheckError, setConfirmPrecheckError] = useState<string | null>(null);
@@ -154,7 +156,12 @@ export function TrackingScreen({
   });
 
   const totalOverdue = bookings.filter((b) => b.is_overdue).length;
-  const totalRetained = bookings.filter((b) => b.deposits.some((d) => d.status === 'ditahan')).length;
+  // Brief 15 Nov 2026 (Bondowoso, demo): jaminan booking 'dipesan' belum
+  // SUNGGUHAN diterima (barang+KTP belum diserahkan) — stat ini cuma
+  // menghitung yang SUDAH diambil (aktif/telat), bukan jaminan "rencana"
+  // dari Catat Transaksi. deposits.status TETAP 'ditahan' di DB sejak
+  // awal (tidak diubah) -- derivasi murni dari status booking di sini.
+  const totalRetained = bookings.filter((b) => !b.is_pending_pickup && b.deposits.some((d) => d.status === 'ditahan')).length;
   const totalActive = bookings.filter((b) => !b.is_pending_pickup).length;
   const totalUnpaidFines = bookings.reduce((sum, b) => sum + b.penalties.reduce((s, p) => s + p.amount, 0), 0);
 
@@ -451,7 +458,7 @@ export function TrackingScreen({
               booking={b}
               onShareWA={() => handleShareWA(b)}
               onPrintInvoice={() => handlePrintInvoice(b)}
-              onPickup={() => runAction(() => pickupBooking(b.id))}
+              onPickup={() => setPickupTarget(b)}
               onAddFine={() => setFineTarget(b)}
               onReturn={() => setReturnTarget(b)}
               onCancel={() => setCancelTarget(b)}
@@ -474,6 +481,17 @@ export function TrackingScreen({
         businessLogoUrl={businessLogoUrl}
         onDone={() => {
           setUbahAlatTarget(null);
+          refresh();
+        }}
+      />
+
+      <PickupConfirmModal
+        isOpen={pickupTarget !== null}
+        onClose={() => setPickupTarget(null)}
+        booking={pickupTarget}
+        pickupBooking={pickupBooking}
+        onDone={() => {
+          setPickupTarget(null);
           refresh();
         }}
       />
@@ -894,7 +912,15 @@ function BookingCard({
                   <ShieldCheck className="w-3.5 h-3.5 text-[#2B4739]" />
                   Jaminan ({depositLabel(activeDeposit.type)})
                 </span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#A65C2A] text-white">DITAHAN</span>
+                {/* Brief 15 Nov 2026: booking 'dipesan' belum sungguhan
+                    menerima jaminan (barang+KTP belum diserahkan) --
+                    badge netral abu, bukan "DITAHAN" oranye, sampai
+                    dikonfirmasi lewat dialog Ambil. */}
+                {b.is_pending_pickup ? (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#DBD5C1] text-[#6E6853]">RENCANA SAAT AMBIL</span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#A65C2A] text-white">DITAHAN</span>
+                )}
               </div>
               {activeDeposit.note && (
                 <p className="text-[11px] text-[#6E6853] mt-1 bg-white p-2 rounded-lg border border-[#DBD5C1]">{activeDeposit.note}</p>

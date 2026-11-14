@@ -122,10 +122,13 @@ export function useTrackings(session: Session | null) {
     pollMs: POLL_MS,
   });
 
-  async function postAction(bookingId: string, action: 'cancel' | 'pickup') {
+  async function postAction(bookingId: string, action: 'cancel' | 'pickup', body?: unknown) {
     if (!session) return { error: 'Belum login' };
     try {
-      await apiFetch(session, `/api/bookings/${bookingId}/${action}`, { method: 'POST' });
+      await apiFetch(session, `/api/bookings/${bookingId}/${action}`, {
+        method: 'POST',
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      });
       await refresh();
       return { error: null };
     } catch (err) {
@@ -134,7 +137,12 @@ export function useTrackings(session: Session | null) {
   }
 
   const cancelBooking = (bookingId: string) => postAction(bookingId, 'cancel');
-  const pickupBooking = (bookingId: string) => postAction(bookingId, 'pickup');
+  // Dialog konfirmasi jaminan saat Ambil (brief 15 Nov 2026, Bagian B) —
+  // deposit opsional: {type, amount?, note?} kalau vendor pilih/ganti
+  // jaminan di dialog, atau tidak dikirim sama sekali kalau "tanpa
+  // jaminan" (perilaku lama tetap sama, backward-compatible).
+  const pickupBooking = (bookingId: string, deposit?: { type: string; amount?: number; note?: string | null }) =>
+    postAction(bookingId, 'pickup', deposit ? { deposit } : undefined);
 
   // Ubah Jadwal (status dipesan) / Perpanjang (status aktif) — Tahap 2,
   // migration 055. Dua endpoint terpisah, lihat backend/src/routes/trackings.ts.

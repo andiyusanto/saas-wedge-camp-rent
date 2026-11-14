@@ -160,6 +160,12 @@ export function NewBookingModal({
   const [depositType, setDepositType] = useState<DepositType>('ktp');
   const [depositNote, setDepositNote] = useState('');
   const [depositAmount, setDepositAmount] = useState('');
+  // Brief 15 Nov 2026 (Bagian B, "Sewa Alat Pendakian": "sering kelupaan
+  // minta kartu jaminan ke costumer") — pendekatan PALING RINGAN: cuma
+  // muncul untuk walk-in (langsung 'aktif', jaminan sungguhan diterima
+  // SEKARANG, bukan nanti lewat dialog Ambil) DAN depositType kosong,
+  // supaya tidak menambah friksi di kasus umum (sudah pilih jaminan).
+  const [noDepositConfirmed, setNoDepositConfirmed] = useState(false);
   const [dpPaid, setDpPaid] = useState('0');
   const [autoOpenWA, setAutoOpenWA] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -328,6 +334,13 @@ export function NewBookingModal({
     // tidak bisa melewati validasi ini.
     if (depositType === 'uang' && !(Number(depositAmount) > 0)) {
       setError('Jumlah Deposit Uang wajib diisi (lebih dari 0) untuk jenis jaminan Uang.');
+      return;
+    }
+    // Brief 15 Nov 2026 Bagian B — walk-in tanpa jaminan wajib dikonfirmasi
+    // sadar, bukan cuma lupa pilih. Tidak relevan untuk booking 'dipesan'
+    // (jaminan sungguhan dikonfirmasi belakangan lewat dialog Ambil).
+    if (startDate <= todayStr() && !depositType && !noDepositConfirmed) {
+      setError('Centang konfirmasi tanpa jaminan dulu, atau pilih jenis jaminan.');
       return;
     }
 
@@ -828,6 +841,22 @@ export function NewBookingModal({
                     className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] font-bold focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
                   />
                 </div>
+              )}
+
+              {/* Brief 15 Nov 2026 Bagian B — cuma muncul untuk walk-in
+                  (langsung 'aktif') tanpa jaminan, supaya tidak menambah
+                  friksi di kasus yang sudah mengisi jaminan atau booking
+                  'dipesan' (jaminannya dikonfirmasi lewat dialog Ambil). */}
+              {startDate <= todayStr() && !depositType && (
+                <label className="sm:col-span-2 flex items-center gap-2 p-2.5 rounded-lg bg-white border border-[#DBD5C1] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={noDepositConfirmed}
+                    onChange={(e) => setNoDepositConfirmed(e.target.checked)}
+                    className="w-4 h-4 accent-[#2B4739] shrink-0"
+                  />
+                  <span className="text-xs font-bold text-[#26302B]">Konfirmasi: tidak ada jaminan untuk transaksi ini</span>
+                </label>
               )}
 
               <div>

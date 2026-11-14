@@ -130,7 +130,14 @@ export function InvoiceModal({
               <p className="font-bold mb-1">Jaminan Sewa</p>
               <p>Tipe: {depositLabel(data.depositType)}</p>
               {data.depositNote && <p>Catatan: {data.depositNote}</p>}
-              <p>Status: {data.depositStatus === 'dikembalikan' ? 'Sudah Dikembalikan' : 'Ditahan di Kasir'}</p>
+              <p>
+                Status:{' '}
+                {data.depositStatus === 'dikembalikan'
+                  ? 'Sudah Dikembalikan'
+                  : data.status === 'dipesan'
+                    ? 'Akan Diminta Saat Ambil'
+                    : 'Ditahan di Kasir'}
+              </p>
             </div>
           )}
 
