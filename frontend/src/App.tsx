@@ -168,7 +168,7 @@ function App() {
   // badge/banner tetap jalan walau belum pernah membuka tab Transaksi
   // Aktif sama sekali.
   const { pendingCount: pendingRequestCount } = useBookingRequests(business?.id ?? null);
-  const { subscription } = useSubscription(business?.id ?? null);
+  const { subscription, loading: subscriptionLoading } = useSubscription(business?.id ?? null);
   const { isAdmin: isAppAdmin, loading: isAppAdminLoading } = useIsAppAdmin(session);
   const isDemoAccount = isDemoAccountEmail(session?.user.email);
 
@@ -331,6 +331,26 @@ function App() {
     }
     return <OnboardingScreen onCreated={refreshBusiness} />;
   }
+
+  // Brief 14 Nov 2026 (CLS SubscriptionBanner, Cloudflare Web Analytics)
+  // — SubscriptionBanner di <main> di bawah return null selama
+  // `subscription` masih null (lihat SubscriptionBanner.tsx), lalu
+  // tiba-tiba render tinggi penuh begitu fetch-nya (useSubscription,
+  // selalu SETELAH business.id ada, jadi sequential bukan paralel)
+  // selesai — kalau statusnya butuh banner, itu geser semua konten tab
+  // di bawahnya (CLS). Ditutup dengan gate yang sama persis polanya
+  // dengan `businessLoading && !business` di atas (blank cuma di load
+  // AWAL sekali, bukan tiap refresh — `subscriptionLoading` dari
+  // useSubscription.ts SECARA ALAMI cuma `true` sekali di awal per
+  // businessId, tidak ada `refresh()` subscription yang dipanggil dari
+  // tempat lain). `business` di titik ini SUDAH DIPASTIKAN non-null
+  // (sudah lewat gate `!business` di atas), jadi tidak perlu diulang di
+  // sini. `!subscription` sebagai syarat tambahan (bukan cuma
+  // `subscriptionLoading`) supaya kalau businessId berubah lagi nanti
+  // (jarang, tapi tidak mustahil) dan subscription LAMA masih ada
+  // sementara yang baru sedang dimuat, app tidak blank ulang — cukup
+  // tampilkan data lama sebentar sampai yang baru siap.
+  if (subscriptionLoading && !subscription) return null;
 
   function openNewBooking(itemId?: string, startDate?: string) {
     setPreselectedItemId(itemId ?? null);

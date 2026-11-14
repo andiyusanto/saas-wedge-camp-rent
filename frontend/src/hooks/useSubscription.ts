@@ -44,42 +44,61 @@ export function useSubscription(businessId: string | null) {
       }
       setLoading(true);
 
-      const [{ data: subRow }, { data: writable }] = await Promise.all([
-        supabase
-          .from('subscriptions')
-          .select('plan, active_until, founder_override, founder_price_until')
-          .eq('business_id', businessId)
-          .maybeSingle(),
-        supabase.rpc('business_is_writable', { p_business_id: businessId }),
-      ]);
+      // App.tsx (brief 14 Nov 2026, CLS SubscriptionBanner) sekarang
+      // menahan render <main> sampai `loading` ini selesai (lihat gate
+      // di App.tsx) — try/catch/finally DI SINI jadi wajib: tanpa ini,
+      // request yang REJECT (bukan cuma balik {error}, mis. jaringan
+      // putus total) akan melempar sebelum sempat setLoading(false),
+      // bikin app blank SELAMANYA, bukan cuma sebentar. Error dari
+      // Supabase sendiri (field `error` di respons, bukan reject) SUDAH
+      // ditangani fail-safe lewat `subRow?.x ?? default`/`writable !==
+      // false` di bawah tanpa perlu dicek eksplisit di sini.
+      try {
+        const [{ data: subRow }, { data: writable }] = await Promise.all([
+          supabase
+            .from('subscriptions')
+            .select('plan, active_until, founder_override, founder_price_until')
+            .eq('business_id', businessId)
+            .maybeSingle(),
+          supabase.rpc('business_is_writable', { p_business_id: businessId }),
+        ]);
 
-      if (cancelled) return;
+        if (cancelled) return;
 
-      // Tidak ada baris (seharusnya tidak pernah terjadi setelah backfill
-      // migration 044 + trigger businesses baru, tapi RPC sendiri sudah
-      // fail-safe return true kalau ini terjadi) — tetap tampilkan
-      // 'aktif', jangan pernah diam-diam kunci.
-      const activeUntil = subRow?.active_until ?? '9999-12-31';
-      const isWritable = writable !== false;
+        // Tidak ada baris (seharusnya tidak pernah terjadi setelah backfill
+        // migration 044 + trigger businesses baru, tapi RPC sendiri sudah
+        // fail-safe return true kalau ini terjadi) — tetap tampilkan
+        // 'aktif', jangan pernah diam-diam kunci.
+        const activeUntil = subRow?.active_until ?? '9999-12-31';
+        const isWritable = writable !== false;
 
-      const activeUntilDate = new Date(`${activeUntil}T00:00:00`);
-      const diffDays = Math.round((activeUntilDate.getTime() - todayLocalDate().getTime()) / 86_400_000);
+        const activeUntilDate = new Date(`${activeUntil}T00:00:00`);
+        const diffDays = Math.round((activeUntilDate.getTime() - todayLocalDate().getTime()) / 86_400_000);
 
-      let status: SubscriptionStatus;
-      if (!isWritable) status = 'hanya-baca';
-      else if (diffDays < 0) status = 'tenggang';
-      else status = 'aktif';
+        let status: SubscriptionStatus;
+        if (!isWritable) status = 'hanya-baca';
+        else if (diffDays < 0) status = 'tenggang';
+        else status = 'aktif';
 
-      setSubscription({
-        plan: subRow?.plan ?? null,
-        activeUntil,
-        writable: isWritable,
-        status,
-        daysUntilActiveUntil: diffDays,
-        founderOverride: subRow?.founder_override ?? null,
-        founderPriceUntil: subRow?.founder_price_until ?? null,
-      });
-      setLoading(false);
+        setSubscription({
+          plan: subRow?.plan ?? null,
+          activeUntil,
+          writable: isWritable,
+          status,
+          daysUntilActiveUntil: diffDays,
+          founderOverride: subRow?.founder_override ?? null,
+          founderPriceUntil: subRow?.founder_price_until ?? null,
+        });
+      } catch {
+        // Jaringan putus total dkk — subscription tetap null (banner
+        // diam-diam tidak tampil, SubscriptionBanner sudah fail-safe
+        // untuk null), tapi App.tsx TIDAK boleh blank selamanya karena
+        // itu loading di bawah ini tetap harus jadi false.
+        if (cancelled) return;
+        setSubscription(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
 
     load();
