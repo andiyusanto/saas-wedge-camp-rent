@@ -403,6 +403,11 @@ export async function resetDemoData(): Promise<DemoResetResult> {
       // bisa mengubahnya lewat Kelola Usaha, harus direset tiap kali.
       return_deadline_time: null,
       return_deadline_next_day: false,
+      // Cara hitung denda telat (migration 063) — baku bertahap_12jam
+      // (default aplikasi), sama alasan field lain di patch ini.
+      late_fee_mode: 'bertahap_12jam',
+      late_fee_per_hour: null,
+      late_fee_per_hour_cap_enabled: true,
       logo_url: DEMO_LOGO_URL,
     }),
   });

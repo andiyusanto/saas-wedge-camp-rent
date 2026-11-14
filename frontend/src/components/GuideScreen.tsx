@@ -567,6 +567,30 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           diisi, baris "Kembali paling lambat" ikut muncul di struk WhatsApp, Nota Sewa, dan halaman Etalase
           publik/status pesanan.
         </p>
+        <p className="font-bold text-xs mt-2">Cara Hitung Denda Telat</p>
+        <p>
+          Di bawah Batas Jam Kembali — empat pilihan: <Ui>Bertahap per 12 jam</Ui> (default, sama seperti sekarang —
+          50% tarif tiap blok 12 jam), <Ui>Per hari penuh (24 jam)</Ui> (lewat toleransi 1 menit pun langsung
+          dihitung 1 hari, tanpa setengah hari), <Ui>Per jam</Ui> (nominal Rp tetap PER TRANSAKSI, bukan per alat —
+          wajib isi nominal lebih dari Rp0), dan <Ui>Tanpa denda otomatis</Ui> (saran Rp0, rincian disembunyikan).
+          Toleransi telat tetap jadi titik mulai hitung di SEMUA pilihan, dan nominal di layar <Ui>Kembalikan</Ui>{' '}
+          tetap bisa diisi manual apa pun modenya.
+        </p>
+        <Note>
+          Mode <Ui>Per jam</Ui> punya batas atas opsional (aktif default): "Batasi maksimal setara Per hari penuh" —
+          supaya telat lama tidak membengkak tanpa batas. Contoh: telat 30 jam dengan Rp10.000/jam harusnya
+          Rp300.000, tapi kalau sewa 2 hari Rp30rb/hari, batas atas memotongnya jadi Rp60.000 (setara 2 hari penuh,
+          sama seperti kalau pakai mode "Per hari penuh" untuk telat sejumlah jam yang sama).
+        </Note>
+        <Note>
+          Mode <Ui>Tanpa denda otomatis</Ui>: status "Terlambat" di kartu transaksi & kartu ringkasan berubah jadi
+          "Lewat Batas Kembali" (warna abu/oranye, bukan merah) — supaya tidak kelihatan seperti tagihan denda yang
+          memang tidak dipungut rental ini. Jumlah jam telat tetap tampil, dan filter "Terlambat" (sekarang "Belum
+          Kembali") tetap berfungsi seperti biasa.
+        </Note>
+        <p className="text-[11px] text-[#6E6853]">
+          Berlaku untuk transaksi BARU yang dicatat setelah disimpan — transaksi yang sudah ada tidak ikut berubah.
+        </p>
         <p className="font-bold text-xs mt-2">Cara Hitung Durasi Sewa</p>
         <p>
           Pengaturan ini juga ada di kartu <Ui>Info Usaha</Ui>, di bawah Toleransi telat — menentukan berapa "hari"

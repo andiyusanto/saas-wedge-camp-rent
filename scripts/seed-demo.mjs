@@ -249,6 +249,11 @@ async function main() {
       // ambil), sama pola field lain di patch ini (lihat demoReset.ts).
       return_deadline_time: null,
       return_deadline_next_day: false,
+      // Cara hitung denda telat (migration 063) — baku bertahap_12jam,
+      // sama pola field lain di patch ini (lihat demoReset.ts).
+      late_fee_mode: 'bertahap_12jam',
+      late_fee_per_hour: null,
+      late_fee_per_hour_cap_enabled: true,
       logo_url: DEMO_LOGO_URL,
     }),
   });

@@ -172,3 +172,73 @@ export function lateDaysEquivalent(hoursLateValue: number, toleranceHours: numbe
   const blocks = computeLateBlocks(hoursLateValue, toleranceHours);
   return blocks * BLOCK_RATE;
 }
+
+// ============================================================
+// Cara hitung denda telat (migration 063, brief 15 Nov 2026)
+// ============================================================
+// Empat mode per rental, snapshot per transaksi (bookings.late_fee_mode,
+// null = 'bertahap_12jam', perilaku di atas TIDAK disentuh sama sekali
+// oleh kode di bawah ini -- regresi default terjamin by construction).
+export type LateFeeMode = 'bertahap_12jam' | 'per_hari_24jam' | 'per_jam' | 'tanpa_denda';
+
+// Jumlah hari telat PENUH (dibulatkan ke ATAS per 24 jam, lewat toleransi
+// 1 menit pun sudah 1 hari, TANPA setengah hari seperti mode bertahap) --
+// dasar bagi mode "per_hari_24jam" (fee sungguhan) DAN batas atas mode
+// "per_jam" (pembanding, lihat computeFullDayLateFee/Flat di bawah).
+export function fullDayLateDays(hoursLateValue: number, toleranceHours: number): number {
+  const effectiveLateHours = hoursLateValue - toleranceHours;
+  return effectiveLateHours <= 0 ? 0 : Math.ceil(effectiveLateHours / 24);
+}
+
+// Mode "per_hari_24jam" — tarif marginal bertingkat (sama basis
+// computeItemRentalPrice seperti computeTieredLateFee), TANPA mekanisme
+// blok 12-jam/50%: tiap hari telat = 100% tarif hari itu, tidak ada
+// setengah hari.
+export function computeFullDayLateFee(
+  hoursLateValue: number,
+  toleranceHours: number,
+  rentDuration: number,
+  rates: ItemDayRates,
+): number {
+  const lateDays = fullDayLateDays(hoursLateValue, toleranceHours);
+  if (lateDays <= 0) return 0;
+  return computeItemRentalPrice(rates, rentDuration + lateDays) - computeItemRentalPrice(rates, rentDuration);
+}
+
+// Sama seperti di atas, untuk baris booking_items lama (snapshot tarif
+// bertingkat null, dari sebelum migration 034) — fallback tarif flat,
+// pola sama fallback di computeLateFee/computeTieredLateFee.
+export function computeFullDayLateFeeFlat(hoursLateValue: number, toleranceHours: number, dailyRate: number): number {
+  return fullDayLateDays(hoursLateValue, toleranceHours) * dailyRate;
+}
+
+// Mode "per_jam" — SATU angka PER TRANSAKSI (bukan per alat, keputusan
+// Andi 15 Nov 2026 v1 — "dikali jumlah alat" ditunda ke v2), dengan batas
+// atas OPSIONAL (aktif default) = PERSIS jumlah yang dihasilkan mode
+// "per hari penuh" untuk telat sejumlah jam yang sama (dihitung dari
+// `fullDayFeeTotal`, dijumlahkan tiap alat oleh pemanggil — lihat
+// routes/trackings.ts). Review -c1 poin 3: kalau `perHourRate` null/<=0
+// (seharusnya tidak pernah terjadi karena constraint businesses_late_fee_
+// per_hour_required_check di migration 063, tapi snapshot booking LAMA
+// bisa saja punya data tidak konsisten) -- DIPERLAKUKAN AMAN, balikin 0
+// dengan flag `needsManualInput` supaya caller bisa tampilkan "isi
+// manual", BUKAN melempar error.
+export function computeHourlyLateFee(
+  hoursLateValue: number,
+  toleranceHours: number,
+  perHourRate: number | null,
+  capEnabled: boolean,
+  fullDayFeeTotal: number,
+): { fee: number; hours: number; cap: number | null; capped: boolean; needsManualInput: boolean } {
+  const effectiveLateHours = Math.max(0, hoursLateValue - toleranceHours);
+  const hours = Math.ceil(effectiveLateHours);
+
+  if (perHourRate == null || perHourRate <= 0) {
+    return { fee: 0, hours, cap: null, capped: false, needsManualInput: hours > 0 };
+  }
+
+  const rawFee = hours * perHourRate;
+  const cap = capEnabled ? fullDayFeeTotal : null;
+  const fee = cap != null ? Math.min(rawFee, cap) : rawFee;
+  return { fee, hours, cap, capped: cap != null && rawFee > cap, needsManualInput: false };
+}

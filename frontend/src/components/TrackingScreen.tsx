@@ -82,6 +82,7 @@ export function TrackingScreen({
     toleranceHours,
     rescheduleDeadlineDays,
     publicPageSlug,
+    lateFeeMode,
     loading,
     error,
     refresh,
@@ -398,8 +399,17 @@ export function TrackingScreen({
         </div>
       )}
 
+      {/* Cara hitung denda telat (migration 063) -- label stat & filter
+          ikut setting LIVE business (lateFeeMode dari atas), BUKAN
+          campuran snapshot tiap transaksi (satu angka agregat tidak
+          masuk akal berubah per baris) -- keputusan koordinator 15 Nov
+          2026. Badge per kartu tetap ikut snapshot transaksi itu sendiri. */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard label="Sewa Terlambat" value={totalOverdue} color="danger" icon={AlertOctagon} sub="Perlu tindakan denda" />
+        {lateFeeMode === 'tanpa_denda' ? (
+          <StatCard label="Belum Kembali" value={totalOverdue} color="warning" icon={AlertOctagon} sub="Lewat batas kembali" />
+        ) : (
+          <StatCard label="Sewa Terlambat" value={totalOverdue} color="danger" icon={AlertOctagon} sub="Perlu tindakan denda" />
+        )}
         <StatCard label="Jaminan Ditahan" value={totalRetained} color="warning" icon={ShieldAlert} sub="KTP / SIM / STNK / Uang" />
         <StatCard label="Sedang Disewa" value={totalActive} color="primary" icon={Clock} sub="Peralatan di lapangan" />
         <StatCard label="Tunggakan Denda" value={formatIDR(totalUnpaidFines)} color="neutral" icon={DollarSign} sub="Total tercatat" isText />
@@ -410,10 +420,10 @@ export function TrackingScreen({
           <ScrollableRow className="sm:w-auto">
             <FilterButton label={`Semua (${bookings.length})`} active={statusFilter === 'all'} onClick={() => setStatusFilter('all')} />
             <FilterButton
-              label={`Terlambat (${bookings.filter((b) => b.is_overdue).length})`}
+              label={`${lateFeeMode === 'tanpa_denda' ? 'Belum Kembali' : 'Terlambat'} (${bookings.filter((b) => b.is_overdue).length})`}
               active={statusFilter === 'overdue'}
               onClick={() => setStatusFilter('overdue')}
-              tone="danger"
+              tone={lateFeeMode === 'tanpa_denda' ? 'warning' : 'danger'}
             />
             <FilterButton
               label={`Sedang Disewa (${bookings.filter((b) => !b.is_pending_pickup).length})`}
@@ -823,10 +833,23 @@ function BookingCard({
   const remaining = Math.max(0, b.total_price - b.dp_paid);
   const [showHistory, setShowHistory] = useState(false);
 
+  // Cara hitung denda telat (migration 063): mode 'tanpa_denda' DIPERHALUS
+  // (keputusan Andi 15 Nov 2026) -- status DB telat/is_overdue TETAP sama
+  // (filter "Terlambat" tetap jalan), cuma tampilannya warning (abu/oranye)
+  // bukan merah "TERLAMBAT", supaya tidak kelihatan seperti tagihan denda
+  // yang memang tidak dipungut rental ini.
+  const lateFeeDisabled = b.late_fee_mode === 'tanpa_denda';
+
   let statusBadge = (
     <span className="px-2.5 py-1 rounded-md bg-[#E8EFEA] text-[#2B4739] text-xs font-bold border border-[#2B4739]/30">Sedang Disewa</span>
   );
-  if (b.is_overdue) {
+  if (b.is_overdue && lateFeeDisabled) {
+    statusBadge = (
+      <span className="px-2.5 py-1 rounded-md bg-[#F9EFE7] text-[#A65C2A] text-xs font-extrabold border border-[#A65C2A]/40 flex items-center gap-1 w-fit">
+        <AlertOctagon className="w-3.5 h-3.5" /> LEWAT BATAS KEMBALI {b.hours_late} JAM
+      </span>
+    );
+  } else if (b.is_overdue) {
     statusBadge = (
       <span className="px-2.5 py-1 rounded-md bg-[#A8412E] text-white text-xs font-extrabold border border-[#A8412E] flex items-center gap-1 w-fit">
         <AlertOctagon className="w-3.5 h-3.5" /> TERLAMBAT {b.hours_late} JAM
@@ -839,7 +862,15 @@ function BookingCard({
   }
 
   return (
-    <div className={`bg-[#FBFAF4] rounded-2xl p-5 border shadow-xs transition ${b.is_overdue ? 'border-[#A8412E] bg-[#FAF0EE]/30' : 'border-[#DBD5C1]'}`}>
+    <div
+      className={`bg-[#FBFAF4] rounded-2xl p-5 border shadow-xs transition ${
+        b.is_overdue && lateFeeDisabled
+          ? 'border-[#A65C2A]/50 bg-[#F9EFE7]/30'
+          : b.is_overdue
+            ? 'border-[#A8412E] bg-[#FAF0EE]/30'
+            : 'border-[#DBD5C1]'
+      }`}
+    >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-[#E6E1D2] gap-2">
         <div className="flex items-center space-x-3">
           <span className="font-mono text-xs font-bold text-[#2B4739] bg-[#E8EFEA] px-2.5 py-1 rounded-md border border-[#2B4739]/20">

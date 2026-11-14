@@ -1,6 +1,17 @@
 import { Router } from 'express';
 import { createRequestClient } from '../lib/supabaseClient.js';
-import { computeDueAt, hoursLate, computeLateFee, computeTieredLateFee, lateDaysEquivalent } from '../lib/penalty.js';
+import {
+  computeDueAt,
+  hoursLate,
+  computeLateFee,
+  computeTieredLateFee,
+  lateDaysEquivalent,
+  computeFullDayLateFee,
+  computeFullDayLateFeeFlat,
+  computeHourlyLateFee,
+  fullDayLateDays,
+} from '../lib/penalty.js';
+import type { LateFeeMode } from '../lib/penalty.js';
 import { rentalDuration, dateRange, todayInTz, addDays } from '../lib/dates.js';
 import { logBookingStatus, logBookingReschedule, resolveActorName } from '../lib/audit.js';
 import { fetchActiveBookingItems, usedUnitsOn, marginDaysFromReadinessHours } from '../lib/availability.js';
@@ -32,14 +43,26 @@ type BookingItemJoin = {
 // ada cara tahu tarif bertingkat waktu transaksi itu dibuat). rentDuration
 // = jumlah hari sewa ASLI booking ini (bukan jumlah hari telat) — basis
 // "harga(durasi+telat) - harga(durasi)" di rumus marginal.
+//
+// Cara hitung denda telat (migration 063, brief 15 Nov 2026) — mode
+// dipakai HANYA untuk dua mode per-alat ('bertahap_12jam' default DAN
+// 'per_hari_24jam'); mode 'per_jam' dihitung PER TRANSAKSI terpisah
+// (computeHourlyLateFee, lihat GET /trackings di bawah), 'tanpa_denda'
+// tidak pernah memanggil fungsi ini sama sekali.
 function itemLateFee(
   bi: BookingItemJoin,
   hLate: number,
   toleranceHours: number,
   rentDuration: number,
+  mode: 'bertahap_12jam' | 'per_hari_24jam',
 ): number {
   if (bi.day2_rate_at_booking == null) {
-    return bi.quantity * computeLateFee(hLate, toleranceHours, bi.price_at_booking);
+    return (
+      bi.quantity *
+      (mode === 'per_hari_24jam'
+        ? computeFullDayLateFeeFlat(hLate, toleranceHours, bi.price_at_booking)
+        : computeLateFee(hLate, toleranceHours, bi.price_at_booking))
+    );
   }
   const rates = {
     price_per_day: bi.price_at_booking,
@@ -49,7 +72,12 @@ function itemLateFee(
     day5_rate: bi.day5_rate_at_booking!,
     extra_day_rate: bi.extra_day_rate_at_booking!,
   };
-  return bi.quantity * computeTieredLateFee(hLate, toleranceHours, rentDuration, rates);
+  return (
+    bi.quantity *
+    (mode === 'per_hari_24jam'
+      ? computeFullDayLateFee(hLate, toleranceHours, rentDuration, rates)
+      : computeTieredLateFee(hLate, toleranceHours, rentDuration, rates))
+  );
 }
 type PenaltyJoin = {
   id: string;
@@ -94,7 +122,7 @@ router.get('/trackings', async (req, res) => {
 
   const { data: business, error: bizError } = await supabase
     .from('businesses')
-    .select('id, late_tolerance_hours, timezone, reschedule_deadline_days')
+    .select('id, late_tolerance_hours, timezone, reschedule_deadline_days, late_fee_mode')
     .maybeSingle();
 
   if (bizError || !business) {
@@ -117,7 +145,7 @@ router.get('/trackings', async (req, res) => {
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select(
-      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_key, rental_day_mode, min_rental_days, max_rental_days, return_deadline_time, return_deadline_next_day, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_status_history(status, changed_by_name, created_at), booking_reschedules(action, old_start_date, old_end_date, new_start_date, new_end_date, reason, past_deadline, changed_by_name, created_at), booking_item_changes(old_items, new_items, old_total_price, new_total_price, reason, changed_by_name, created_at)',
+      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_key, rental_day_mode, min_rental_days, max_rental_days, return_deadline_time, return_deadline_next_day, late_fee_mode, late_fee_per_hour, late_fee_per_hour_cap_enabled, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_status_history(status, changed_by_name, created_at), booking_reschedules(action, old_start_date, old_end_date, new_start_date, new_end_date, reason, past_deadline, changed_by_name, created_at), booking_item_changes(old_items, new_items, old_total_price, new_total_price, reason, changed_by_name, created_at)',
     )
     .in('status', ['dipesan', 'aktif'])
     .order('end_date');
@@ -150,30 +178,73 @@ router.get('/trackings', async (req, res) => {
     );
     const hLate = isPendingPickup ? 0 : Math.max(0, hoursLate(dueAt, now));
 
-    // Per item: tiered (snapshot ada) atau flat lama (snapshot null),
-    // lihat itemLateFee() di atas. Dijumlah jadi satu saran denda, tapi
-    // rinciannya (late_fee_breakdown) dikirim juga ke frontend supaya
-    // dialog pengembalian bisa tampilkan tarif efektif per alat, bukan
-    // cuma satu angka gabungan.
-    const lateDaysDisplay = isPendingPickup ? 0 : lateDaysEquivalent(hLate, business.late_tolerance_hours);
-    const lateFeeBreakdown = isPendingPickup
-      ? []
-      : bookingItems
-          .map((bi) => ({
-            item_id: bi.item_id,
-            name: bi.items?.name ?? '',
-            fee: itemLateFee(bi, hLate, business.late_tolerance_hours, rentDuration),
-          }))
-          .filter((x) => x.fee > 0)
-          .map((x) => ({
-            ...x,
-            // Tarif efektif per hari telat, cuma buat tampilan (seperti
-            // dailyRateBreakdown Bilbo) — fee sungguhan sudah final di
-            // atas, ini cuma fee/lateDaysDisplay dibalik supaya vendor
-            // paham angkanya dari mana, bukan sumber hitungan baru.
-            per_day_rate: lateDaysDisplay > 0 ? Math.round(x.fee / lateDaysDisplay) : 0,
-          }));
-    const suggestedLateFee = isPendingPickup ? 0 : lateFeeBreakdown.reduce((sum, x) => sum + x.fee, 0);
+    // Cara hitung denda telat (migration 063, brief 15 Nov 2026) — snapshot
+    // PER TRANSAKSI (b.late_fee_mode), null = 'bertahap_12jam' (baris lama,
+    // perilaku TIDAK berubah). Empat mode:
+    const lateFeeMode: LateFeeMode = (b.late_fee_mode as LateFeeMode | null) ?? 'bertahap_12jam';
+
+    let lateDaysDisplay = 0;
+    let lateFeeBreakdown: { item_id: string; name: string; fee: number; per_day_rate: number }[] = [];
+    let suggestedLateFee = 0;
+    let lateFeeHourly: { hours: number; per_hour: number; cap: number | null; capped: boolean; needs_manual_input: boolean } | null =
+      null;
+
+    if (!isPendingPickup && lateFeeMode === 'per_jam') {
+      // SATU angka PER TRANSAKSI (bukan per alat, v1) — batas atas =
+      // jumlah fee "per hari penuh" tiap alat (computeFullDayLateFee/Flat),
+      // PERSIS yang akan dihasilkan mode per_hari_24jam untuk jam telat
+      // yang sama (lihat lib/penalty.ts computeHourlyLateFee).
+      const fullDayFeeTotal = bookingItems.reduce(
+        (sum, bi) =>
+          sum +
+          itemLateFee(bi, hLate, business.late_tolerance_hours, rentDuration, 'per_hari_24jam'),
+        0,
+      );
+      const hourly = computeHourlyLateFee(
+        hLate,
+        business.late_tolerance_hours,
+        b.late_fee_per_hour,
+        b.late_fee_per_hour_cap_enabled ?? true,
+        fullDayFeeTotal,
+      );
+      suggestedLateFee = hourly.fee;
+      lateFeeHourly = {
+        hours: hourly.hours,
+        per_hour: b.late_fee_per_hour ?? 0,
+        cap: hourly.cap,
+        capped: hourly.capped,
+        needs_manual_input: hourly.needsManualInput,
+      };
+    } else if (!isPendingPickup && lateFeeMode !== 'tanpa_denda') {
+      // 'bertahap_12jam' (default) atau 'per_hari_24jam' — per item,
+      // lihat itemLateFee() di atas. Dijumlah jadi satu saran denda, tapi
+      // rinciannya (late_fee_breakdown) dikirim juga ke frontend supaya
+      // dialog pengembalian bisa tampilkan tarif efektif per alat, bukan
+      // cuma satu angka gabungan.
+      lateDaysDisplay =
+        lateFeeMode === 'per_hari_24jam'
+          ? fullDayLateDays(hLate, business.late_tolerance_hours)
+          : lateDaysEquivalent(hLate, business.late_tolerance_hours);
+      lateFeeBreakdown = bookingItems
+        .map((bi) => ({
+          item_id: bi.item_id,
+          name: bi.items?.name ?? '',
+          fee: itemLateFee(bi, hLate, business.late_tolerance_hours, rentDuration, lateFeeMode as 'bertahap_12jam' | 'per_hari_24jam'),
+        }))
+        .filter((x) => x.fee > 0)
+        .map((x) => ({
+          ...x,
+          // Tarif efektif per hari telat, cuma buat tampilan (seperti
+          // dailyRateBreakdown Bilbo) — fee sungguhan sudah final di
+          // atas, ini cuma fee/lateDaysDisplay dibalik supaya vendor
+          // paham angkanya dari mana, bukan sumber hitungan baru.
+          per_day_rate: lateDaysDisplay > 0 ? Math.round(x.fee / lateDaysDisplay) : 0,
+        }));
+      suggestedLateFee = lateFeeBreakdown.reduce((sum, x) => sum + x.fee, 0);
+    }
+    // 'tanpa_denda' (atau is_pending_pickup): suggestedLateFee=0,
+    // lateFeeBreakdown=[], lateFeeHourly=null -- nilai awal di atas sudah
+    // tepat, tidak perlu cabang eksplisit.
 
     return {
       id: b.id,
@@ -197,6 +268,10 @@ router.get('/trackings', async (req, res) => {
       suggested_late_fee: suggestedLateFee,
       late_days_equivalent: lateDaysDisplay,
       late_fee_breakdown: lateFeeBreakdown,
+      // Snapshot (migration 063) — dipakai ReturnModal.tsx/TrackingScreen.tsx
+      // untuk tampilan mode-aware (badge "tanpa_denda" diperhalus, dsb).
+      late_fee_mode: lateFeeMode,
+      late_fee_hourly: lateFeeHourly,
       items: ((b.booking_items ?? []) as unknown as BookingItemJoin[]).map((bi) => ({
         item_id: bi.item_id,
         name: bi.items?.name ?? '',
@@ -242,6 +317,13 @@ router.get('/trackings', async (req, res) => {
     tolerance_hours: business.late_tolerance_hours,
     reschedule_deadline_days: business.reschedule_deadline_days,
     public_page_slug: publicPageSlug ?? null,
+    // Setting LIVE business (migration 063) — BUKAN snapshot per booking
+    // (itu ada di tiap baris bookings[].late_fee_mode) — dipakai
+    // TrackingScreen.tsx cuma untuk label stat "Sewa Terlambat"/tombol
+    // filter "Terlambat", keputusan koordinator 15 Nov 2026: satu angka
+    // agregat tidak masuk akal berubah-ubah per baris, jadi ikut
+    // kebijakan business SEKARANG, bukan campuran snapshot historis.
+    late_fee_mode: business.late_fee_mode,
     bookings: result,
   });
 });

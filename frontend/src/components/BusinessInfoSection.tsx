@@ -47,6 +47,15 @@ export function BusinessInfoSection({
   // (lihat handler di bawah) -- definisi lengkap di CLAUDE.md bagian 4.
   const [returnDeadlineTime, setReturnDeadlineTime] = useState(business.return_deadline_time ?? '');
   const [returnDeadlineNextDay, setReturnDeadlineNextDay] = useState(business.return_deadline_next_day ?? false);
+  // Cara hitung denda telat (migration 063) — review -c1 poin 4: nilai
+  // Rp/jam DISIMPAN APA ADANYA di state terpisah, TIDAK direset/dihapus
+  // saat owner pindah-pindah mode — cuma DIPAKAI (dikirim ke server dan
+  // divalidasi) saat lateFeeMode==='per_jam'. Supaya owner yang sempat
+  // coba mode "Per jam" lalu pindah balik tidak kehilangan angka yang
+  // sudah diketik kalau mau kembali ke mode itu lagi.
+  const [lateFeeMode, setLateFeeMode] = useState(business.late_fee_mode);
+  const [lateFeePerHour, setLateFeePerHour] = useState(business.late_fee_per_hour != null ? String(business.late_fee_per_hour) : '');
+  const [lateFeePerHourCapEnabled, setLateFeePerHourCapEnabled] = useState(business.late_fee_per_hour_cap_enabled);
   const [logoUrl, setLogoUrl] = useState(business.logo_url ?? '');
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -75,6 +84,9 @@ export function BusinessInfoSection({
     setRescheduleDeadlineDays(business.reschedule_deadline_days != null ? String(business.reschedule_deadline_days) : '');
     setReturnDeadlineTime(business.return_deadline_time ?? '');
     setReturnDeadlineNextDay(business.return_deadline_next_day ?? false);
+    setLateFeeMode(business.late_fee_mode);
+    setLateFeePerHour(business.late_fee_per_hour != null ? String(business.late_fee_per_hour) : '');
+    setLateFeePerHourCapEnabled(business.late_fee_per_hour_cap_enabled);
     setLogoUrl(business.logo_url ?? '');
   }, [business]);
 
@@ -112,6 +124,13 @@ export function BusinessInfoSection({
       setError('Minimal hari sewa tidak boleh lebih besar dari maksimal.');
       return;
     }
+    // Review -c1 poin 3: mode per_jam TANPA nominal tidak boleh tersimpan
+    // (ditegakkan juga di DB lewat constraint, ini jaring pengaman form
+    // supaya pesan errornya jelas, bukan error constraint mentah).
+    if (lateFeeMode === 'per_jam' && !(Number(lateFeePerHour) > 0)) {
+      setError('Nominal Rp/jam wajib diisi (lebih dari 0) untuk mode "Per jam".');
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
@@ -136,6 +155,13 @@ export function BusinessInfoSection({
       // di bawah, yang mengunci toggle ini begitu jam = 00:00) -- dikirim
       // apa adanya, backend/computeDueAt juga menegakkan ulang (migration 062).
       return_deadline_next_day: returnDeadlineTime ? returnDeadlineNextDay : false,
+      late_fee_mode: lateFeeMode,
+      // Review -c1 poin 4: nilai Rp/jam yang sudah diketik TETAP dikirim
+      // apa adanya walau mode SAAT INI bukan per_jam (tidak dihapus saat
+      // pindah-pindah mode) -- cuma tidak DIPAKAI untuk hitung denda
+      // selama mode bukan per_jam (lib/penalty.ts).
+      late_fee_per_hour: lateFeePerHour.trim() ? Number(lateFeePerHour) : null,
+      late_fee_per_hour_cap_enabled: lateFeePerHourCapEnabled,
     });
 
     setSubmitting(false);
@@ -323,6 +349,61 @@ export function BusinessInfoSection({
           <p className="text-[11px] text-[#6E6853]">
             Jam tetap berlaku untuk transaksi BARU yang dicatat setelah disimpan — transaksi yang sudah ada tidak
             ikut berubah. Toleransi telat di atas tetap berlaku di atas batas ini.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2 pt-2 border-t border-[#E6E1D2]">
+          <p className="text-sm font-semibold text-[#26302B]">Cara Hitung Denda Telat</p>
+          <label className="flex items-center gap-2 text-sm text-[#26302B]">
+            <input type="radio" checked={lateFeeMode === 'bertahap_12jam'} onChange={() => setLateFeeMode('bertahap_12jam')} className="accent-[#2B4739]" />
+            Bertahap per 12 jam (default — 50% tarif tiap blok 12 jam)
+          </label>
+          <label className="flex items-center gap-2 text-sm text-[#26302B]">
+            <input type="radio" checked={lateFeeMode === 'per_hari_24jam'} onChange={() => setLateFeeMode('per_hari_24jam')} className="accent-[#2B4739]" />
+            Per hari penuh (24 jam) — lewat toleransi langsung dihitung 1 hari
+          </label>
+          <label className="flex items-center gap-2 text-sm text-[#26302B]">
+            <input type="radio" checked={lateFeeMode === 'per_jam'} onChange={() => setLateFeeMode('per_jam')} className="accent-[#2B4739]" />
+            Per jam (nominal tetap per transaksi)
+          </label>
+          {lateFeeMode === 'per_jam' && (
+            <div className="pl-6 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-[#6E6853]">Rp</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={1000}
+                  value={lateFeePerHour}
+                  onChange={(e) => setLateFeePerHour(e.target.value)}
+                  placeholder="mis. 10000"
+                  className="w-32 px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] font-bold focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+                />
+                <span className="text-sm text-[#6E6853]">/jam</span>
+              </div>
+              <label className="flex items-center gap-2 text-sm text-[#26302B]">
+                <input
+                  type="checkbox"
+                  checked={lateFeePerHourCapEnabled}
+                  onChange={(e) => setLateFeePerHourCapEnabled(e.target.checked)}
+                  className="accent-[#2B4739]"
+                />
+                Batasi maksimal setara "Per hari penuh" (disarankan)
+              </label>
+              <p className="text-[11px] text-[#6E6853]">
+                Contoh: telat 30 jam dengan Rp10.000/jam = Rp300.000 mentah — tapi kalau batas aktif dan sewa 2 hari
+                Rp30rb/hari, saran denda dipotong jadi Rp60.000 (setara 2 hari penuh), tidak pernah lebih mahal dari
+                mode "Per hari penuh".
+              </p>
+            </div>
+          )}
+          <label className="flex items-center gap-2 text-sm text-[#26302B]">
+            <input type="radio" checked={lateFeeMode === 'tanpa_denda'} onChange={() => setLateFeeMode('tanpa_denda')} className="accent-[#2B4739]" />
+            Tanpa denda otomatis
+          </label>
+          <p className="text-[11px] text-[#6E6853]">
+            Berlaku untuk transaksi BARU yang dicatat setelah disimpan — transaksi yang sudah ada tidak ikut berubah.
+            Nominal denda di layar Kembalikan tetap bisa diisi manual di mode apa pun.
           </p>
         </div>
 

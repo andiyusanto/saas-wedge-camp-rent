@@ -34,6 +34,13 @@ export type Business = {
   // yang sudah dibuat punya snapshot sendiri di bookings.return_deadline_time.
   return_deadline_time: string | null;
   return_deadline_next_day: boolean;
+  // Cara hitung denda telat (migration 063) — setting LIVE, selalu ada
+  // nilai (NOT NULL di DB, beda dari Batas jam kembali yang opsional).
+  // Transaksi yang sudah dibuat punya snapshot sendiri di
+  // bookings.late_fee_mode (null di sana = 'bertahap_12jam').
+  late_fee_mode: 'bertahap_12jam' | 'per_hari_24jam' | 'per_jam' | 'tanpa_denda';
+  late_fee_per_hour: number | null;
+  late_fee_per_hour_cap_enabled: boolean;
   created_at: string;
 };
 
@@ -53,6 +60,9 @@ export type BusinessUpdateInput = {
   reschedule_deadline_days: number | null;
   return_deadline_time: string | null;
   return_deadline_next_day: boolean;
+  late_fee_mode: 'bertahap_12jam' | 'per_hari_24jam' | 'per_jam' | 'tanpa_denda';
+  late_fee_per_hour: number | null;
+  late_fee_per_hour_cap_enabled: boolean;
 };
 
 export type MemberRole = 'owner' | 'karyawan';
@@ -76,7 +86,7 @@ export function useBusiness(session: Session | null) {
     // RLS (members_select_own_business) sudah membatasi ke baris milik user ini.
     const { data, error: queryError } = await supabase
       .from('businesses')
-      .select('id, name, owner_name, phone, address, regency_id, district_id, late_tolerance_hours, logo_url, rental_day_mode, timezone, min_rental_days, max_rental_days, reschedule_deadline_days, return_deadline_time, return_deadline_next_day, created_at')
+      .select('id, name, owner_name, phone, address, regency_id, district_id, late_tolerance_hours, logo_url, rental_day_mode, timezone, min_rental_days, max_rental_days, reschedule_deadline_days, return_deadline_time, return_deadline_next_day, late_fee_mode, late_fee_per_hour, late_fee_per_hour_cap_enabled, created_at')
       .maybeSingle();
 
     // PENTING: error di sini (mis. PGRST116 "multiple rows" kalau akun ini
@@ -146,6 +156,9 @@ export function useBusiness(session: Session | null) {
         reschedule_deadline_days: input.reschedule_deadline_days,
         return_deadline_time: input.return_deadline_time,
         return_deadline_next_day: input.return_deadline_next_day,
+        late_fee_mode: input.late_fee_mode,
+        late_fee_per_hour: input.late_fee_per_hour,
+        late_fee_per_hour_cap_enabled: input.late_fee_per_hour_cap_enabled,
       })
       .eq('id', business.id);
 

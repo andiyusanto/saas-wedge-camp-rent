@@ -114,7 +114,9 @@ router.post('/bookings', async (req, res) => {
   // struk WA, denda telat bertingkat) tidak pernah ikut berubah.
   const { data: bizRow, error: bizError } = await supabase
     .from('businesses')
-    .select('rental_day_mode, timezone, min_rental_days, max_rental_days, return_deadline_time, return_deadline_next_day')
+    .select(
+      'rental_day_mode, timezone, min_rental_days, max_rental_days, return_deadline_time, return_deadline_next_day, late_fee_mode, late_fee_per_hour, late_fee_per_hour_cap_enabled',
+    )
     .eq('id', businessId)
     .maybeSingle();
 
@@ -280,6 +282,11 @@ router.post('/bookings', async (req, res) => {
         // ter-snapshot, tidak perlu jalur terpisah.
         return_deadline_time: bizRow.return_deadline_time,
         return_deadline_next_day: bizRow.return_deadline_next_day,
+        // Snapshot cara hitung denda telat (migration 063) — null =
+        // bertahap_12jam, perilaku sebelum fitur ini ada.
+        late_fee_mode: bizRow.late_fee_mode,
+        late_fee_per_hour: bizRow.late_fee_per_hour,
+        late_fee_per_hour_cap_enabled: bizRow.late_fee_per_hour_cap_enabled,
       })
       .select('id, booking_number, status')
       .single();

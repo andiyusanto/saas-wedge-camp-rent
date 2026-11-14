@@ -24,6 +24,13 @@ export type TrackingBooking = {
   suggested_late_fee: number;
   late_days_equivalent: number;
   late_fee_breakdown: { item_id: string; name: string; fee: number; per_day_rate: number }[];
+  // Cara hitung denda telat (migration 063) — SNAPSHOT transaksi ini
+  // (null di DB ditafsirkan 'bertahap_12jam' oleh backend, field ini
+  // SUDAH diresolve, tidak pernah null di respons). `late_fee_hourly`
+  // cuma terisi kalau mode === 'per_jam' (satu angka per transaksi,
+  // bukan per alat) — `late_fee_breakdown` kosong untuk mode itu.
+  late_fee_mode: 'bertahap_12jam' | 'per_hari_24jam' | 'per_jam' | 'tanpa_denda';
+  late_fee_hourly: { hours: number; per_hour: number; cap: number | null; capped: boolean; needs_manual_input: boolean } | null;
   items: { item_id: string; name: string; quantity: number; price_per_day: number; subtotal: number | null }[];
   deposits: { id: string; type: string; amount: number | null; note: string | null; status: string }[];
   penalties: {
@@ -81,6 +88,11 @@ type TrackingsResponse = {
   // pesanan bentuk baru (brief 12 Nov 2026), fallback ke format lama kalau
   // null.
   public_page_slug: string | null;
+  // Setting LIVE business (migration 063) — BUKAN snapshot per booking
+  // (itu ada di tiap TrackingBooking.late_fee_mode) — dipakai cuma untuk
+  // label stat "Sewa Terlambat"/tombol filter "Terlambat" (keputusan
+  // koordinator 15 Nov 2026).
+  late_fee_mode: 'bertahap_12jam' | 'per_hari_24jam' | 'per_jam' | 'tanpa_denda';
 };
 
 // Dipakai bareng oleh struk WA dan Nota Sewa (cetak/PDF) — satu sumber
@@ -209,6 +221,7 @@ export function useTrackings(session: Session | null) {
     toleranceHours: data?.tolerance_hours ?? 6,
     rescheduleDeadlineDays: data?.reschedule_deadline_days ?? null,
     publicPageSlug: data?.public_page_slug ?? null,
+    lateFeeMode: data?.late_fee_mode ?? 'bertahap_12jam',
     loading,
     error,
     refresh,

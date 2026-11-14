@@ -1,8 +1,19 @@
 // Unit test batas jam kembali TETAP (migration 062, brief 14 Nov 2026) —
-// computeDueAt() dengan returnDeadlineTime/returnDeadlineNextDay.
+// computeDueAt() dengan returnDeadlineTime/returnDeadlineNextDay. Juga
+// Cara hitung denda telat (migration 063, brief 15 Nov 2026) di bagian
+// bawah file ini.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeDueAt } from '../penalty.js';
+import {
+  computeDueAt,
+  computeLateFee,
+  computeTieredLateFee,
+  computeFullDayLateFee,
+  computeFullDayLateFeeFlat,
+  computeHourlyLateFee,
+  fullDayLateDays,
+} from '../penalty.js';
+import type { ItemDayRates } from '../pricing.js';
 
 const WIB = 'Asia/Jakarta';
 const WITA = 'Asia/Makassar';
@@ -78,4 +89,87 @@ test('due > anchor (kasus normal) -> TIDAK ikut digeser oleh jaring pengaman', (
   const pickedUpAt = '2026-11-09T03:00:00.000Z'; // 10:00 WIB, jauh sebelum due
   const due = computeDueAt('2026-11-11', pickedUpAt, pickedUpAt, WIB, '22:00', false);
   assert.equal(due.toISOString(), '2026-11-11T15:00:00.000Z'); // tetap end_date pukul 22:00, tidak digeser
+});
+
+// ============================================================
+// Cara hitung denda telat (migration 063, brief 15 Nov 2026)
+// ============================================================
+
+test('fullDayLateDays: lewat toleransi 1 menit pun sudah 1 hari, tanpa setengah hari', () => {
+  assert.equal(fullDayLateDays(0.5 / 60, 0), 1); // 30 detik lewat -> tetap 1 hari (ceil)
+  assert.equal(fullDayLateDays(24, 0), 1); // persis 24 jam -> 1 hari
+  assert.equal(fullDayLateDays(24.01, 0), 2); // sedikit lewat 24 jam -> 2 hari
+  assert.equal(fullDayLateDays(5, 10), 0); // masih di dalam toleransi -> 0
+});
+
+test('computeFullDayLateFeeFlat: 2 hari telat x tarif flat', () => {
+  // Telat 30 jam, toleransi 0 -> ceil(30/24) = 2 hari.
+  assert.equal(computeFullDayLateFeeFlat(30, 0, 30000), 60000);
+});
+
+test('computeFullDayLateFee (tiered): 2 hari telat, marginal dari computeItemRentalPrice', () => {
+  const rates: ItemDayRates = {
+    price_per_day: 30000,
+    day2_rate: 30000,
+    day3_rate: 30000,
+    day4_rate: 30000,
+    day5_rate: 30000,
+    extra_day_rate: 30000,
+  };
+  // rentDuration 2 hari, telat 30 jam toleransi 0 -> lateDays 2 -> harga(4)-harga(2) = 60000.
+  assert.equal(computeFullDayLateFee(30, 0, 2, rates), 60000);
+});
+
+test('computeHourlyLateFee: batas atas AKTIF -> tidak lebih mahal dari "per hari penuh" (contoh brief)', () => {
+  // Tenda Dome Rp30rb/hari flat, 2 hari, telat 30 jam toleransi 0,
+  // Rp10rb/jam -> raw 300rb, cap (= per hari penuh) 60rb -> hasil 60rb.
+  const fullDayFeeTotal = computeFullDayLateFeeFlat(30, 0, 30000);
+  const result = computeHourlyLateFee(30, 0, 10000, true, fullDayFeeTotal);
+  assert.equal(fullDayFeeTotal, 60000);
+  assert.equal(result.hours, 30);
+  assert.equal(result.cap, 60000);
+  assert.equal(result.capped, true);
+  assert.equal(result.fee, 60000); // BUKAN 300.000 -- dibatasi setara per hari penuh
+  assert.equal(result.needsManualInput, false);
+});
+
+test('computeHourlyLateFee: batas atas DIMATIKAN -> nominal penuh tanpa pembanding', () => {
+  const fullDayFeeTotal = computeFullDayLateFeeFlat(30, 0, 30000);
+  const result = computeHourlyLateFee(30, 0, 10000, false, fullDayFeeTotal);
+  assert.equal(result.fee, 300000);
+  assert.equal(result.cap, null);
+  assert.equal(result.capped, false);
+});
+
+test('computeHourlyLateFee: perHourRate null/0 (seharusnya tidak pernah terjadi, snapshot lama tidak konsisten) -> aman, saran 0 + needsManualInput', () => {
+  const resultNull = computeHourlyLateFee(30, 0, null, true, 60000);
+  assert.equal(resultNull.fee, 0);
+  assert.equal(resultNull.needsManualInput, true);
+
+  const resultZero = computeHourlyLateFee(30, 0, 0, true, 60000);
+  assert.equal(resultZero.fee, 0);
+  assert.equal(resultZero.needsManualInput, true);
+});
+
+test('computeHourlyLateFee: belum telat (di dalam toleransi) -> 0, TIDAK minta isi manual walau perHourRate null', () => {
+  const result = computeHourlyLateFee(5, 10, null, true, 0);
+  assert.equal(result.hours, 0);
+  assert.equal(result.fee, 0);
+  assert.equal(result.needsManualInput, false);
+});
+
+test('regresi: mode bertahap_12jam (computeLateFee/computeTieredLateFee) TIDAK disentuh oleh fitur mode baru', () => {
+  // Sekadar bukti functions lama masih diekspor & berperilaku sama --
+  // computeFullDayLateFee/Flat adalah fungsi BARU terpisah, bukan
+  // pengganti, lihat lib/penalty.ts.
+  assert.equal(computeLateFee(13, 11, 100000), 0.5 * 100000 * Math.ceil((13 - 11) / 12));
+  const rates: ItemDayRates = {
+    price_per_day: 100000,
+    day2_rate: 0,
+    day3_rate: 0,
+    day4_rate: 0,
+    day5_rate: 20000,
+    extra_day_rate: 20000,
+  };
+  assert.equal(typeof computeTieredLateFee(30, 0, 4, rates), 'number');
 });

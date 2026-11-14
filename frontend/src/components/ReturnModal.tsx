@@ -54,6 +54,9 @@ export function ReturnModal({
     setInitialisedFor(booking.id);
   }
 
+  // Cara hitung denda telat (migration 063) — snapshot transaksi ini.
+  const lateFeeDisabled = booking.late_fee_mode === 'tanpa_denda';
+  const isHourlyMode = booking.late_fee_mode === 'per_jam';
   const hasDeposit = booking.deposits.some((d) => d.status === 'ditahan');
   const activeDeposit = booking.deposits.find((d) => d.status === 'ditahan');
   const needsItemChoice = booking.items.length > 1;
@@ -172,20 +175,51 @@ export function ReturnModal({
           <div className="space-y-3 bg-[#F1EEE2] p-4 rounded-xl border border-[#DBD5C1]">
             <h3 className="font-bold text-[#26302B]">1. Denda Keterlambatan</h3>
             {booking.is_overdue ? (
-              <div className="p-3 rounded-lg bg-[#FAF0EE] border border-[#A8412E]/40 text-[#A8412E]">
+              <div
+                className={`p-3 rounded-lg border ${
+                  lateFeeDisabled ? 'bg-[#F9EFE7] border-[#A65C2A]/40 text-[#A65C2A]' : 'bg-[#FAF0EE] border-[#A8412E]/40 text-[#A8412E]'
+                }`}
+              >
                 <p className="font-extrabold flex items-center gap-1">
-                  <AlertTriangle className="w-4 h-4" /> TERLAMBAT {booking.hours_late} JAM
+                  <AlertTriangle className="w-4 h-4" /> {lateFeeDisabled ? 'LEWAT BATAS KEMBALI' : 'TERLAMBAT'} {booking.hours_late} JAM
                 </p>
-                <p className="text-[11px] text-[#26302B] mt-1">Saran denda otomatis (bisa diubah):</p>
-                {booking.late_fee_breakdown.length > 0 && (
-                  <ul className="text-[11px] text-[#26302B] mt-1 space-y-0.5">
-                    {booking.late_fee_breakdown.map((x) => (
-                      <li key={x.item_id}>
-                        {x.name}: ~Rp{x.per_day_rate.toLocaleString('id-ID')}/hari × {booking.late_days_equivalent} hari
-                        telat = Rp{x.fee.toLocaleString('id-ID')}
-                      </li>
-                    ))}
-                  </ul>
+                {/* Cara hitung denda telat (migration 063) — tiga tampilan
+                    beda per mode: tanpa_denda (rincian disembunyikan, cuma
+                    catatan netral), per_jam (satu baris "jam x tarif",
+                    BUKAN breakdown per-alat), sisanya (bertahap_12jam/
+                    per_hari_24jam) pola breakdown per-alat yang sudah ada. */}
+                {lateFeeDisabled ? (
+                  <p className="text-[11px] text-[#26302B] mt-1">
+                    Rental ini tidak memungut denda telat otomatis — isi manual kalau perlu.
+                  </p>
+                ) : isHourlyMode ? (
+                  <>
+                    <p className="text-[11px] text-[#26302B] mt-1">Saran denda otomatis (bisa diubah):</p>
+                    {booking.late_fee_hourly && (
+                      <p className="text-[11px] text-[#26302B] mt-1">
+                        Telat {booking.late_fee_hourly.hours} jam × Rp{booking.late_fee_hourly.per_hour.toLocaleString('id-ID')} = Rp
+                        {(booking.late_fee_hourly.hours * booking.late_fee_hourly.per_hour).toLocaleString('id-ID')}
+                        {booking.late_fee_hourly.capped && (
+                          <> — dibatasi maks Rp{(booking.late_fee_hourly.cap ?? 0).toLocaleString('id-ID')} (setara per hari penuh)</>
+                        )}
+                        {booking.late_fee_hourly.needs_manual_input && <> — nominal Rp/jam belum diatur, isi manual.</>}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[11px] text-[#26302B] mt-1">Saran denda otomatis (bisa diubah):</p>
+                    {booking.late_fee_breakdown.length > 0 && (
+                      <ul className="text-[11px] text-[#26302B] mt-1 space-y-0.5">
+                        {booking.late_fee_breakdown.map((x) => (
+                          <li key={x.item_id}>
+                            {x.name}: ~Rp{x.per_day_rate.toLocaleString('id-ID')}/hari × {booking.late_days_equivalent} hari
+                            telat = Rp{x.fee.toLocaleString('id-ID')}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
                 )}
               </div>
             ) : (
