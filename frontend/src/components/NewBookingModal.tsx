@@ -655,6 +655,25 @@ export function NewBookingModal({
                 Melebihi paket {business.max_rental_days} hari.
               </p>
             )}
+            {/* Batas jam kembali tetap (migration 062) — peringatan NON-
+                BLOCKING, cuma relevan untuk walk-in (ambil hari ini,
+                langsung 'aktif') karena anchor jam ambilnya "sekarang".
+                Dihitung dengan waktu lokal BROWSER (pola sama todayStr(),
+                CLAUDE.md bagian 4 — bukan sumber kebenaran, backend
+                computeDueAt() sudah punya jaring pengaman sendiri kalau
+                due <= jam ambil sungguhan). */}
+            {startDate === todayStr() && business.return_deadline_time && (() => {
+              const nextDay = business.return_deadline_next_day || business.return_deadline_time === '00:00';
+              const dueLocalDateStr = nextDay ? addDaysStr(endDate, 1) : endDate;
+              const due = new Date(`${dueLocalDateStr}T${business.return_deadline_time}:00`);
+              if (due.getTime() > Date.now()) return null;
+              return (
+                <p className="text-[11px] text-[#A65C2A] font-semibold">
+                  Batas jam kembali ({business.return_deadline_time}) untuk tanggal ini sudah lewat — transaksi bisa
+                  langsung tercatat berpotensi terlambat.
+                </p>
+              );
+            })()}
           </div>
 
           <div className="space-y-3 bg-[#F1EEE2] p-4 rounded-xl border border-[#DBD5C1]">

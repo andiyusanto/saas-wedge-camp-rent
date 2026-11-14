@@ -55,8 +55,26 @@ type PublicPageData = {
   // Pesanan Online (keputusan Andi), makanya diambil dari get_public_page
   // (selalu dipanggil untuk katalog), bukan cuma ordering-config.
   terms_content: string | null;
+  // Batas jam kembali TETAP (migration 062) — null = ikuti jam ambil,
+  // tidak ada baris kebijakan ditampilkan.
+  return_deadline_time?: string | null;
+  return_deadline_next_day?: boolean | null;
   items: PublicItem[];
 };
+
+// Dipakai bareng oleh Etalase (PublicPageData) dan halaman status
+// pesanan (StatusPageData, keduanya punya bentuk timezone/return_deadline_*
+// yang sama) — satu baris teks kebijakan, atau string kosong kalau belum
+// diisi vendor (caller yang memutuskan tampil/tidak).
+function returnDeadlineLabel(
+  time: string | null | undefined,
+  nextDay: boolean | null | undefined,
+  tz: string | null | undefined,
+): string | null {
+  if (!time) return null;
+  const dayText = nextDay || time === '00:00' ? ' (hari berikutnya)' : '';
+  return `Kembalikan paling lambat pukul ${time}${dayText} ${tzLabel(tz)}`;
+}
 
 function formatIDR(amount: number): string {
   return new Intl.NumberFormat('id-ID', {
@@ -303,6 +321,10 @@ type BookingRequestStatus = {
     confirmed_at: string;
   } | null;
   items: { name: string; quantity: number }[];
+  // Batas jam kembali TETAP (migration 062) — kebijakan LIVE business ini
+  // (booking_requests belum jadi transaksi, belum ada snapshot).
+  return_deadline_time?: string | null;
+  return_deadline_next_day?: boolean | null;
 };
 
 // Halaman status pesanan — rencana 2.1 langkah 5/6, 2.8b. Token
@@ -690,6 +712,10 @@ ${data.slug ? `<meta property="og:image" content="${escapeHtml(shareImageUrl(req
     <p style="margin:2px 0 0;font-weight:700;">${escapeHtml(formatDateID(data.start_date))} s/d ${escapeHtml(formatDateID(data.end_date))}</p>
     <p style="margin:10px 0 0;font-size:0.8rem;color:#6E6853;">Alat</p>
     <ul style="margin:4px 0 0;padding-left:18px;">${itemsListHtml}</ul>
+    ${(() => {
+      const label = returnDeadlineLabel(data.return_deadline_time, data.return_deadline_next_day, data.timezone);
+      return label ? `<p style="margin:10px 0 0;font-size:0.8rem;color:#6E6853;">⏰ ${escapeHtml(label)}</p>` : '';
+    })()}
     ${
       // Review -c1 (poin 2): setelah dikonfirmasi, "Total sewa" di
       // sini DISEMBUNYIKAN — membingungkan berdampingan dengan total
@@ -1101,6 +1127,10 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
     ${page.description ? `<p style="margin:10px 0 0;color:#26302B;line-height:1.5;">${escapeHtml(page.description)}</p>` : ''}
     ${page.address ? `<p style="margin:10px 0 0;color:#6E6853;font-size:0.875rem;">📍 ${escapeHtml(page.address)}</p>` : ''}
     ${page.operating_hours ? `<p style="margin:4px 0 0;color:#6E6853;font-size:0.875rem;white-space:pre-line;">🕒 ${escapeHtml(page.operating_hours)}</p>` : ''}
+    ${(() => {
+      const label = returnDeadlineLabel(page.return_deadline_time, page.return_deadline_next_day, page.timezone);
+      return label ? `<p style="margin:4px 0 0;color:#6E6853;font-size:0.875rem;">⏰ ${escapeHtml(label)}</p>` : '';
+    })()}
     ${
       waUrl
         ? `<a href="${escapeHtml(waUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:14px;background:#2B4739;color:#fff;font-weight:700;font-size:0.875rem;padding:10px 18px;border-radius:12px;text-decoration:none;">Hubungi via WhatsApp</a>`

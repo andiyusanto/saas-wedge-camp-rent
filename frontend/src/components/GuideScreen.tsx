@@ -542,6 +542,16 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           baru (koreksi ke arah benar, selisih 1-2 jam), tapi denda yang sudah tercatat tidak berubah. Rental lama
           tetap WIB sampai pemiliknya sendiri menggantinya.
         </Note>
+        <p className="font-bold text-xs mt-2">Batas Jam Kembali</p>
+        <p>
+          Di bawah Toleransi telat — pilih <Ui>Ikuti jam ambil</Ui> (default, sama seperti sekarang) atau{' '}
+          <Ui>Jam tetap</Ui> (mis. maks 22.00, atau 00.00 + <Ui>Hari berikutnya</Ui> untuk "besoknya maks jam
+          segini"). Begitu diisi, batas telat transaksi jadi JAM ITU di hari kembali — bukan lagi jam ambil barang
+          seperti biasanya — tapi Toleransi telat (jam) tetap berlaku DI ATAS batas ini seperti biasa. Cuma berlaku
+          untuk transaksi BARU yang dicatat setelah disimpan, transaksi yang sudah ada tidak ikut berubah. Kalau
+          diisi, baris "Kembali paling lambat" ikut muncul di struk WhatsApp, Nota Sewa, dan halaman Etalase
+          publik/status pesanan.
+        </p>
         <p className="font-bold text-xs mt-2">Cara Hitung Durasi Sewa</p>
         <p>
           Pengaturan ini juga ada di kartu <Ui>Info Usaha</Ui>, di bawah Toleransi telat — menentukan berapa "hari"

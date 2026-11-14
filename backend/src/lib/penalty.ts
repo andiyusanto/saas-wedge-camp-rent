@@ -1,4 +1,4 @@
-import { tzOffsetMs } from './dates.js';
+import { tzOffsetMs, addDays } from './dates.js';
 import { computeItemRentalPrice, type ItemDayRates } from './pricing.js';
 
 const BLOCK_HOURS = 12;
@@ -26,15 +26,49 @@ const BLOCK_RATE = 0.5;
 // `timezone` (migration 053) = zona rental. Jam ambil dibaca di zona itu,
 // jadi batasnya "tanggal kembali, jam yang sama dengan jam ambil" waktu
 // setempat. Default WIB = perilaku sebelum 053.
+//
+// Batas jam kembali TETAP (migration 062, brief 14 Nov 2026) —
+// returnDeadlineTime null (default, baris lama) = perilaku di atas TIDAK
+// BERUBAH sama sekali. Diisi ("HH:MM") -> due = end_date (+1 hari kalau
+// returnDeadlineNextDay) pukul segitu, zona rental, TERLEPAS dari jam
+// ambil. "00:00" SELALU dibaca end_date+1 00:00 (tidak pernah dobel
+// ditambah lagi walau returnDeadlineNextDay juga true) — lihat migration
+// 062 untuk definisi lengkap & alasan dikunci di UI.
 export function computeDueAt(
   endDate: string,
   createdAt: string,
   pickedUpAt: string | null = null,
   timezone: string | null = null,
+  returnDeadlineTime: string | null = null,
+  returnDeadlineNextDay: boolean = false,
 ): Date {
   const offsetMs = tzOffsetMs(timezone);
   const anchor = pickedUpAt ?? createdAt;
-  const anchorLocalMs = new Date(anchor).getTime() + offsetMs;
+  const anchorMs = new Date(anchor).getTime();
+
+  if (returnDeadlineTime) {
+    const [hh, mm] = returnDeadlineTime.split(':').map(Number);
+    const isMidnight = hh === 0 && mm === 0;
+    const dayOffset = isMidnight || returnDeadlineNextDay ? 1 : 0;
+    const [y, m, d] = addDays(endDate, dayOffset).split('-').map(Number);
+    let dueAtUtcMs = Date.UTC(y, m - 1, d, hh, mm, 0) - offsetMs;
+
+    // Review -c1 poin 1 (14 Nov 2026): kalau barang BARU diambil setelah
+    // jam batas tetap di hari yang sama (mis. ambil jam 23:00, batas
+    // 22:00, end_date = hari yang sama) -- due bisa jatuh SEBELUM jam
+    // ambil sungguhan, membuat transaksi langsung "terlambat" detik itu
+    // juga saat diambil. Geser +1 hari (jam tetap sama) sebagai jaring
+    // pengaman -- due TIDAK PERNAH lebih awal dari anchor (jam ambil).
+    // Satu kali geser (bukan loop) -- cukup untuk skenario realistis di
+    // brief (telat satu hari kalender), bukan klaim menutup kasus anchor
+    // yang sudah berhari-hari lewat end_date (di luar cakupan).
+    if (dueAtUtcMs <= anchorMs) {
+      dueAtUtcMs += 86_400_000;
+    }
+    return new Date(dueAtUtcMs);
+  }
+
+  const anchorLocalMs = anchorMs + offsetMs;
   const anchorLocal = new Date(anchorLocalMs);
   const hours = anchorLocal.getUTCHours();
   const minutes = anchorLocal.getUTCMinutes();

@@ -42,6 +42,11 @@ export function BusinessInfoSection({
   const [rescheduleDeadlineDays, setRescheduleDeadlineDays] = useState(
     business.reschedule_deadline_days != null ? String(business.reschedule_deadline_days) : '',
   );
+  // Batas jam kembali tetap (migration 062) — '' = "Ikuti jam ambil"
+  // (default, null di DB). "00:00" dikunci bareng returnDeadlineNextDay
+  // (lihat handler di bawah) -- definisi lengkap di CLAUDE.md bagian 4.
+  const [returnDeadlineTime, setReturnDeadlineTime] = useState(business.return_deadline_time ?? '');
+  const [returnDeadlineNextDay, setReturnDeadlineNextDay] = useState(business.return_deadline_next_day ?? false);
   const [logoUrl, setLogoUrl] = useState(business.logo_url ?? '');
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -68,6 +73,8 @@ export function BusinessInfoSection({
     setMinRentalDays(business.min_rental_days != null ? String(business.min_rental_days) : '');
     setMaxRentalDays(business.max_rental_days != null ? String(business.max_rental_days) : '');
     setRescheduleDeadlineDays(business.reschedule_deadline_days != null ? String(business.reschedule_deadline_days) : '');
+    setReturnDeadlineTime(business.return_deadline_time ?? '');
+    setReturnDeadlineNextDay(business.return_deadline_next_day ?? false);
     setLogoUrl(business.logo_url ?? '');
   }, [business]);
 
@@ -124,6 +131,11 @@ export function BusinessInfoSection({
       min_rental_days: minDays,
       max_rental_days: maxDays,
       reschedule_deadline_days: rescheduleDeadlineDays.trim() ? Math.max(0, Number(rescheduleDeadlineDays)) : null,
+      return_deadline_time: returnDeadlineTime || null,
+      // "00:00" SELALU dianggap hari berikutnya (lihat handler input time
+      // di bawah, yang mengunci toggle ini begitu jam = 00:00) -- dikirim
+      // apa adanya, backend/computeDueAt juga menegakkan ulang (migration 062).
+      return_deadline_next_day: returnDeadlineTime ? returnDeadlineNextDay : false,
     });
 
     setSubmitting(false);
@@ -257,6 +269,62 @@ export function BusinessInfoSection({
         <p className="text-[11px] text-[#6E6853]">
           Toleransi telat: berapa jam setelah janji kembali sebelum transaksi dianggap terlambat dan mulai kena denda.
         </p>
+
+        <div className="flex flex-col gap-2 pt-2 border-t border-[#E6E1D2]">
+          <p className="text-sm font-semibold text-[#26302B]">Batas Jam Kembali</p>
+          <label className="flex items-center gap-2 text-sm text-[#26302B]">
+            <input
+              type="radio"
+              checked={!returnDeadlineTime}
+              onChange={() => {
+                setReturnDeadlineTime('');
+                setReturnDeadlineNextDay(false);
+              }}
+              className="accent-[#2B4739]"
+            />
+            Ikuti jam ambil (default — sama seperti sekarang)
+          </label>
+          <label className="flex items-center gap-2 text-sm text-[#26302B]">
+            <input type="radio" checked={!!returnDeadlineTime} onChange={() => setReturnDeadlineTime('22:00')} className="accent-[#2B4739]" />
+            Jam tetap
+          </label>
+          {returnDeadlineTime && (
+            <div className="flex flex-wrap items-center gap-3 pl-6">
+              <input
+                type="time"
+                value={returnDeadlineTime}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setReturnDeadlineTime(value);
+                  // "00:00"/"24:00" SELALU berarti tengah malam akhir hari
+                  // kembali (migration 062) -- toggle "hari berikutnya"
+                  // dikunci tercentang supaya tidak ada state form yang
+                  // kelihatan kontradiktif (computeDueAt sendiri tetap
+                  // menegakkan ulang ini di backend, jaring pengaman).
+                  if (value === '00:00') setReturnDeadlineNextDay(true);
+                }}
+                className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] font-bold focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+              />
+              <label className="flex items-center gap-2 text-sm text-[#26302B]">
+                <input
+                  type="checkbox"
+                  checked={returnDeadlineNextDay}
+                  disabled={returnDeadlineTime === '00:00'}
+                  onChange={(e) => setReturnDeadlineNextDay(e.target.checked)}
+                  className="accent-[#2B4739] disabled:opacity-60"
+                />
+                Hari berikutnya
+              </label>
+            </div>
+          )}
+          {returnDeadlineTime === '00:00' && (
+            <p className="text-[11px] text-[#6E6853] pl-6">00:00 selalu berarti tengah malam akhir hari kembali (hari berikutnya otomatis aktif).</p>
+          )}
+          <p className="text-[11px] text-[#6E6853]">
+            Jam tetap berlaku untuk transaksi BARU yang dicatat setelah disimpan — transaksi yang sudah ada tidak
+            ikut berubah. Toleransi telat di atas tetap berlaku di atas batas ini.
+          </p>
+        </div>
 
         <div className="flex flex-col gap-2 pt-2 border-t border-[#E6E1D2]">
           <p className="text-sm font-semibold text-[#26302B]">Cara Hitung Durasi Sewa</p>

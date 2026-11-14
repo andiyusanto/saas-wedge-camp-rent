@@ -66,6 +66,9 @@ export type TrackingBooking = {
   // Snapshot paket min/maks hari (Tahap 1, migration 054).
   min_rental_days: number | null;
   max_rental_days: number | null;
+  // Snapshot batas jam kembali (migration 062) — null = ikuti jam ambil.
+  return_deadline_time: string | null;
+  return_deadline_next_day: boolean | null;
 };
 
 type TrackingsResponse = {
@@ -107,6 +110,8 @@ export function buildReceiptData(
     businessAddress,
     businessLogoUrl,
     rentalDayMode: b.rental_day_mode,
+    returnDeadlineTime: b.return_deadline_time,
+    returnDeadlineNextDay: b.return_deadline_next_day,
   };
 }
 

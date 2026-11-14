@@ -210,6 +210,10 @@ export type ReceiptData = {
   // ditafsirkan 'per_hari_kalender' oleh rentalDays(). Jangan pernah
   // diisi dari businesses.rental_day_mode yang SEDANG berlaku.
   rentalDayMode: RentalDayMode | null;
+  // Snapshot batas jam kembali (migration 062) — null = ikuti jam ambil,
+  // tidak ada baris "Kembali paling lambat" ditampilkan.
+  returnDeadlineTime?: string | null;
+  returnDeadlineNextDay?: boolean | null;
 };
 
 const BOOKING_STATUS_LABEL: Record<string, string> = {
@@ -251,7 +255,13 @@ Kode Booking: *${data.bookingNumber}*
 Penyewa: *${data.customerName}*
 WhatsApp: ${data.customerPhone}
 Tanggal Ambil: ${formatDateIndo(data.startDate)}
-Tanggal Kembali: ${formatDateIndo(data.endDate)} (${days} hari)
+Tanggal Kembali: ${formatDateIndo(data.endDate)} (${days} hari)${
+    data.returnDeadlineTime
+      ? `\nKembali paling lambat: ${formatDateIndo(
+          data.returnDeadlineNextDay || data.returnDeadlineTime === '00:00' ? addDaysStr(data.endDate, 1) : data.endDate,
+        )}, ${data.returnDeadlineTime}`
+      : ''
+  }
 
 *DAFTAR PERALATAN:*
 ${itemsText}

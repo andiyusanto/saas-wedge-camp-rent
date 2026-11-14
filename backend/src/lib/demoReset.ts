@@ -398,6 +398,11 @@ export async function resetDemoData(): Promise<DemoResetResult> {
       min_rental_days: null,
       max_rental_days: null,
       reschedule_deadline_days: null,
+      // Batas jam kembali (migration 062) — baku null/false (ikuti jam
+      // ambil), sama alasan field lain di patch ini: pengunjung demo
+      // bisa mengubahnya lewat Kelola Usaha, harus direset tiap kali.
+      return_deadline_time: null,
+      return_deadline_next_day: false,
       logo_url: DEMO_LOGO_URL,
     }),
   });

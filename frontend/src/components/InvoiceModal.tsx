@@ -1,7 +1,7 @@
 import { Printer, X } from 'lucide-react';
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import type { ReceiptData } from '../utils/formatters';
-import { formatIDR, formatDateIndo, rentalDays, depositLabel, fineLabel, todayStr } from '../utils/formatters';
+import { formatIDR, formatDateIndo, rentalDays, depositLabel, fineLabel, todayStr, addDaysStr } from '../utils/formatters';
 
 // Nota cetak/PDF — dirender dari data yang sama dengan struk WA (lihat
 // buildReceiptData di useTrackings.ts), tanpa library PDF atau endpoint
@@ -78,6 +78,15 @@ export function InvoiceModal({
               <span className="text-[#6E6853]">Tanggal Kembali: </span>
               {formatDateIndo(data.endDate)} ({days} hari)
             </p>
+            {data.returnDeadlineTime && (
+              <p>
+                <span className="text-[#6E6853]">Kembali paling lambat: </span>
+                {formatDateIndo(
+                  data.returnDeadlineNextDay || data.returnDeadlineTime === '00:00' ? addDaysStr(data.endDate, 1) : data.endDate,
+                )}
+                , {data.returnDeadlineTime}
+              </p>
+            )}
           </div>
 
           <table className="w-full text-xs mb-4 border-collapse">

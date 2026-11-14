@@ -114,7 +114,7 @@ router.post('/bookings', async (req, res) => {
   // struk WA, denda telat bertingkat) tidak pernah ikut berubah.
   const { data: bizRow, error: bizError } = await supabase
     .from('businesses')
-    .select('rental_day_mode, timezone, min_rental_days, max_rental_days')
+    .select('rental_day_mode, timezone, min_rental_days, max_rental_days, return_deadline_time, return_deadline_next_day')
     .eq('id', businessId)
     .maybeSingle();
 
@@ -274,6 +274,12 @@ router.post('/bookings', async (req, res) => {
         rental_day_mode: bizRow.rental_day_mode,
         min_rental_days: bizRow.min_rental_days,
         max_rental_days: bizRow.max_rental_days,
+        // Snapshot batas jam kembali (migration 062) — null = ikuti jam
+        // ambil, perilaku sebelum fitur ini ada. Pesanan Online yang
+        // dikonfirmasi lewat form Catat Transaksi ini juga otomatis
+        // ter-snapshot, tidak perlu jalur terpisah.
+        return_deadline_time: bizRow.return_deadline_time,
+        return_deadline_next_day: bizRow.return_deadline_next_day,
       })
       .select('id, booking_number, status')
       .single();

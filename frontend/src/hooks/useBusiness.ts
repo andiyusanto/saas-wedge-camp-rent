@@ -29,6 +29,11 @@ export type Business = {
   // migration 055) — nullable, null = kapan saja sebelum diambil. Cuma
   // PERINGATAN (RescheduleModal.tsx), tidak pernah menolak permintaan.
   reschedule_deadline_days: number | null;
+  // Batas jam kembali tetap (migration 062) — setting LIVE, nullable =
+  // ikuti jam ambil (default, perilaku sebelum fitur ini ada). Transaksi
+  // yang sudah dibuat punya snapshot sendiri di bookings.return_deadline_time.
+  return_deadline_time: string | null;
+  return_deadline_next_day: boolean;
   created_at: string;
 };
 
@@ -46,6 +51,8 @@ export type BusinessUpdateInput = {
   min_rental_days: number | null;
   max_rental_days: number | null;
   reschedule_deadline_days: number | null;
+  return_deadline_time: string | null;
+  return_deadline_next_day: boolean;
 };
 
 export type MemberRole = 'owner' | 'karyawan';
@@ -69,7 +76,7 @@ export function useBusiness(session: Session | null) {
     // RLS (members_select_own_business) sudah membatasi ke baris milik user ini.
     const { data, error: queryError } = await supabase
       .from('businesses')
-      .select('id, name, owner_name, phone, address, regency_id, district_id, late_tolerance_hours, logo_url, rental_day_mode, timezone, min_rental_days, max_rental_days, reschedule_deadline_days, created_at')
+      .select('id, name, owner_name, phone, address, regency_id, district_id, late_tolerance_hours, logo_url, rental_day_mode, timezone, min_rental_days, max_rental_days, reschedule_deadline_days, return_deadline_time, return_deadline_next_day, created_at')
       .maybeSingle();
 
     // PENTING: error di sini (mis. PGRST116 "multiple rows" kalau akun ini
@@ -137,6 +144,8 @@ export function useBusiness(session: Session | null) {
         min_rental_days: input.min_rental_days,
         max_rental_days: input.max_rental_days,
         reschedule_deadline_days: input.reschedule_deadline_days,
+        return_deadline_time: input.return_deadline_time,
+        return_deadline_next_day: input.return_deadline_next_day,
       })
       .eq('id', business.id);
 

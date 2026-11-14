@@ -117,7 +117,7 @@ router.get('/trackings', async (req, res) => {
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select(
-      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_key, rental_day_mode, min_rental_days, max_rental_days, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_status_history(status, changed_by_name, created_at), booking_reschedules(action, old_start_date, old_end_date, new_start_date, new_end_date, reason, past_deadline, changed_by_name, created_at), booking_item_changes(old_items, new_items, old_total_price, new_total_price, reason, changed_by_name, created_at)',
+      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_key, rental_day_mode, min_rental_days, max_rental_days, return_deadline_time, return_deadline_next_day, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_status_history(status, changed_by_name, created_at), booking_reschedules(action, old_start_date, old_end_date, new_start_date, new_end_date, reason, past_deadline, changed_by_name, created_at), booking_item_changes(old_items, new_items, old_total_price, new_total_price, reason, changed_by_name, created_at)',
     )
     .in('status', ['dipesan', 'aktif'])
     .order('end_date');
@@ -140,7 +140,14 @@ router.get('/trackings', async (req, res) => {
 
     // 'dipesan' belum diambil fisik — belum relevan hitung telat.
     const isPendingPickup = b.status === 'dipesan';
-    const dueAt = computeDueAt(b.end_date, b.created_at, b.picked_up_at, business.timezone);
+    const dueAt = computeDueAt(
+      b.end_date,
+      b.created_at,
+      b.picked_up_at,
+      business.timezone,
+      b.return_deadline_time,
+      b.return_deadline_next_day ?? false,
+    );
     const hLate = isPendingPickup ? 0 : Math.max(0, hoursLate(dueAt, now));
 
     // Per item: tiered (snapshot ada) atau flat lama (snapshot null),
@@ -224,6 +231,10 @@ router.get('/trackings', async (req, res) => {
       rental_day_mode: b.rental_day_mode,
       min_rental_days: b.min_rental_days,
       max_rental_days: b.max_rental_days,
+      // Snapshot (migration 062) — null = ikuti jam ambil (tidak ada
+      // baris batas jam kembali untuk ditampilkan di struk/nota).
+      return_deadline_time: b.return_deadline_time,
+      return_deadline_next_day: b.return_deadline_next_day,
     };
   });
 
@@ -255,7 +266,7 @@ router.post('/bookings/:id/return', async (req, res) => {
 
   const { data: booking, error: bookingError } = await supabase
     .from('bookings')
-    .select('id, end_date, created_at, picked_up_at, status, booking_items(item_id)')
+    .select('id, end_date, created_at, picked_up_at, status, return_deadline_time, return_deadline_next_day, booking_items(item_id)')
     .eq('id', id)
     .maybeSingle();
 
@@ -286,7 +297,14 @@ router.post('/bookings/:id/return', async (req, res) => {
     .maybeSingle();
 
   const now = new Date();
-  const dueAt = computeDueAt(booking.end_date, booking.created_at, booking.picked_up_at, business?.timezone ?? null);
+  const dueAt = computeDueAt(
+    booking.end_date,
+    booking.created_at,
+    booking.picked_up_at,
+    business?.timezone ?? null,
+    booking.return_deadline_time,
+    booking.return_deadline_next_day ?? false,
+  );
   const hLate = Math.max(0, hoursLate(dueAt, now));
   const isLate = hLate > (business?.late_tolerance_hours ?? 6);
 
