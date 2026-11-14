@@ -75,12 +75,11 @@ create policy "members_insert_booking_item_changes"
 --
 -- Review -c1 (14 Nov 2026) poin 1 -- WAJIB: validasi tiap item_id di
 -- p_new_items benar-benar milik business YANG SAMA dengan booking ini
--- (items.business_id = booking.business_id). Tanpa ini, anggota bisa
--- menautkan alat milik business lain ke booking-nya sendiri (RPC ini
--- bypass RLS items, jadi tidak ada penjagaan lain). Skema items TIDAK
--- punya kolom "aktif/nonaktif" (tidak ada soft-delete) -- exists di
--- tabel items dengan business_id yang cocok SUDAH cukup sebagai
--- penanda "alat ini valid dipakai".
+-- (items.business_id = booking.business_id) DAN masih aktif
+-- (items.deactivated_at is null) -- lihat pengecekan lengkap + alasan
+-- detail di badan function di bawah. Tanpa ini, anggota bisa menautkan
+-- alat milik business lain ke booking-nya sendiri (RPC ini bypass RLS
+-- items, jadi tidak ada penjagaan lain).
 --
 -- Review -c1 poin 3 -- CATATAN RISIKO (didokumentasikan, SENGAJA TIDAK
 -- ditutup sekarang): RPC ini bisa dipanggil LANGSUNG oleh anggota
