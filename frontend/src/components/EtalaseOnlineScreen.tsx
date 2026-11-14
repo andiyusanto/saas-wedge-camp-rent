@@ -561,6 +561,31 @@ export function EtalaseOnlineScreen({
           />
         </label>
 
+        {/* Brief 14 Nov 2026 (vendor Rintis Outdoor tidak sadar kotak
+            centang S&K cuma muncul kalau S&K diisi) — pengingat NON-
+            BLOCKING, S&K tetap opsional. Sumber kebenaran "sudah
+            tersimpan" = page.current_terms_version_id (bukan isi
+            termsContent, yang bisa berupa draft belum disimpan) — sama
+            persis pola dependency effect fetchCurrentTerms() di atas,
+            supaya pengingat hilang TEPAT setelah "Simpan Syarat" sukses. */}
+        {acceptOnlineOrders && !page?.current_terms_version_id && (
+          <div className="flex items-start gap-2 p-3 rounded-xl bg-[#F9EFE7] border border-[#A65C2A]/40">
+            <AlertTriangle className="w-4 h-4 text-[#A65C2A] shrink-0 mt-0.5" />
+            <div className="text-xs text-[#A65C2A] space-y-1">
+              <p>Belum ada Syarat &amp; Ketentuan. Penyewa tidak diminta menyetujui apa pun sebelum memesan.</p>
+              <button
+                type="button"
+                onClick={() =>
+                  document.getElementById('syarat-ketentuan')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+                className="font-semibold underline"
+              >
+                Isi sekarang
+              </button>
+            </div>
+          </div>
+        )}
+
         {
           // Review -c1 (tahap 4, poin 6) bug ditemukan saat verifikasi:
           // field cara bayar/DP SEBELUMNYA cuma muncul kalau
@@ -744,7 +769,7 @@ export function EtalaseOnlineScreen({
               )}
             </div>
 
-            <div className="space-y-2 pt-1 border-t border-[#E6E1D2]">
+            <div id="syarat-ketentuan" className="space-y-2 pt-1 border-t border-[#E6E1D2]">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-[#26302B]">Syarat &amp; Ketentuan sewa</p>
                 <button
