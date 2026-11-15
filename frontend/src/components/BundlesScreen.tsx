@@ -6,13 +6,16 @@ import { useBundles } from '../hooks/useBundles';
 import type { Bundle, BundleComponentInput, BundleInput } from '../hooks/useBundles';
 import { formatIDR } from '../utils/formatters';
 
-// Paket Alat Tahap 1 (brief 15 Nov 2026, migration 064) — Katalog Paket,
-// owner-only (RLS bundles sudah menolak karyawan menulis — tombol tetap
-// disembunyikan di sini untuk UX, bukan satu-satunya penjaga). Dirender
-// sebagai sub-tab di dalam ItemsScreen.tsx (lihat tab "Alat"/"Paket" di
-// sana), bukan screen/route terpisah — paket adalah fitur sekunder
-// terhadap katalog alat, sesuai "progressive disclosure" (CLAUDE.md
-// bagian 5).
+// Paket Alat Tahap 1 (brief 15 Nov 2026, migration 064) — Katalog Paket.
+// **Keputusan Andi 15 Nov 2026** (revisi dari rencana awal "owner-only"):
+// paket mengikuti pola ITEMS (migration 044) -- member (karyawan) BOLEH
+// membuat/mengubah/menonaktifkan paket, bukan cuma owner. Satu-satunya
+// gerbang yang relevan adalah `writable` (rencana langganan hanya-baca),
+// pola sama `ItemsScreen.tsx` -- tombol di sini TIDAK digerbang `role`.
+// Dirender sebagai sub-tab di dalam ItemsScreen.tsx (lihat tab
+// "Alat"/"Paket" di sana), bukan screen/route terpisah -- paket adalah
+// fitur sekunder terhadap katalog alat, sesuai "progressive disclosure"
+// (CLAUDE.md bagian 5).
 
 function emptyBundleInput(): BundleInput {
   return {
@@ -284,11 +287,9 @@ function BundleFormModal({
 
 export function BundlesScreen({
   businessId,
-  role,
   writable = true,
 }: {
   businessId: string;
-  role: 'owner' | 'karyawan' | null;
   writable?: boolean;
 }) {
   const { items } = useItems(businessId);
@@ -311,17 +312,15 @@ export function BundlesScreen({
         <p className="text-xs text-[#6E6853]">
           Paket dipecah jadi alat satuan saat transaksi dibuat — stok tetap tersambung ke komponennya, bukan stok sendiri.
         </p>
-        {role === 'owner' && (
-          <button
-            onClick={() => setModalBundle('new')}
-            disabled={!writable}
-            title={!writable ? 'Masa aktif langganan sudah habis — hubungi Sewalog untuk memperpanjang.' : undefined}
-            className="px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs shadow-sm transition flex items-center gap-2 disabled:opacity-50 shrink-0"
-          >
-            <Plus className="w-4 h-4 text-[#A65C2A]" />
-            <span>Tambah Paket</span>
-          </button>
-        )}
+        <button
+          onClick={() => setModalBundle('new')}
+          disabled={!writable}
+          title={!writable ? 'Masa aktif langganan sudah habis — hubungi Sewalog untuk memperpanjang.' : undefined}
+          className="px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs shadow-sm transition flex items-center gap-2 disabled:opacity-50 shrink-0"
+        >
+          <Plus className="w-4 h-4 text-[#A65C2A]" />
+          <span>Tambah Paket</span>
+        </button>
       </div>
 
       {bundles.length === 0 && inactiveBundles.length === 0 && (
@@ -340,21 +339,19 @@ export function BundlesScreen({
                 <p className="font-bold text-[#26302B] flex items-center gap-1.5">
                   <Package className="w-4 h-4 text-[#2B4739]" /> {bundle.name}
                 </p>
-                {role === 'owner' && (
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => setModalBundle(bundle)} disabled={!writable} className="text-[11px] font-bold text-[#2B4739] disabled:opacity-50">
-                      Ubah
-                    </button>
-                    <button
-                      onClick={() => setBundleActive(bundle.id, deactivated)}
-                      disabled={!writable}
-                      title={deactivated ? 'Aktifkan' : 'Nonaktifkan'}
-                      className="disabled:opacity-50"
-                    >
-                      <Power className={`w-4 h-4 ${deactivated ? 'text-[#6E6853]' : 'text-[#A8412E]'}`} />
-                    </button>
-                  </div>
-                )}
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setModalBundle(bundle)} disabled={!writable} className="text-[11px] font-bold text-[#2B4739] disabled:opacity-50">
+                    Ubah
+                  </button>
+                  <button
+                    onClick={() => setBundleActive(bundle.id, deactivated)}
+                    disabled={!writable}
+                    title={deactivated ? 'Aktifkan' : 'Nonaktifkan'}
+                    className="disabled:opacity-50"
+                  >
+                    <Power className={`w-4 h-4 ${deactivated ? 'text-[#6E6853]' : 'text-[#A8412E]'}`} />
+                  </button>
+                </div>
               </div>
               <p className="text-[11px] text-[#6E6853]">{componentSummary(bundle)}</p>
               <p className="text-[11px] text-[#26302B]">

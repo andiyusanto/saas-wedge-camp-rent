@@ -728,7 +728,7 @@ export function ItemsScreen({
       </div>
 
       {catalogTab === 'paket' ? (
-        <BundlesScreen businessId={businessId} role={role} writable={writable} />
+        <BundlesScreen businessId={businessId} writable={writable} />
       ) : loading ? (
         <p className="text-sm text-[#6E6853]">Memuat...</p>
       ) : filtered.length === 0 ? (

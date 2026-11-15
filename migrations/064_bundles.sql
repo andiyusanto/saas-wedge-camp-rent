@@ -58,12 +58,13 @@ create index if not exists bundle_items_item_id_idx on bundle_items (item_id);
 --
 -- SECURITY INVOKER (review koordinator 15 Nov 2026, bukan DEFINER seperti
 -- draft awal) -- sengaja TANPA elevasi: trigger ini cuma SELECT dari
--- bundles/items, dan siapa pun yang insert/update bundle_items (owner,
--- lewat RLS owner_write_bundle_items) SUDAH otomatis punya hak baca
--- bundles/items miliknya sendiri lewat RLS member-select yang sudah ada
--- -- tidak ada kebutuhan bypass RLS sama sekali, jadi DEFINER cuma
--- menambah permukaan risiko (search_path hijack dkk) tanpa manfaat.
--- set search_path tetap disertakan sebagai defense-in-depth meski INVOKER.
+-- bundles/items, dan siapa pun yang insert/update bundle_items (member,
+-- lewat RLS members_insert_bundle_items/members_update_bundle_items di
+-- bawah) SUDAH otomatis punya hak baca bundles/items miliknya sendiri
+-- lewat RLS member-select yang sudah ada -- tidak ada kebutuhan bypass
+-- RLS sama sekali, jadi DEFINER cuma menambah permukaan risiko
+-- (search_path hijack dkk) tanpa manfaat. set search_path tetap
+-- disertakan sebagai defense-in-depth meski INVOKER.
 create or replace function check_bundle_item_business() returns trigger as $$
 declare
   v_bundle_business uuid;
@@ -89,23 +90,50 @@ create trigger bundle_items_check_business
 alter table bundles enable row level security;
 alter table bundle_items enable row level security;
 
-drop policy if exists members_select_bundles on bundles;
-create policy members_select_bundles on bundles for select using (is_member_of(business_id));
+-- Keputusan Andi 15 Nov 2026 (revisi dari rencana awal "owner-only"):
+-- paket mengikuti pola ITEMS (migration 044) -- member (bukan cuma
+-- owner) boleh insert/update/delete, insert & update digerbang
+-- `business_is_writable` (dikunci kalau langganan hanya-baca). Nama
+-- policy lama (owner_*, kalau sempat dijalankan versi sebelumnya) DAN
+-- nama baru (members_*) sama-sama di-drop-if-exists dulu supaya
+-- idempoten di kedua kondisi.
 drop policy if exists owner_write_bundles on bundles;
-create policy owner_write_bundles on bundles for insert with check (is_owner_of(business_id));
 drop policy if exists owner_update_bundles on bundles;
-create policy owner_update_bundles on bundles for update using (is_owner_of(business_id)) with check (is_owner_of(business_id));
 drop policy if exists owner_delete_bundles on bundles;
-create policy owner_delete_bundles on bundles for delete using (is_owner_of(business_id));
+drop policy if exists members_select_bundles on bundles;
+drop policy if exists members_insert_bundles on bundles;
+drop policy if exists members_update_bundles on bundles;
+drop policy if exists members_delete_bundles on bundles;
+create policy members_select_bundles on bundles for select using (is_member_of(business_id));
+create policy members_insert_bundles
+  on bundles for insert
+  with check (is_member_of(business_id) and business_is_writable(business_id));
+create policy members_update_bundles
+  on bundles for update
+  using (is_member_of(business_id))
+  with check (is_member_of(business_id) and business_is_writable(business_id));
+create policy members_delete_bundles
+  on bundles for delete
+  using (is_member_of(business_id));
 
-drop policy if exists members_select_bundle_items on bundle_items;
-create policy members_select_bundle_items on bundle_items for select using (is_member_of(business_id));
 drop policy if exists owner_write_bundle_items on bundle_items;
-create policy owner_write_bundle_items on bundle_items for insert with check (is_owner_of(business_id));
 drop policy if exists owner_update_bundle_items on bundle_items;
-create policy owner_update_bundle_items on bundle_items for update using (is_owner_of(business_id)) with check (is_owner_of(business_id));
 drop policy if exists owner_delete_bundle_items on bundle_items;
-create policy owner_delete_bundle_items on bundle_items for delete using (is_owner_of(business_id));
+drop policy if exists members_select_bundle_items on bundle_items;
+drop policy if exists members_insert_bundle_items on bundle_items;
+drop policy if exists members_update_bundle_items on bundle_items;
+drop policy if exists members_delete_bundle_items on bundle_items;
+create policy members_select_bundle_items on bundle_items for select using (is_member_of(business_id));
+create policy members_insert_bundle_items
+  on bundle_items for insert
+  with check (is_member_of(business_id) and business_is_writable(business_id));
+create policy members_update_bundle_items
+  on bundle_items for update
+  using (is_member_of(business_id))
+  with check (is_member_of(business_id) and business_is_writable(business_id));
+create policy members_delete_bundle_items
+  on bundle_items for delete
+  using (is_member_of(business_id));
 
 -- Penanda paket di booking_items -- NULLABLE, baris lama/alat biasa
 -- semuanya null (regresi aman). bundle_id dipertahankan (bukan
