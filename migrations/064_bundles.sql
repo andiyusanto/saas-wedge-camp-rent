@@ -5,8 +5,12 @@
 -- logika stok/kalender/readiness/denda per alat yang SUDAH ADA tidak
 -- berubah sama sekali. Tabel ini cuma menyimpan RESEP (daftar
 -- komponen + cara harga), bukan ketersediaan.
+--
+-- Idempotensi (review koordinator 15 Nov 2026 -- Andi pernah menjalankan
+-- migration dua kali, kasus 061): SELURUH statement di file ini aman
+-- dijalankan ulang (if not exists / drop ... if exists sebelum create).
 
-create table bundles (
+create table if not exists bundles (
   id              uuid primary key default gen_random_uuid(),
   business_id     uuid not null references businesses(id),
   name            text not null,
@@ -34,9 +38,9 @@ create table bundles (
   check (discount_type <> 'percent' or discount_value <= 100)
 );
 
-create index bundles_business_id_idx on bundles (business_id);
+create index if not exists bundles_business_id_idx on bundles (business_id);
 
-create table bundle_items (
+create table if not exists bundle_items (
   id           uuid primary key default gen_random_uuid(),
   bundle_id    uuid not null references bundles(id) on delete cascade,
   business_id  uuid not null references businesses(id),
@@ -44,13 +48,22 @@ create table bundle_items (
   quantity     int not null check (quantity >= 1)
 );
 
-create index bundle_items_bundle_id_idx on bundle_items (bundle_id);
-create index bundle_items_item_id_idx on bundle_items (item_id);
+create index if not exists bundle_items_bundle_id_idx on bundle_items (bundle_id);
+create index if not exists bundle_items_item_id_idx on bundle_items (item_id);
 
 -- Keamanan wajib (koordinator 15 Nov 2026): item komponen dan bundle
 -- induknya harus satu business yang sama -- dicek di Express JUGA, tapi
 -- trigger ini jaring pengaman DB-level (RLS WITH CHECK saja tidak bisa
 -- membandingkan ke tabel items lain secara efisien per baris di sini).
+--
+-- SECURITY INVOKER (review koordinator 15 Nov 2026, bukan DEFINER seperti
+-- draft awal) -- sengaja TANPA elevasi: trigger ini cuma SELECT dari
+-- bundles/items, dan siapa pun yang insert/update bundle_items (owner,
+-- lewat RLS owner_write_bundle_items) SUDAH otomatis punya hak baca
+-- bundles/items miliknya sendiri lewat RLS member-select yang sudah ada
+-- -- tidak ada kebutuhan bypass RLS sama sekali, jadi DEFINER cuma
+-- menambah permukaan risiko (search_path hijack dkk) tanpa manfaat.
+-- set search_path tetap disertakan sebagai defense-in-depth meski INVOKER.
 create or replace function check_bundle_item_business() returns trigger as $$
 declare
   v_bundle_business uuid;
@@ -66,8 +79,9 @@ begin
   end if;
   return new;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security invoker set search_path = public;
 
+drop trigger if exists bundle_items_check_business on bundle_items;
 create trigger bundle_items_check_business
   before insert or update on bundle_items
   for each row execute function check_bundle_item_business();
@@ -75,29 +89,37 @@ create trigger bundle_items_check_business
 alter table bundles enable row level security;
 alter table bundle_items enable row level security;
 
+drop policy if exists members_select_bundles on bundles;
 create policy members_select_bundles on bundles for select using (is_member_of(business_id));
+drop policy if exists owner_write_bundles on bundles;
 create policy owner_write_bundles on bundles for insert with check (is_owner_of(business_id));
+drop policy if exists owner_update_bundles on bundles;
 create policy owner_update_bundles on bundles for update using (is_owner_of(business_id)) with check (is_owner_of(business_id));
+drop policy if exists owner_delete_bundles on bundles;
 create policy owner_delete_bundles on bundles for delete using (is_owner_of(business_id));
 
+drop policy if exists members_select_bundle_items on bundle_items;
 create policy members_select_bundle_items on bundle_items for select using (is_member_of(business_id));
+drop policy if exists owner_write_bundle_items on bundle_items;
 create policy owner_write_bundle_items on bundle_items for insert with check (is_owner_of(business_id));
+drop policy if exists owner_update_bundle_items on bundle_items;
 create policy owner_update_bundle_items on bundle_items for update using (is_owner_of(business_id)) with check (is_owner_of(business_id));
+drop policy if exists owner_delete_bundle_items on bundle_items;
 create policy owner_delete_bundle_items on bundle_items for delete using (is_owner_of(business_id));
 
 -- Penanda paket di booking_items -- NULLABLE, baris lama/alat biasa
 -- semuanya null (regresi aman). bundle_id dipertahankan (bukan
 -- on delete set null) supaya riwayat masih bisa ditautkan -- bundle
 -- TIDAK PERNAH di-hard-delete (cuma deactivated_at), pola sama items.
-alter table booking_items add column bundle_id uuid references bundles(id);
-alter table booking_items add column bundle_instance_id uuid;
-alter table booking_items add column bundle_name text;
-alter table booking_items add column bundle_quantity int;
+alter table booking_items add column if not exists bundle_id uuid references bundles(id);
+alter table booking_items add column if not exists bundle_instance_id uuid;
+alter table booking_items add column if not exists bundle_name text;
+alter table booking_items add column if not exists bundle_quantity int;
 
-alter table booking_request_items add column bundle_id uuid references bundles(id);
-alter table booking_request_items add column bundle_instance_id uuid;
-alter table booking_request_items add column bundle_name text;
-alter table booking_request_items add column bundle_quantity int;
+alter table booking_request_items add column if not exists bundle_id uuid references bundles(id);
+alter table booking_request_items add column if not exists bundle_instance_id uuid;
+alter table booking_request_items add column if not exists bundle_name text;
+alter table booking_request_items add column if not exists bundle_quantity int;
 
 -- apply_booking_item_changes (migration 061, Ubah Alat) di-create-or-
 -- replace ulang supaya ikut menyimpan 4 kolom penanda paket -- Express
@@ -108,6 +130,7 @@ alter table booking_request_items add column bundle_quantity int;
 -- milik business booking ini (keamanan wajib, sama alasan item_id di
 -- bawah -- RPC bypass RLS, tanpa ini anggota bisa menautkan bundle_id
 -- business lain). Badan function SAMA PERSIS migration 061 selain itu.
+-- create or replace sendiri sudah idempotent by construction.
 create or replace function apply_booking_item_changes(
   p_booking_id uuid,
   p_new_items jsonb,
