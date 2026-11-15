@@ -100,6 +100,12 @@ test('fullDayLateDays: lewat toleransi 1 menit pun sudah 1 hari, tanpa setengah 
   assert.equal(fullDayLateDays(24, 0), 1); // persis 24 jam -> 1 hari
   assert.equal(fullDayLateDays(24.01, 0), 2); // sedikit lewat 24 jam -> 2 hari
   assert.equal(fullDayLateDays(5, 10), 0); // masih di dalam toleransi -> 0
+  // Review -c2 (15 Nov 2026) poin batas tambahan -- dicek ulang eksplisit
+  // setelah verifikasi live sempat diragukan (tapi ternyata TIDAK ada bug,
+  // cuma salah tebak manual di laporan sebelumnya -- lihat catatan di
+  // commit): 72,5 jam -> ceil(72.5/24) = ceil(3.0208) = 4 hari, BUKAN 3.
+  assert.equal(fullDayLateDays(72.5, 0), 4);
+  assert.equal(fullDayLateDays(72, 0), 3); // persis 72 jam (kelipatan genap) -> 3 hari, tanpa dibulatkan naik
 });
 
 test('computeFullDayLateFeeFlat: 2 hari telat x tarif flat', () => {
@@ -118,6 +124,33 @@ test('computeFullDayLateFee (tiered): 2 hari telat, marginal dari computeItemRen
   };
   // rentDuration 2 hari, telat 30 jam toleransi 0 -> lateDays 2 -> harga(4)-harga(2) = 60000.
   assert.equal(computeFullDayLateFee(30, 0, 2, rates), 60000);
+});
+
+test('computeFullDayLateFee: regresi angka live yang sempat diragukan (-c2 15 Nov 2026) -- Tenda Dome 4 Orang', () => {
+  // Tarif asli demo: 30rb/20rb/10rb/10rb/10rb (hari 1-5), ekstra 10rb.
+  // rentDuration 1 hari (1 malam), telat ~48,0003 jam (verifikasi live:
+  // booking sungguhan toleransi 0) -> lateDays = ceil(48.0003/24) = 3
+  // (BUKAN 2) -> harga(1+3=4) - harga(1) = (30000+20000+10000+10000) -
+  // 30000 = 40000. Nilai ini SAMA PERSIS dengan suggested_late_fee yang
+  // dikembalikan GET /trackings pada verifikasi live -- bukti TIDAK ADA
+  // off-by-one, cuma salah tebak manual ("3 hari" vs sebenarnya 4 hari
+  // untuk kasus telat ~72-73 jam) di laporan verifikasi sebelumnya.
+  const tendaDomeRates: ItemDayRates = {
+    price_per_day: 30000,
+    day2_rate: 20000,
+    day3_rate: 10000,
+    day4_rate: 10000,
+    day5_rate: 10000,
+    extra_day_rate: 10000,
+  };
+  assert.equal(fullDayLateDays(48.0003, 0), 3);
+  assert.equal(computeFullDayLateFeeFlat(48.0003, 0, 30000), 3 * 30000); // untuk pembanding tarif FLAT
+  assert.equal(computeFullDayLateFee(48.0003, 0, 1, tendaDomeRates), 40000); // tarif bertingkat sungguhan
+
+  // Kasus ~72-73 jam dari verifikasi sebelumnya -> lateDays 4 (bukan 3) ->
+  // harga(1+4=5) - harga(1) = 80000 - 30000 = 50000.
+  assert.equal(fullDayLateDays(72.03, 0), 4);
+  assert.equal(computeFullDayLateFee(72.03, 0, 1, tendaDomeRates), 50000);
 });
 
 test('computeHourlyLateFee: batas atas AKTIF -> tidak lebih mahal dari "per hari penuh" (contoh brief)', () => {
