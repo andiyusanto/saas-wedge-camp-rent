@@ -5,6 +5,8 @@ import { X, Calendar, Plus, CheckCircle2, User, ShieldCheck, History, Search, Ca
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import { useItems } from '../hooks/useItems';
 import type { Item } from '../hooks/useItems';
+import { useBundles } from '../hooks/useBundles';
+import type { Bundle } from '../hooks/useBundles';
 import type { Business } from '../hooks/useBusiness';
 import { apiFetch } from '../lib/api';
 import { useCustomerSearch, fetchCustomerHistorySummary } from '../hooks/useCustomerSearch';
@@ -20,7 +22,106 @@ import {
   getWhatsAppShareUrl,
   depositLabel,
   computeItemRentalPrice,
+  combinedComponentRates,
+  applyBundleDiscount,
+  allocateBundlePrice,
 } from '../utils/formatters';
+
+// Paket Alat Tahap 1 (brief 15 Nov 2026, migration 064) — satu paket
+// "dipecah" jadi booking_items per komponen TEPAT di sini (sebelum POST
+// /bookings), item/nama/alat satuan tidak pernah melihat soal paket di
+// level backend sama sekali. items (katalog, bukan cuma bundle.bundle_items
+// yang hanya punya item_id+quantity) dibutuhkan untuk tarif komponen.
+// overrides: quantity EFEKTIF per item_id yang sudah diubah manual dari
+// resep aslinya (recipeQty × bundleQty) -- kosong/tidak ada entri =
+// dipakai apa adanya dari resep (penanda paket dipertahankan). Tiap
+// baris yang di-override dilepas penanda paketnya (koordinator 15 Nov
+// 2026, "Alat Dalam Paket Dikurangi") TAPI subtotal baris SISA LAIN di
+// grup yang sama TIDAK ikut berubah -- harga teralokasi dari
+// allocateBundlePrice() dihitung SEKALI dari resep PENUH (supaya
+// "jumlah alokasi sisa + porsi yang dihapus = total paket awal" persis,
+// tanpa redistribusi), baris yang diubah cuma diskalakan linear dari
+// porsi alokasinya SENDIRI (porsi per unit × quantity efektif baru).
+function explodeBundleToComponents(
+  bundle: Bundle,
+  bundleQty: number,
+  days: number,
+  catalogItems: Item[],
+  instanceId: string,
+  overrides: Record<string, number> = {},
+) {
+  const components = bundle.bundle_items
+    .map((bi) => {
+      const catalogItem = catalogItems.find((i) => i.id === bi.item_id);
+      if (!catalogItem) return null;
+      return {
+        item_id: bi.item_id,
+        quantityPerBundle: bi.quantity,
+        catalogRates: {
+          price_per_day: catalogItem.price_per_day,
+          day2_rate: catalogItem.day2_rate,
+          day3_rate: catalogItem.day3_rate,
+          day4_rate: catalogItem.day4_rate,
+          day5_rate: catalogItem.day5_rate,
+          extra_day_rate: catalogItem.extra_day_rate,
+        },
+      };
+    })
+    .filter((c): c is NonNullable<typeof c> => c !== null);
+  if (components.length === 0) return null;
+
+  const effectiveRates =
+    bundle.pricing_mode === 'sendiri'
+      ? {
+          price_per_day: bundle.price_per_day ?? 0,
+          day2_rate: bundle.day2_rate ?? 0,
+          day3_rate: bundle.day3_rate ?? 0,
+          day4_rate: bundle.day4_rate ?? 0,
+          day5_rate: bundle.day5_rate ?? 0,
+          extra_day_rate: bundle.extra_day_rate ?? 0,
+        }
+      : applyBundleDiscount(combinedComponentRates(components), bundle.discount_type, bundle.discount_value);
+
+  const totalPerInstance = computeItemRentalPrice(effectiveRates, days);
+  const totalForAllInstances = totalPerInstance * bundleQty;
+  const allocated = allocateBundlePrice(components, totalForAllInstances, days);
+
+  let anyOverridden = false;
+  const lines = components
+    .map((c) => {
+      const recipeQtyTotal = c.quantityPerBundle * bundleQty;
+      const override = overrides[c.item_id];
+      const effectiveQty = override == null ? recipeQtyTotal : override;
+      if (effectiveQty <= 0) {
+        anyOverridden = true;
+        return null;
+      }
+      const fullAllocated = allocated.find((a) => a.item_id === c.item_id)!.subtotalPerInstance;
+      const touched = effectiveQty !== recipeQtyTotal;
+      if (touched) anyOverridden = true;
+      const subtotal = touched ? Math.round((fullAllocated / recipeQtyTotal) * effectiveQty) : fullAllocated;
+      return {
+        item_id: c.item_id,
+        quantity: effectiveQty,
+        subtotal,
+        bundle_id: touched ? null : bundle.id,
+        bundle_instance_id: touched ? null : instanceId,
+        bundle_name: touched ? null : bundle.name,
+        bundle_quantity: touched ? null : bundleQty,
+      };
+    })
+    .filter((l): l is NonNullable<typeof l> => l !== null);
+
+  return {
+    instanceId,
+    // Total ditampilkan di preview = jumlah subtotal baris yang BENAR-
+    // BENAR disertakan (bukan totalForAllInstances resep penuh) --
+    // supaya turun persis sebesar porsi komponen yang dihapus/dikurangi.
+    totalForAllInstances: lines.reduce((s, l) => s + l.subtotal, 0),
+    anyOverridden,
+    lines,
+  };
+}
 
 type DepositType = '' | 'ktp' | 'sim' | 'stnk' | 'paspor' | 'uang' | 'lainnya';
 
@@ -135,6 +236,7 @@ export function NewBookingModal({
   writable?: boolean;
 }) {
   const { items } = useItems(business.id);
+  const { bundles } = useBundles(business.id);
   const { results: customerSuggestions, search: searchCustomers, clear: clearCustomerSuggestions } =
     useCustomerSearch(business.id);
 
@@ -156,6 +258,14 @@ export function NewBookingModal({
   const [startDate, setStartDate] = useState(todayStr());
   const [endDate, setEndDate] = useState(todayStr());
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [bundleQuantities, setBundleQuantities] = useState<Record<string, number>>({});
+  // bundle_instance_id harus STABIL selama satu paket masih dipilih di
+  // form ini (bukan di-generate ulang tiap render) -- lihat
+  // explodeBundleToComponents. overrides: quantity efektif per
+  // item_id, PER bundle, kalau vendor mengubah/menghapus salah satu
+  // komponen sebelum Simpan (brief "Alat Dalam Paket Dikurangi").
+  const [bundleInstanceIds, setBundleInstanceIds] = useState<Record<string, string>>({});
+  const [bundleComponentOverrides, setBundleComponentOverrides] = useState<Record<string, Record<string, number>>>({});
   const [itemSearchQuery, setItemSearchQuery] = useState('');
   const [depositType, setDepositType] = useState<DepositType>('ktp');
   const [depositNote, setDepositNote] = useState('');
@@ -177,6 +287,11 @@ export function NewBookingModal({
       setStartDate(requestPrefill.startDate);
       setEndDate(requestPrefill.endDate);
       setQuantities(Object.fromEntries(requestPrefill.items.map((i) => [i.itemId, i.quantity])));
+      // Pesanan Online Tahap 1 belum punya paket (Tahap 2) — prefill
+      // paket selalu kosong, pelanggan cuma bisa pesan alat satuan.
+      setBundleQuantities({});
+      setBundleInstanceIds({});
+      setBundleComponentOverrides({});
       setCustomerName(requestPrefill.customerName);
       // Review -c1 (tahap 4, poin 2): customer_phone dari booking_requests
       // tersimpan dalam bentuk kanonik "628xxx" (lihat normalizePhone() di
@@ -195,6 +310,9 @@ export function NewBookingModal({
       setStartDate(initialStart);
       setEndDate(business.rental_day_mode === 'per_malam' ? addDaysStr(initialStart, 1) : initialStart);
       setQuantities(preselectedItemId ? { [preselectedItemId]: 1 } : {});
+      setBundleQuantities({});
+      setBundleInstanceIds({});
+      setBundleComponentOverrides({});
       setCustomerName('');
       setCustomerPhone('');
     }
@@ -242,13 +360,80 @@ export function NewBookingModal({
     );
   }, [items, itemSearchQuery]);
 
-  const totalPrice = selectedEntries.reduce((sum, [itemId, qty]) => {
-    const item = items.find((i) => i.id === itemId);
-    if (!item) return sum;
-    return sum + qty * itemRentalPrice(item, days);
-  }, 0);
+  const selectedBundleEntries = useMemo(
+    () => Object.entries(bundleQuantities).filter(([, qty]) => qty > 0),
+    [bundleQuantities],
+  );
+
+  // Dipecah SEKALI di sini (bukan di handleSubmit/receipt masing-masing)
+  // supaya preview harga di form dan payload yang dikirim selalu sama
+  // persis — satu sumber per render.
+  const explodedBundles = useMemo(
+    () =>
+      selectedBundleEntries
+        .map(([bundleId, qty]) => {
+          const bundle = bundles.find((b) => b.id === bundleId);
+          if (!bundle) return null;
+          const instanceId = bundleInstanceIds[bundleId];
+          if (!instanceId) return null; // belum di-assign (lihat setBundleQuantity) -- hindari render transisional
+          const exploded = explodeBundleToComponents(bundle, qty, days, items, instanceId, bundleComponentOverrides[bundleId] ?? {});
+          return exploded ? { bundle, qty, exploded } : null;
+        })
+        .filter((b): b is NonNullable<typeof b> => b !== null),
+    [selectedBundleEntries, bundles, days, items, bundleInstanceIds, bundleComponentOverrides],
+  );
+
+  const bundleComponentLines = useMemo(
+    () => explodedBundles.flatMap((b) => b.exploded.lines),
+    [explodedBundles],
+  );
+
+  const totalPrice =
+    selectedEntries.reduce((sum, [itemId, qty]) => {
+      const item = items.find((i) => i.id === itemId);
+      if (!item) return sum;
+      return sum + qty * itemRentalPrice(item, days);
+    }, 0) + explodedBundles.reduce((sum, b) => sum + b.exploded.totalForAllInstances, 0);
 
   const remainingPayment = Math.max(0, totalPrice - (Number(dpPaid) || 0));
+
+  function setBundleQuantity(bundleId: string, qty: number) {
+    const clamped = Math.max(0, qty);
+    setBundleQuantities((prev) => ({ ...prev, [bundleId]: clamped }));
+    if (clamped === 0) {
+      // Paket dilepas dari pilihan -- bersihkan instance id & override-nya
+      // supaya kalau dipilih lagi nanti, mulai dari resep penuh yang segar.
+      setBundleInstanceIds((prev) => {
+        const next = { ...prev };
+        delete next[bundleId];
+        return next;
+      });
+      setBundleComponentOverrides((prev) => {
+        const next = { ...prev };
+        delete next[bundleId];
+        return next;
+      });
+    } else if (!bundleInstanceIds[bundleId]) {
+      setBundleInstanceIds((prev) => ({ ...prev, [bundleId]: crypto.randomUUID() }));
+    } else {
+      // bundleQty berubah (bukan baru dipilih) -- reset override supaya
+      // tidak nyangkut ke resep lama (jumlah komponen efektif ikut
+      // berubah mengikuti bundleQty baru, label TETAP karena ini
+      // mengubah kontrol jumlah paket, bukan komponen individual).
+      setBundleComponentOverrides((prev) => {
+        const next = { ...prev };
+        delete next[bundleId];
+        return next;
+      });
+    }
+  }
+
+  function setBundleComponentOverride(bundleId: string, itemId: string, qty: number) {
+    setBundleComponentOverrides((prev) => ({
+      ...prev,
+      [bundleId]: { ...(prev[bundleId] ?? {}), [itemId]: Math.max(0, qty) },
+    }));
+  }
 
   if (!isOpen) return null;
 
@@ -315,10 +500,13 @@ export function NewBookingModal({
     // SAAT INI dan disimpan sebagai snapshot booking_items.subtotal —
     // bukan dihitung ulang dari katalog lagi nanti saat struk/Nota
     // ditampilkan, supaya tidak berubah kalau harga alat diedit belakangan.
-    const selectedItems = selectedEntries.map(([item_id, quantity]) => {
-      const item = items.find((i) => i.id === item_id);
-      return { item_id, quantity, subtotal: item ? quantity * itemRentalPrice(item, days) : undefined };
-    });
+    const selectedItems = [
+      ...selectedEntries.map(([item_id, quantity]) => {
+        const item = items.find((i) => i.id === item_id);
+        return { item_id, quantity, subtotal: item ? quantity * itemRentalPrice(item, days) : undefined };
+      }),
+      ...bundleComponentLines,
+    ];
     if (selectedItems.length === 0) {
       setError('Pilih minimal satu alat.');
       return;
@@ -376,16 +564,34 @@ export function NewBookingModal({
     // menahan modal ini tertutup atau bikin layar nyangkut.
     if (autoOpenWA && customerPhone) {
       try {
-        const receiptItems = selectedEntries
-          .map(([itemId, qty]) => {
-            const item = items.find((i) => i.id === itemId);
-            return item
-              ? { name: item.name, quantity: qty, price_per_day: item.price_per_day, subtotal: qty * itemRentalPrice(item, days) }
-              : null;
-          })
-          .filter(
-            (i): i is { name: string; quantity: number; price_per_day: number; subtotal: number } => i !== null,
-          );
+        const receiptItems = [
+          ...selectedEntries
+            .map(([itemId, qty]) => {
+              const item = items.find((i) => i.id === itemId);
+              return item
+                ? { name: item.name, quantity: qty, price_per_day: item.price_per_day, subtotal: qty * itemRentalPrice(item, days) }
+                : null;
+            })
+            .filter(
+              (i): i is { name: string; quantity: number; price_per_day: number; subtotal: number } => i !== null,
+            ),
+          ...bundleComponentLines
+            .map((line) => {
+              const item = items.find((i) => i.id === line.item_id);
+              return item
+                ? {
+                    name: item.name,
+                    quantity: line.quantity,
+                    price_per_day: item.price_per_day,
+                    subtotal: line.subtotal,
+                    bundle_instance_id: line.bundle_instance_id,
+                    bundle_name: line.bundle_name,
+                    bundle_quantity: line.bundle_quantity,
+                  }
+                : null;
+            })
+            .filter((i): i is NonNullable<typeof i> => i !== null),
+        ];
 
         const receiptText = generateWhatsAppReceipt({
           bookingNumber: body.booking_number,
@@ -688,6 +894,131 @@ export function NewBookingModal({
               );
             })()}
           </div>
+
+          {bundles.length > 0 && (
+            <div className="space-y-2 bg-[#F1EEE2] p-4 rounded-xl border border-[#DBD5C1]">
+              <h3 className="font-bold text-[#26302B]">Pilih Paket (opsional)</h3>
+              <div className="space-y-2">
+                {bundles.map((bundle) => {
+                  const qty = bundleQuantities[bundle.id] ?? 0;
+                  const checked = qty > 0;
+                  // Paket komponennya dinonaktifkan -- items (useItems) sudah
+                  // hanya berisi alat AKTIF, jadi komponen yang tidak ketemu di
+                  // sana berarti nonaktif. Paket seperti ini tidak bisa dipilih.
+                  const hasDeactivatedComponent = bundle.bundle_items.some((bi) => !items.some((i) => i.id === bi.item_id));
+                  const instanceId = bundleInstanceIds[bundle.id];
+                  const exploded =
+                    checked && !hasDeactivatedComponent && instanceId
+                      ? explodeBundleToComponents(bundle, qty, days, items, instanceId, bundleComponentOverrides[bundle.id] ?? {})
+                      : null;
+                  return (
+                    <div key={bundle.id} className="rounded-lg bg-white border border-[#DBD5C1] overflow-hidden">
+                      <div className="flex items-center justify-between p-2.5">
+                        <label className={`flex-1 min-w-0 pr-2 flex items-center gap-2 ${hasDeactivatedComponent ? '' : 'cursor-pointer'}`}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={hasDeactivatedComponent}
+                            onChange={(e) => setBundleQuantity(bundle.id, e.target.checked ? 1 : 0)}
+                            className="w-4 h-4 accent-[#2B4739] shrink-0"
+                          />
+                          <span className="min-w-0">
+                            <p className="font-bold text-[#26302B] truncate">Paket {bundle.name}</p>
+                            <p className="text-[9px] text-[#6E6853] font-semibold uppercase tracking-wide truncate">
+                              {bundle.bundle_items
+                                .map((bi) => `${items.find((i) => i.id === bi.item_id)?.name ?? '?'} ×${bi.quantity}`)
+                                .join(', ')}
+                            </p>
+                            {exploded && (
+                              <p className="text-[11px] text-[#6E6853]">
+                                = <strong className="text-[#2B4739]">{formatIDR(exploded.totalForAllInstances)}</strong>
+                              </p>
+                            )}
+                            {hasDeactivatedComponent && (
+                              <p className="text-[11px] text-[#A8412E] font-semibold">
+                                Salah satu alat di paket ini sudah nonaktif — tidak bisa dipilih.
+                              </p>
+                            )}
+                          </span>
+                        </label>
+                        {checked && (
+                          <div className="flex items-center gap-1 bg-[#F1EEE2] rounded-lg p-1 border border-[#DBD5C1] shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setBundleQuantity(bundle.id, qty - 1)}
+                              className="w-6 h-6 rounded bg-white font-bold hover:bg-[#DBD5C1] text-[#26302B] transition"
+                            >
+                              −
+                            </button>
+                            <span className="w-6 text-center font-bold text-[#26302B]">{qty}</span>
+                            <button
+                              type="button"
+                              onClick={() => setBundleQuantity(bundle.id, qty + 1)}
+                              className="w-6 h-6 rounded bg-white font-bold hover:bg-[#DBD5C1] text-[#26302B] transition"
+                            >
+                              +
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Rincian komponen -- bisa dikurangi/dihapus kalau
+                          pelanggan tidak butuh salah satu alat di paket
+                          (brief "Alat Dalam Paket Dikurangi", 15 Nov 2026).
+                          Mengubah salah satu baris MELEPAS label paket (sama
+                          aturan Ubah Alat) -- harga baris lain TIDAK berubah,
+                          cuma porsi baris yang disentuh yang turun/hilang. */}
+                      {exploded && (
+                        <div className="px-2.5 pb-2.5 space-y-1 bg-[#F1EEE2]/60 border-t border-[#DBD5C1]">
+                          {bundle.bundle_items.map((bi) => {
+                            const recipeQtyTotal = bi.quantity * qty;
+                            const overrideQty = bundleComponentOverrides[bundle.id]?.[bi.item_id];
+                            const effectiveQty = overrideQty ?? recipeQtyTotal;
+                            const itemName = items.find((i) => i.id === bi.item_id)?.name ?? '?';
+                            const line = exploded.lines.find((l) => l.item_id === bi.item_id);
+                            return (
+                              <div key={bi.item_id} className="flex items-center justify-between py-1 text-[11px]">
+                                <span className="text-[#26302B]">
+                                  {itemName} {line ? `(${formatIDR(line.subtotal)})` : <span className="text-[#A8412E] font-semibold">dihapus</span>}
+                                </span>
+                                <div className="flex items-center gap-1 bg-white rounded p-0.5 border border-[#DBD5C1] shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => setBundleComponentOverride(bundle.id, bi.item_id, effectiveQty - 1)}
+                                    className="w-5 h-5 rounded bg-[#F1EEE2] font-bold hover:bg-[#DBD5C1] text-[#26302B]"
+                                  >
+                                    −
+                                  </button>
+                                  <span className="w-5 text-center font-bold text-[#26302B]">{effectiveQty}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setBundleComponentOverride(bundle.id, bi.item_id, Math.min(recipeQtyTotal, effectiveQty + 1))}
+                                    disabled={effectiveQty >= recipeQtyTotal}
+                                    className="w-5 h-5 rounded bg-[#F1EEE2] font-bold hover:bg-[#DBD5C1] text-[#26302B] disabled:opacity-40"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {exploded.anyOverridden && (
+                            <p className="text-[10px] text-[#A65C2A] font-semibold pt-1">
+                              Isi paket diubah. Harga dihitung dari porsi paket, label paket dilepas untuk baris yang
+                              diubah.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] text-[#6E6853] italic">
+                Ketersediaan paket dicek saat Simpan (sama seperti alat satuan) — belum ditampilkan sisa stok di sini.
+              </p>
+            </div>
+          )}
 
           <div className="space-y-3 bg-[#F1EEE2] p-4 rounded-xl border border-[#DBD5C1]">
             <h3 className="font-bold text-[#26302B]">3. Pilih Peralatan ({selectedEntries.length} Jenis)</h3>

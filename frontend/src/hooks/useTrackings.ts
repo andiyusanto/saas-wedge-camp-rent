@@ -31,7 +31,16 @@ export type TrackingBooking = {
   // bukan per alat) — `late_fee_breakdown` kosong untuk mode itu.
   late_fee_mode: 'bertahap_12jam' | 'per_hari_24jam' | 'per_jam' | 'tanpa_denda';
   late_fee_hourly: { hours: number; per_hour: number; cap: number | null; capped: boolean; needs_manual_input: boolean } | null;
-  items: { item_id: string; name: string; quantity: number; price_per_day: number; subtotal: number | null }[];
+  items: {
+    item_id: string;
+    name: string;
+    quantity: number;
+    price_per_day: number;
+    subtotal: number | null;
+    bundle_instance_id?: string | null;
+    bundle_name?: string | null;
+    bundle_quantity?: number | null;
+  }[];
   deposits: { id: string; type: string; amount: number | null; note: string | null; status: string }[];
   penalties: {
     id: string;
@@ -201,13 +210,26 @@ export function useTrackings(session: Session | null) {
   // rescheduleBooking/extendBooking di atas.
   async function updateBookingItems(
     bookingId: string,
-    body: { items: { item_id: string; quantity: number }[]; total_price?: number; reason?: string },
+    body: {
+      items: { item_id: string; quantity: number; bundle_instance_id?: string | null }[];
+      total_price?: number;
+      reason?: string;
+    },
   ) {
     if (!session) return { error: 'Belum login', data: null };
     try {
       const result = await apiFetch<{
         total_price: number;
-        items: { item_id: string; name: string; quantity: number; price_per_day: number; subtotal: number }[];
+        items: {
+          item_id: string;
+          name: string;
+          quantity: number;
+          price_per_day: number;
+          subtotal: number;
+          bundle_instance_id?: string | null;
+          bundle_name?: string | null;
+          bundle_quantity?: number | null;
+        }[];
       }>(session, `/api/bookings/${bookingId}/items`, { method: 'PATCH', body: JSON.stringify(body) });
       await refresh();
       return { error: null, data: result };

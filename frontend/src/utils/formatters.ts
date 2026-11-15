@@ -152,6 +152,63 @@ export function computeItemRentalPrice(rates: ItemDayRates, days: number): numbe
   return total;
 }
 
+// Paket Alat Tahap 1 (brief 15 Nov 2026, migration 064) -- salinan
+// frontend dari backend/src/lib/pricing.ts allocateBundlePrice dkk
+// (satu definisi per runtime, pola sama computeItemRentalPrice di atas
+// -- lihat migration 034). Dipakai NewBookingModal.tsx saat memecah
+// paket jadi booking_items per komponen sebelum POST /bookings.
+export type BundleComponent = { item_id: string; quantityPerBundle: number; catalogRates: ItemDayRates };
+
+export function combinedComponentRates(components: BundleComponent[]): ItemDayRates {
+  const sum = (key: keyof ItemDayRates) =>
+    components.reduce((total, c) => total + c.catalogRates[key] * c.quantityPerBundle, 0);
+  return {
+    price_per_day: sum('price_per_day'),
+    day2_rate: sum('day2_rate'),
+    day3_rate: sum('day3_rate'),
+    day4_rate: sum('day4_rate'),
+    day5_rate: sum('day5_rate'),
+    extra_day_rate: sum('extra_day_rate'),
+  };
+}
+
+export function applyBundleDiscount(
+  rates: ItemDayRates,
+  discountType: 'percent' | 'nominal' | null,
+  discountValue: number | null,
+): ItemDayRates {
+  if (!discountType || !discountValue) return rates;
+  const apply = (v: number) => (discountType === 'percent' ? Math.max(0, v * (1 - discountValue / 100)) : Math.max(0, v - discountValue));
+  return {
+    price_per_day: apply(rates.price_per_day),
+    day2_rate: apply(rates.day2_rate),
+    day3_rate: apply(rates.day3_rate),
+    day4_rate: apply(rates.day4_rate),
+    day5_rate: apply(rates.day5_rate),
+    extra_day_rate: apply(rates.extra_day_rate),
+  };
+}
+
+export type AllocatedComponent = { item_id: string; subtotalPerInstance: number };
+
+export function allocateBundlePrice(components: BundleComponent[], totalPerInstance: number, days: number): AllocatedComponent[] {
+  const standalone = components.map((c) => computeItemRentalPrice(c.catalogRates, days) * c.quantityPerBundle);
+  const standaloneSum = standalone.reduce((a, b) => a + b, 0);
+
+  if (standaloneSum <= 0) {
+    const equal = Math.floor(totalPerInstance / components.length);
+    const result = components.map((c) => ({ item_id: c.item_id, subtotalPerInstance: equal }));
+    result[0].subtotalPerInstance += totalPerInstance - equal * components.length;
+    return result;
+  }
+
+  const raw = standalone.map((s) => Math.floor((s / standaloneSum) * totalPerInstance));
+  const rawSum = raw.reduce((a, b) => a + b, 0);
+  const remainder = totalPerInstance - rawSum;
+
+  return components.map((c, i) => ({ item_id: c.item_id, subtotalPerInstance: raw[i] + (i === 0 ? remainder : 0) }));
+}
+
 const DEPOSIT_LABEL: Record<string, string> = {
   ktp: 'KTP Asli',
   sim: 'SIM Asli',
@@ -181,7 +238,15 @@ export function fineLabel(type: string): string {
 // berubah kalau harga katalog alat ini diedit belakangan. null = baris
 // booking_items lama dari SEBELUM migration 034 (tidak di-backfill),
 // fallback ke price_per_day * quantity * hari (perilaku lama).
-export type ReceiptItem = { name: string; quantity: number; price_per_day: number; subtotal?: number | null };
+export type ReceiptItem = {
+  name: string;
+  quantity: number;
+  price_per_day: number;
+  subtotal?: number | null;
+  bundle_instance_id?: string | null;
+  bundle_name?: string | null;
+  bundle_quantity?: number | null;
+};
 export type ReceiptFine = {
   type: string;
   amount: number;
@@ -228,10 +293,40 @@ export function bookingStatusLabel(status: string): string {
   return BOOKING_STATUS_LABEL[status] ?? status;
 }
 
+// Kelompokkan baris struk ber-bundle_instance_id sama jadi satu grup
+// "Paket X ×N" (dipakai struk WA di atas, dan bisa dipakai tampilan
+// lain, mis. InvoiceModal.tsx/TrackingScreen.tsx) -- baris tanpa
+// penanda tetap satu grup sendiri-sendiri (bundleName null).
+export type ReceiptItemGroup = { bundleName: string | null; bundleQuantity: number | null; items: ReceiptItem[] };
+
+export function groupReceiptItemsByBundle(items: ReceiptItem[]): ReceiptItemGroup[] {
+  const groups: ReceiptItemGroup[] = [];
+  const instanceIndex = new Map<string, number>();
+  for (const item of items) {
+    if (item.bundle_instance_id) {
+      const existingIdx = instanceIndex.get(item.bundle_instance_id);
+      if (existingIdx != null) {
+        groups[existingIdx].items.push(item);
+        continue;
+      }
+      instanceIndex.set(item.bundle_instance_id, groups.length);
+      groups.push({ bundleName: item.bundle_name ?? null, bundleQuantity: item.bundle_quantity ?? null, items: [item] });
+    } else {
+      groups.push({ bundleName: null, bundleQuantity: null, items: [item] });
+    }
+  }
+  return groups;
+}
+
 export function generateWhatsAppReceipt(data: ReceiptData): string {
   const days = rentalDays(data.startDate, data.endDate, data.rentalDayMode);
-  const itemsText = data.items
-    .map((i) => `• ${i.name} (${i.quantity}x) = ${formatIDR(i.subtotal ?? i.price_per_day * i.quantity * days)}`)
+  const itemsText = groupReceiptItemsByBundle(data.items)
+    .map((group) => {
+      const line = (i: ReceiptItem) => `• ${i.name} (${i.quantity}x) = ${formatIDR(i.subtotal ?? i.price_per_day * i.quantity * days)}`;
+      if (!group.bundleName) return group.items.map(line).join('\n');
+      const header = `• Paket ${group.bundleName}${group.bundleQuantity && group.bundleQuantity > 1 ? ` x${group.bundleQuantity}` : ''}`;
+      return [header, ...group.items.map((i) => `   - ${line(i).slice(2)}`)].join('\n');
+    })
     .join('\n');
 
   const remaining = Math.max(0, data.totalPrice - data.dpPaid);

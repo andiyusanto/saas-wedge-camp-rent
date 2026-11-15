@@ -7,7 +7,15 @@ import { buildReceiptData } from '../hooks/useTrackings';
 import type { TrackingBooking } from '../hooks/useTrackings';
 import { formatIDR, rentalDays, computeItemRentalPrice, generateWhatsAppReceipt, getWhatsAppShareUrl } from '../utils/formatters';
 
-type SavedResultItem = { item_id: string; name: string; quantity: number; price_per_day: number; subtotal: number };
+type SavedResultItem = {
+  item_id: string;
+  name: string;
+  quantity: number;
+  price_per_day: number;
+  subtotal: number;
+  bundle_instance_id?: string | null;
+  bundle_name?: string | null;
+};
 type ActionResult = { error: string | null; data: { total_price: number; items: SavedResultItem[] } | null };
 
 function itemRentalPrice(item: Item, days: number): number {
@@ -24,6 +32,15 @@ function itemRentalPrice(item: Item, days: number): number {
   );
 }
 
+// Paket Alat Tahap 1 (brief 15 Nov 2026, migration 064) -- rowKey
+// mencocokkan pola backend (lib/bookingItems.ts rowKey()): item_id yang
+// sama bisa punya 2 baris berbeda (komponen paket + alat tambahan biasa,
+// harganya BEDA) -- harus dibedakan lewat bundle_instance_id, bukan
+// cuma item_id, supaya quantities state ini tidak menimpa salah satunya.
+function rowKey(itemId: string, bundleInstanceId: string | null | undefined): string {
+  return `${itemId}::${bundleInstanceId ?? ''}`;
+}
+
 // Ubah Alat (migration 061, brief 14 Nov 2026) — HANYA untuk booking
 // berstatus 'dipesan' ("Siap Diambil"), tanggal TIDAK berubah di sini
 // (beda dari RescheduleModal.tsx). Preview harga di modal ini SENGAJA
@@ -34,6 +51,13 @@ function itemRentalPrice(item: Item, days: number): number {
 // selalu dihitung ulang server-side (PATCH /bookings/:id/items, pakai
 // snapshot asli), persis seperti subtotal booking_items lainnya di app
 // ini (trust-the-server, bukan trust-the-client).
+//
+// Baris komponen paket (bundle_instance_id != null) ditampilkan
+// terkelompok di bawah header "Paket X" — mengubah/menghapus salah satu
+// baris grup itu MELEPAS label paket untuk SELURUH baris sisa grup
+// (ditegakkan server-side, lib/bookingItems.ts groupsToRelease; harga
+// baris lain di grup yang sama TIDAK ikut berubah, cuma porsi baris yang
+// disentuh yang berubah/hilang — brief "Alat Dalam Paket Dikurangi").
 export function UbahAlatModal({
   isOpen,
   onClose,
@@ -51,7 +75,7 @@ export function UbahAlatModal({
   businessId: string;
   updateBookingItems: (
     bookingId: string,
-    body: { items: { item_id: string; quantity: number }[]; total_price?: number; reason?: string },
+    body: { items: { item_id: string; quantity: number; bundle_instance_id?: string | null }[]; total_price?: number; reason?: string },
   ) => Promise<ActionResult>;
   businessName: string;
   businessAddress: string | null;
@@ -59,6 +83,8 @@ export function UbahAlatModal({
   onDone: () => void;
 }) {
   const { items, inactiveItems } = useItems(businessId);
+  // Kunci: rowKey(item_id, bundle_instance_id) untuk baris existing (paket
+  // ATAU plain), atau rowKey(item_id, null) untuk alat baru yang ditambah.
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [itemSearchQuery, setItemSearchQuery] = useState('');
   const [reason, setReason] = useState('');
@@ -99,11 +125,24 @@ export function UbahAlatModal({
     );
   }, [pickerItems, itemSearchQuery]);
 
+  // Baris paket (bundle_instance_id != null), dikelompokkan per instance
+  // -- ditampilkan terpisah dari daftar alat biasa di bawah.
+  const bundleGroups = useMemo(() => {
+    const groups = new Map<string, { bundleName: string; rows: NonNullable<TrackingBooking['items']>[number][] }>();
+    for (const bi of booking?.items ?? []) {
+      if (!bi.bundle_instance_id) continue;
+      const g = groups.get(bi.bundle_instance_id) ?? { bundleName: bi.bundle_name ?? '', rows: [] };
+      g.rows.push(bi);
+      groups.set(bi.bundle_instance_id, g);
+    }
+    return groups;
+  }, [booking]);
+
   if (!isOpen || !booking) return null;
 
   if (initialisedFor !== booking.id) {
     const initial: Record<string, number> = {};
-    for (const bi of booking.items) initial[bi.item_id] = bi.quantity;
+    for (const bi of booking.items) initial[rowKey(bi.item_id, bi.bundle_instance_id)] = bi.quantity;
     setQuantities(initial);
     setItemSearchQuery('');
     setReason('');
@@ -115,15 +154,23 @@ export function UbahAlatModal({
   }
 
   const days = rentalDays(booking.start_date, booking.end_date, booking.rental_day_mode);
-  const existingById = new Map(booking.items.map((bi) => [bi.item_id, bi]));
+  // existingByKey: utk estimasi preview per baris -- dicocokkan per
+  // KUNCI (item_id+bundle_instance_id), BUKAN item_id saja, supaya baris
+  // komponen paket dan baris alat biasa yang item_id-nya sama tidak
+  // saling menimpa estimasinya (koordinator 15 Nov 2026, lihat komentar
+  // rowKey() di atas).
+  const existingByKey = new Map(booking.items.map((bi) => [rowKey(bi.item_id, bi.bundle_instance_id), bi]));
+  // Dipakai picker alat biasa (bagian bawah) -- cuma peduli baris PLAIN
+  // (bundle_instance_id null), supaya tidak bingung dengan baris paket.
+  const existingPlainByItemId = new Map(booking.items.filter((bi) => !bi.bundle_instance_id).map((bi) => [bi.item_id, bi]));
 
   const selectedEntries = Object.entries(quantities).filter(([, qty]) => qty > 0);
 
   // Estimasi subtotal per baris — existing (proporsional dari subtotal
   // snapshot lama) vs baru (tarif katalog live). CUMA untuk preview,
   // lihat catatan di atas komponen.
-  function estimateSubtotal(itemId: string, qty: number): number {
-    const prior = existingById.get(itemId);
+  function estimateSubtotalForKey(key: string, itemId: string, qty: number): number {
+    const prior = existingByKey.get(key);
     if (prior && prior.subtotal != null && prior.quantity > 0) {
       return Math.round((prior.subtotal / prior.quantity) * qty);
     }
@@ -132,15 +179,18 @@ export function UbahAlatModal({
     return qty * itemRentalPrice(catalogItem, days);
   }
 
-  const estimatedTotal = selectedEntries.reduce((sum, [itemId, qty]) => sum + estimateSubtotal(itemId, qty), 0);
+  const estimatedTotal = selectedEntries.reduce((sum, [key, qty]) => {
+    const itemId = key.split('::')[0];
+    return sum + estimateSubtotalForKey(key, itemId, qty);
+  }, 0);
 
-  function setQuantity(itemId: string, qty: number, maxUnits?: number) {
+  function setQuantityForKey(key: string, qty: number, maxUnits?: number) {
     const clamped = Math.max(0, maxUnits != null ? Math.min(qty, maxUnits) : qty);
-    setQuantities((prev) => ({ ...prev, [itemId]: clamped }));
+    setQuantities((prev) => ({ ...prev, [key]: clamped }));
   }
 
-  function toggleItem(itemId: string, checked: boolean) {
-    setQuantities((prev) => ({ ...prev, [itemId]: checked ? 1 : 0 }));
+  function togglePlainItem(itemId: string, checked: boolean) {
+    setQuantityForKey(rowKey(itemId, null), checked ? 1 : 0);
   }
 
   async function handleSubmit() {
@@ -153,7 +203,10 @@ export function UbahAlatModal({
     setError(null);
 
     const body = {
-      items: selectedEntries.map(([item_id, quantity]) => ({ item_id, quantity })),
+      items: selectedEntries.map(([key, quantity]) => {
+        const [itemId, bundleInstanceId] = key.split('::');
+        return { item_id: itemId, quantity, bundle_instance_id: bundleInstanceId || null };
+      }),
       reason: reason.trim() || undefined,
       ...(overrideTotal ? { total_price: Number(totalPrice) || 0 } : {}),
     };
@@ -172,6 +225,13 @@ export function UbahAlatModal({
     const updatedBooking = { ...booking, items: savedResult.items, total_price: savedResult.total_price };
     const text = generateWhatsAppReceipt(buildReceiptData(updatedBooking, businessName, businessAddress, businessLogoUrl));
     window.open(getWhatsAppShareUrl(booking.customer.phone, text), '_blank');
+  }
+
+  // Grup paket yang sudah "disentuh" (ada baris quantity-nya berubah
+  // dari semula, atau dihapus) -- cuma untuk tampilan info "label
+  // dilepas", keputusan FINAL tetap di server (groupsToRelease).
+  function isGroupTouched(rows: NonNullable<TrackingBooking['items']>[number][]): boolean {
+    return rows.some((row) => (quantities[rowKey(row.item_id, row.bundle_instance_id)] ?? 0) !== row.quantity);
   }
 
   return (
@@ -196,9 +256,10 @@ export function UbahAlatModal({
               <p>
                 {booking.booking_number} · {booking.customer?.name}
               </p>
-              {savedResult.items.map((it) => (
-                <p key={it.item_id} className="flex items-center justify-between">
+              {savedResult.items.map((it, idx) => (
+                <p key={`${it.item_id}-${idx}`} className="flex items-center justify-between">
                   <span>
+                    {it.bundle_name ? `${it.bundle_name} — ` : ''}
                     {it.name} × {it.quantity}
                   </span>
                   <span className="font-semibold">{formatIDR(it.subtotal)}</span>
@@ -233,6 +294,54 @@ export function UbahAlatModal({
               {booking.booking_number} · {booking.customer?.name} · {days} hari (tanggal tidak berubah di sini)
             </p>
 
+            {bundleGroups.size > 0 && (
+              <div className="space-y-2">
+                {[...bundleGroups.entries()].map(([instanceId, group]) => {
+                  const touched = isGroupTouched(group.rows);
+                  return (
+                    <div key={instanceId} className="rounded-lg border border-[#DBD5C1] bg-[#F1EEE2] p-2.5 space-y-1.5">
+                      <p className="font-bold text-[#26302B] text-xs">Paket {group.bundleName}</p>
+                      {group.rows.map((row) => {
+                        const key = rowKey(row.item_id, row.bundle_instance_id);
+                        const qty = quantities[key] ?? 0;
+                        const subtotal = estimateSubtotalForKey(key, row.item_id, qty);
+                        return (
+                          <div key={key} className="flex items-center justify-between py-0.5 text-[11px]">
+                            <span className="text-[#26302B]">
+                              {row.name} {qty > 0 ? `(~${formatIDR(subtotal)})` : <span className="text-[#A8412E] font-semibold">dihapus</span>}
+                            </span>
+                            <div className="flex items-center gap-1 bg-white rounded p-0.5 border border-[#DBD5C1] shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => setQuantityForKey(key, qty - 1)}
+                                className="w-5 h-5 rounded bg-[#F1EEE2] font-bold hover:bg-[#DBD5C1] text-[#26302B]"
+                              >
+                                −
+                              </button>
+                              <span className="w-5 text-center font-bold text-[#26302B]">{qty}</span>
+                              <button
+                                type="button"
+                                onClick={() => setQuantityForKey(key, qty + 1, row.quantity)}
+                                disabled={qty >= row.quantity}
+                                className="w-5 h-5 rounded bg-[#F1EEE2] font-bold hover:bg-[#DBD5C1] text-[#26302B] disabled:opacity-40"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {touched && (
+                        <p className="text-[10px] text-[#A65C2A] font-semibold pt-1">
+                          Isi paket diubah. Harga dihitung dari porsi paket, label paket dilepas untuk baris yang diubah.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             {items.length === 0 ? (
               <p className="text-center text-[#6E6853] py-3 italic bg-white/50 rounded-lg border border-dashed border-[#DBD5C1]">
                 Belum ada alat di katalog.
@@ -251,10 +360,11 @@ export function UbahAlatModal({
                 </div>
                 <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                   {filteredItems.map((item) => {
-                    const qty = quantities[item.id] ?? 0;
+                    const key = rowKey(item.id, null);
+                    const qty = quantities[key] ?? 0;
                     const checked = qty > 0;
-                    const subtotal = checked ? estimateSubtotal(item.id, qty) : 0;
-                    const isExisting = existingById.has(item.id);
+                    const subtotal = checked ? estimateSubtotalForKey(key, item.id, qty) : 0;
+                    const isExisting = existingPlainByItemId.has(item.id);
 
                     return (
                       <div key={item.id} className="flex items-center justify-between p-2.5 rounded-lg bg-white border border-[#DBD5C1]">
@@ -262,7 +372,7 @@ export function UbahAlatModal({
                           <input
                             type="checkbox"
                             checked={checked}
-                            onChange={(e) => toggleItem(item.id, e.target.checked)}
+                            onChange={(e) => togglePlainItem(item.id, e.target.checked)}
                             className="w-4 h-4 accent-[#2B4739] shrink-0"
                           />
                           <span className="min-w-0">
@@ -288,7 +398,7 @@ export function UbahAlatModal({
                           <div className="flex items-center gap-1 bg-[#F1EEE2] rounded-lg p-1 border border-[#DBD5C1] shrink-0">
                             <button
                               type="button"
-                              onClick={() => setQuantity(item.id, qty - 1, item.total_units)}
+                              onClick={() => setQuantityForKey(key, qty - 1, item.total_units)}
                               className="w-6 h-6 rounded bg-white font-bold hover:bg-[#DBD5C1] text-[#26302B] transition"
                             >
                               -
@@ -296,7 +406,7 @@ export function UbahAlatModal({
                             <span className="w-6 text-center font-bold text-[#26302B] text-xs">{qty}</span>
                             <button
                               type="button"
-                              onClick={() => setQuantity(item.id, qty + 1, item.total_units)}
+                              onClick={() => setQuantityForKey(key, qty + 1, item.total_units)}
                               className="w-6 h-6 rounded bg-white font-bold hover:bg-[#DBD5C1] text-[#26302B] transition"
                             >
                               +

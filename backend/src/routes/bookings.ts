@@ -5,6 +5,7 @@ import { dateRange, todayInTz, tzOffsetIso, rentalDuration } from '../lib/dates.
 import { logBookingStatus } from '../lib/audit.js';
 import { isBusinessWritable, SUBSCRIPTION_LOCKED_MESSAGE } from '../lib/subscription.js';
 import { getCustomerPhotoSignedUrl } from '../lib/r2.js';
+import { computeBundleComponentRatesSnapshot } from '../lib/pricing.js';
 
 const router = Router();
 
@@ -19,7 +20,20 @@ const router = Router();
 // denda keterlambatan bertingkat (lib/penalty.ts computeTieredLateFee,
 // dipanggil dari routes/trackings.ts), yang TIDAK BOLEH baca harga
 // katalog yang mungkin sudah vendor edit setelah transaksi ini dibuat.
-type BookingItemInput = { item_id: string; quantity: number; subtotal?: number };
+// Paket Alat Tahap 1 (brief 15 Nov 2026, migration 064) -- 4 field
+// penanda OPSIONAL, trust-the-client sama seperti subtotal (grouping
+// key tampilan, bukan data sensitif). bundle_id DIVALIDASI di bawah
+// harus milik business booking ini -- tolak kalau tidak (keamanan
+// wajib dari koordinator 15 Nov 2026).
+type BookingItemInput = {
+  item_id: string;
+  quantity: number;
+  subtotal?: number;
+  bundle_id?: string | null;
+  bundle_instance_id?: string | null;
+  bundle_name?: string | null;
+  bundle_quantity?: number | null;
+};
 
 async function generateBookingNumber(
   supabase: ReturnType<typeof createRequestClient>,
@@ -152,7 +166,28 @@ router.post('/bookings', async (req, res) => {
     return;
   }
 
+  // Keamanan wajib (koordinator 15 Nov 2026): bundle_id yang dikirim
+  // klien harus milik business booking ini -- tolak kalau tidak (jangan
+  // andalkan RLS saja, pola sama CLAUDE.md bag 7 untuk query berpotensi
+  // lintas-business).
+  const requestedBundleIds = [...new Set(requestedItems.map((i) => i.bundle_id).filter((v): v is string => !!v))];
+  if (requestedBundleIds.length > 0) {
+    const { data: bundleRows, error: bundleError } = await supabase
+      .from('bundles')
+      .select('id')
+      .eq('business_id', businessId)
+      .in('id', requestedBundleIds);
+    if (bundleError || (bundleRows ?? []).length !== requestedBundleIds.length) {
+      res.status(400).json({ error: 'Paket tidak valid atau bukan milik usaha ini.' });
+      return;
+    }
+  }
+
   const days = dateRange(start_date, end_date);
+  // N hari yang sama dipakai frontend saat menghitung subtotal paket
+  // (computeItemRentalPrice dengan rentalDuration -- ikut mode per_malam
+  // / per_hari_kalender), bukan jumlah hari kalender dari dateRange().
+  const rentDuration = rentalDuration(start_date, end_date, bizRow.rental_day_mode);
 
   let existingBookingItems;
   try {
@@ -166,18 +201,29 @@ router.post('/bookings', async (req, res) => {
     return;
   }
 
+  // Paket Alat (migration 064) membuat item_id yang sama bisa muncul di
+  // lebih dari satu baris requestedItems dalam SATU request (mis. alat
+  // dipilih manual DAN ikut dalam resep paket lain) -- jumlahkan dulu
+  // per item_id sebelum validasi stok, supaya tidak under-count
+  // permintaan gabungannya (tiap baris dicek sendiri-sendiri terhadap
+  // "used" yang sama akan lolos walau totalnya sebenarnya melebihi stok).
+  const requestedQuantityByItemId = new Map<string, number>();
   for (const requested of requestedItems) {
-    const itemRow = itemRows?.find((i) => i.id === requested.item_id);
+    requestedQuantityByItemId.set(requested.item_id, (requestedQuantityByItemId.get(requested.item_id) ?? 0) + requested.quantity);
+  }
+
+  for (const [itemId, totalQuantity] of requestedQuantityByItemId) {
+    const itemRow = itemRows?.find((i) => i.id === itemId);
     if (!itemRow) {
       res.status(400).json({ error: 'Alat tidak ditemukan' });
       return;
     }
 
     for (const day of days) {
-      const used = usedUnitsOn(existingBookingItems, requested.item_id, day, itemRow.readiness_hours, bizRow.timezone);
-      if (used + requested.quantity > itemRow.total_units) {
+      const used = usedUnitsOn(existingBookingItems, itemId, day, itemRow.readiness_hours, bizRow.timezone);
+      if (used + totalQuantity > itemRow.total_units) {
         res.status(409).json({
-          error: `Alat "${itemRow.name}" tidak cukup pada ${day} (sisa ${itemRow.total_units - used}, diminta ${requested.quantity})`,
+          error: `Alat "${itemRow.name}" tidak cukup pada ${day} (sisa ${itemRow.total_units - used}, diminta ${totalQuantity})`,
         });
         return;
       }
@@ -311,21 +357,44 @@ router.post('/bookings', async (req, res) => {
 
   const bookingItemsPayload = requestedItems.map((i) => {
     const itemRow = itemRows!.find((r) => r.id === i.item_id)!;
+    const catalogRates = {
+      price_per_day: itemRow.price_per_day,
+      day2_rate: itemRow.day2_rate,
+      day3_rate: itemRow.day3_rate,
+      day4_rate: itemRow.day4_rate,
+      day5_rate: itemRow.day5_rate,
+      extra_day_rate: itemRow.extra_day_rate,
+    };
+    const subtotal = typeof i.subtotal === 'number' ? i.subtotal : null;
+    // Baris berpenanda paket (migration 064, keputusan koordinator 15
+    // Nov 2026): *_at_booking BUKAN tarif katalog asli, melainkan tarif
+    // katalog × rasio alokasi (lihat computeBundleComponentRatesSnapshot)
+    // -- supaya denda telat, Perpanjang, dan Ubah Jadwal mengikuti
+    // "harga paket", bukan melompat ke harga katalog alat satuan saat
+    // dihitung ulang untuk hari tambahan.
+    const rates =
+      i.bundle_id && subtotal != null
+        ? computeBundleComponentRatesSnapshot(catalogRates, i.quantity, rentDuration, subtotal)
+        : catalogRates;
     return {
       booking_id: bookingRow.id,
       item_id: i.item_id,
       quantity: i.quantity,
-      price_at_booking: itemRow.price_per_day,
-      subtotal: typeof i.subtotal === 'number' ? i.subtotal : null,
+      price_at_booking: rates.price_per_day,
+      subtotal,
       // Snapshot tarif bertingkat (migration 034) — SERVER-SIDE dari
-      // tabel items saat ini, BUKAN dari input klien (beda dari subtotal
-      // di atas) supaya denda telat nanti (lib/penalty.ts) tidak pernah
-      // membaca harga katalog yang sudah berubah. Lihat komentar migrasi.
-      day2_rate_at_booking: itemRow.day2_rate,
-      day3_rate_at_booking: itemRow.day3_rate,
-      day4_rate_at_booking: itemRow.day4_rate,
-      day5_rate_at_booking: itemRow.day5_rate,
-      extra_day_rate_at_booking: itemRow.extra_day_rate,
+      // tabel items saat ini (atau rasio alokasi paket di atas), BUKAN
+      // dari input klien, supaya denda telat (lib/penalty.ts) tidak
+      // pernah membaca harga yang bisa dimanipulasi klien.
+      day2_rate_at_booking: rates.day2_rate,
+      day3_rate_at_booking: rates.day3_rate,
+      day4_rate_at_booking: rates.day4_rate,
+      day5_rate_at_booking: rates.day5_rate,
+      extra_day_rate_at_booking: rates.extra_day_rate,
+      bundle_id: i.bundle_id ?? null,
+      bundle_instance_id: i.bundle_instance_id ?? null,
+      bundle_name: i.bundle_id ? (i.bundle_name ?? null) : null,
+      bundle_quantity: i.bundle_id ? (i.bundle_quantity ?? null) : null,
     };
   });
 

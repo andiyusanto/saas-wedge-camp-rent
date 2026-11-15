@@ -496,6 +496,82 @@ export async function resetDemoData(): Promise<DemoResetResult> {
     });
   }
 
+  // --- Paket Alat contoh (Tahap 1, migration 064) -- upsert by-nama
+  // (bundles tidak punya kolom `code` seperti items), supaya reset
+  // berulang idempotent dan konsisten dengan pola items di atas. ---
+  const existingBundles = await rest<{ id: string; name: string }[]>(
+    `bundles?select=id,name&business_id=eq.${businessId}`,
+    ownerToken,
+  );
+  const existingBundleByName = Object.fromEntries(existingBundles.map((b) => [b.name, b.id]));
+
+  const BUNDLE_DEFS: { name: string; description: string; pricing_mode: 'ikuti_alat' | 'sendiri'; discount_type: 'percent' | null; discount_value: number | null; components: { code: string; quantity: number }[] }[] = [
+    {
+      name: 'Tektok',
+      description: 'Paket naik-turun sehari — tenda, carrier, headlamp.',
+      pricing_mode: 'ikuti_alat',
+      discount_type: 'percent',
+      discount_value: 10,
+      components: [
+        { code: 'TND-01', quantity: 1 },
+        { code: 'CR-05', quantity: 1 },
+        { code: 'HL-06', quantity: 1 },
+      ],
+    },
+    {
+      name: 'Camping 2 Orang',
+      description: 'Paket camping santai 2 orang — tenda, 2 sleeping bag, matras, kompor.',
+      pricing_mode: 'sendiri',
+      discount_type: null,
+      discount_value: null,
+      components: [
+        { code: 'TND-01', quantity: 1 },
+        { code: 'SB-02', quantity: 2 },
+        { code: 'MT-04', quantity: 2 },
+        { code: 'KP-03', quantity: 1 },
+      ],
+    },
+  ];
+
+  for (const def of BUNDLE_DEFS) {
+    const bundleFields =
+      def.pricing_mode === 'sendiri'
+        ? { pricing_mode: 'sendiri', price_per_day: 60000, day2_rate: 50000, day3_rate: 40000, day4_rate: 40000, day5_rate: 40000, extra_day_rate: 40000, discount_type: null, discount_value: null }
+        : { pricing_mode: 'ikuti_alat', price_per_day: null, day2_rate: null, day3_rate: null, day4_rate: null, day5_rate: null, extra_day_rate: null, discount_type: def.discount_type, discount_value: def.discount_value };
+
+    const existingId = existingBundleByName[def.name];
+    const bundleId: string = existingId
+      ? (await rest<any[]>(`bundles?id=eq.${existingId}`, ownerToken, {
+          method: 'PATCH',
+          body: JSON.stringify({ description: def.description, deactivated_at: null, ...bundleFields }),
+        }))[0].id
+      : (await rest<any[]>('bundles', ownerToken, {
+          method: 'POST',
+          body: JSON.stringify({ business_id: businessId, name: def.name, description: def.description, ...bundleFields }),
+        }))[0].id;
+
+    // Resep diganti total (hapus semua baris lama, insert ulang) -- pola
+    // sama useBundles.ts updateBundle(), lebih simpel daripada diff.
+    await rest(`bundle_items?bundle_id=eq.${bundleId}`, ownerToken, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+    await rest('bundle_items', ownerToken, {
+      method: 'POST',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify(def.components.map((c) => ({ bundle_id: bundleId, business_id: businessId, item_id: items[c.code].id, quantity: c.quantity }))),
+    });
+  }
+
+  // Paket TAMBAHAN yang dibuat pengunjung demo (nama di luar 2 nama seed
+  // di atas) dinonaktifkan tiap reset -- pola sama alat tambahan di atas.
+  const seedBundleNames = new Set(BUNDLE_DEFS.map((d) => d.name));
+  const extraBundleIds = existingBundles.filter((b) => !seedBundleNames.has(b.name)).map((b) => b.id);
+  if (extraBundleIds.length > 0) {
+    await rest(`bundles?id=in.(${extraBundleIds.join(',')})&business_id=eq.${businessId}`, ownerToken, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ deactivated_at: new Date().toISOString() }),
+    });
+  }
+
   // Push subscriptions (migration 056) milik business demo dihapus tiap
   // reset -- pengunjung demo yang sempat menekan "Aktifkan notifikasi"
   // tidak boleh terus menerima push dari akun demo setelah reset.

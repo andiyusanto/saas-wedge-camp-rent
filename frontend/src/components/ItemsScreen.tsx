@@ -13,6 +13,7 @@ import { SelectOrAddField } from './SelectOrAddField';
 import { ConfirmModal } from './ConfirmModal';
 import { ImportItemsModal } from './ImportItemsModal';
 import { ImagePreviewModal } from './ImagePreviewModal';
+import { BundlesScreen } from './BundlesScreen';
 
 // Diturunkan live dari katalog sendiri, bukan tabel enum/lookup terpisah —
 // sama seperti pola setara di Bilbo-Outdoors. Kategori sengaja ikut pola
@@ -606,6 +607,11 @@ export function ItemsScreen({
 }) {
   const { items, inactiveItems, loading, addItem, updateItem, setItemActive, refresh } = useItems(businessId);
   const { members } = useTeam(session, businessId);
+  // Sub-tab "Paket" (brief 15 Nov 2026, migration 064) — paket adalah
+  // fitur sekunder terhadap katalog alat (progressive disclosure,
+  // CLAUDE.md bagian 5), jadi disembunyikan di bawah tab ini, bukan
+  // entri Navbar/App.tsx sendiri.
+  const [catalogTab, setCatalogTab] = useState<'alat' | 'paket'>('alat');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Semua');
   const [modalItem, setModalItem] = useState<Item | 'new' | null>(null);
@@ -650,60 +656,80 @@ export function ItemsScreen({
             </h2>
             <p className="text-xs text-[#6E6853]">Kelola daftar alat kamping, stok fisik toko, dan tarif sewa per hari.</p>
           </div>
-          <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
-            {role === 'owner' && (
+          {catalogTab === 'alat' && (
+            <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+              {role === 'owner' && (
+                <button
+                  onClick={() => setIsImportOpen(true)}
+                  disabled={!writable}
+                  title={!writable ? 'Masa aktif langganan sudah habis — hubungi Sewalog untuk memperpanjang.' : 'Impor banyak alat sekaligus dari file Excel/CSV'}
+                  className="px-3 py-2.5 rounded-xl border border-[#DBD5C1] text-[#26302B] hover:bg-[#F1EEE2] font-bold text-xs shadow-xs transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-[#6E6853]" />
+                  <span>Impor dari Excel</span>
+                </button>
+              )}
               <button
-                onClick={() => setIsImportOpen(true)}
+                onClick={() => setModalItem('new')}
                 disabled={!writable}
-                title={!writable ? 'Masa aktif langganan sudah habis — hubungi Sewalog untuk memperpanjang.' : 'Impor banyak alat sekaligus dari file Excel/CSV'}
-                className="px-3 py-2.5 rounded-xl border border-[#DBD5C1] text-[#26302B] hover:bg-[#F1EEE2] font-bold text-xs shadow-xs transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                title={!writable ? 'Masa aktif langganan sudah habis — hubungi Sewalog untuk memperpanjang.' : undefined}
+                className="px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs shadow-sm transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#2B4739]"
               >
-                <FileSpreadsheet className="w-4 h-4 text-[#6E6853]" />
-                <span>Impor dari Excel</span>
+                <Plus className="w-4 h-4 text-[#A65C2A]" />
+                <span>Tambah Alat Baru</span>
               </button>
-            )}
-            <button
-              onClick={() => setModalItem('new')}
-              disabled={!writable}
-              title={!writable ? 'Masa aktif langganan sudah habis — hubungi Sewalog untuk memperpanjang.' : undefined}
-              className="px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs shadow-sm transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#2B4739]"
-            >
-              <Plus className="w-4 h-4 text-[#A65C2A]" />
-              <span>Tambah Alat Baru</span>
-            </button>
-          </div>
+            </div>
+          )}
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t border-[#E6E1D2]">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#6E6853]" />
-            <input
-              type="text"
-              placeholder="Cari kode / nama alat..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-xs rounded-xl bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
-            />
-          </div>
-          <ScrollableRow className="sm:w-auto">
-            {['Semua', ...categoryOptions].map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition shrink-0 ${
-                  selectedCategory === cat
-                    ? 'bg-[#2B4739] text-[#FBFAF4] shadow-xs font-bold'
-                    : 'bg-[#F1EEE2] text-[#26302B] border border-[#DBD5C1] hover:bg-[#E6E1D2]'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </ScrollableRow>
+        <div className="flex gap-2 pt-2 border-t border-[#E6E1D2]">
+          {(['alat', 'paket'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setCatalogTab(tab)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                catalogTab === tab ? 'bg-[#2B4739] text-[#FBFAF4] shadow-xs' : 'bg-[#F1EEE2] text-[#26302B] border border-[#DBD5C1] hover:bg-[#E6E1D2]'
+              }`}
+            >
+              {tab === 'alat' ? 'Alat' : 'Paket'}
+            </button>
+          ))}
         </div>
+
+        {catalogTab === 'alat' && (
+          <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t border-[#E6E1D2]">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#6E6853]" />
+              <input
+                type="text"
+                placeholder="Cari kode / nama alat..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 text-xs rounded-xl bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+              />
+            </div>
+            <ScrollableRow className="sm:w-auto">
+              {['Semua', ...categoryOptions].map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition shrink-0 ${
+                    selectedCategory === cat
+                      ? 'bg-[#2B4739] text-[#FBFAF4] shadow-xs font-bold'
+                      : 'bg-[#F1EEE2] text-[#26302B] border border-[#DBD5C1] hover:bg-[#E6E1D2]'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </ScrollableRow>
+          </div>
+        )}
       </div>
 
-      {loading ? (
+      {catalogTab === 'paket' ? (
+        <BundlesScreen businessId={businessId} role={role} writable={writable} />
+      ) : loading ? (
         <p className="text-sm text-[#6E6853]">Memuat...</p>
       ) : filtered.length === 0 ? (
         <div className="bg-[#FBFAF4] rounded-2xl p-8 border border-[#DBD5C1] text-center text-[#6E6853] text-sm">
@@ -725,7 +751,7 @@ export function ItemsScreen({
         </div>
       )}
 
-      {inactiveItems.length > 0 && (
+      {catalogTab === 'alat' && inactiveItems.length > 0 && (
         <div>
           <h3 className="text-sm font-bold text-[#6E6853] mb-2">Alat Nonaktif</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 opacity-70">

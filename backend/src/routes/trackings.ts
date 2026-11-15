@@ -33,6 +33,10 @@ type BookingItemJoin = {
   day4_rate_at_booking: number | null;
   day5_rate_at_booking: number | null;
   extra_day_rate_at_booking: number | null;
+  bundle_id: string | null;
+  bundle_instance_id: string | null;
+  bundle_name: string | null;
+  bundle_quantity: number | null;
   items: { name: string } | null;
 };
 
@@ -145,7 +149,7 @@ router.get('/trackings', async (req, res) => {
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select(
-      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_key, rental_day_mode, min_rental_days, max_rental_days, return_deadline_time, return_deadline_next_day, late_fee_mode, late_fee_per_hour, late_fee_per_hour_cap_enabled, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_status_history(status, changed_by_name, created_at), booking_reschedules(action, old_start_date, old_end_date, new_start_date, new_end_date, reason, past_deadline, changed_by_name, created_at), booking_item_changes(old_items, new_items, old_total_price, new_total_price, reason, changed_by_name, created_at)',
+      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_key, rental_day_mode, min_rental_days, max_rental_days, return_deadline_time, return_deadline_next_day, late_fee_mode, late_fee_per_hour, late_fee_per_hour_cap_enabled, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, bundle_id, bundle_instance_id, bundle_name, bundle_quantity, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_status_history(status, changed_by_name, created_at), booking_reschedules(action, old_start_date, old_end_date, new_start_date, new_end_date, reason, past_deadline, changed_by_name, created_at), booking_item_changes(old_items, new_items, old_total_price, new_total_price, reason, changed_by_name, created_at)',
     )
     .in('status', ['dipesan', 'aktif'])
     .order('end_date');
@@ -278,6 +282,9 @@ router.get('/trackings', async (req, res) => {
         quantity: bi.quantity,
         price_per_day: bi.price_at_booking,
         subtotal: bi.subtotal,
+        bundle_instance_id: bi.bundle_instance_id,
+        bundle_name: bi.bundle_name,
+        bundle_quantity: bi.bundle_quantity,
       })),
       deposits: b.deposits ?? [],
       penalties: ((b.penalties ?? []) as unknown as PenaltyJoin[]).map((p) => ({
@@ -645,21 +652,23 @@ async function checkStockForNewDates(
   });
   const days = dateRange(newStart, newEnd);
 
+  // Paket Alat (migration 064) membuat item_id yang sama bisa muncul di
+  // lebih dari satu baris itemRows (komponen paket + alat tambahan biasa)
+  // -- jumlahkan dulu per item_id sebelum validasi, sama alasan POST
+  // /bookings (routes/bookings.ts).
+  const requestedQuantityByItemId = new Map<string, number>();
   for (const requested of itemRows) {
-    const catalogItem = catalogItems?.find((i) => i.id === requested.item_id);
+    requestedQuantityByItemId.set(requested.item_id, (requestedQuantityByItemId.get(requested.item_id) ?? 0) + requested.quantity);
+  }
+
+  for (const [itemId, totalQuantity] of requestedQuantityByItemId) {
+    const catalogItem = catalogItems?.find((i) => i.id === itemId);
     if (!catalogItem) return 'Alat tidak ditemukan';
 
     for (const day of days) {
-      const used = usedUnitsOn(
-        existingBookingItems,
-        requested.item_id,
-        day,
-        catalogItem.readiness_hours,
-        bizRow?.timezone ?? null,
-        bookingId,
-      );
-      if (used + requested.quantity > catalogItem.total_units) {
-        return `Alat "${catalogItem.name}" tidak cukup pada ${day} (sisa ${catalogItem.total_units - used}, diminta ${requested.quantity})`;
+      const used = usedUnitsOn(existingBookingItems, itemId, day, catalogItem.readiness_hours, bizRow?.timezone ?? null, bookingId);
+      if (used + totalQuantity > catalogItem.total_units) {
+        return `Alat "${catalogItem.name}" tidak cukup pada ${day} (sisa ${catalogItem.total_units - used}, diminta ${totalQuantity})`;
       }
     }
   }
@@ -918,7 +927,7 @@ router.patch('/bookings/:id/items', async (req, res) => {
   const { id } = req.params;
   const { items, total_price, reason } = req.body ?? {};
 
-  const requestedItems = items as { item_id: string; quantity: number }[] | undefined;
+  const requestedItems = items as { item_id: string; quantity: number; bundle_instance_id?: string | null }[] | undefined;
   if (!Array.isArray(requestedItems) || requestedItems.length === 0) {
     res.status(400).json({ error: 'Minimal satu alat harus tersisa.' });
     return;
@@ -934,7 +943,7 @@ router.patch('/bookings/:id/items', async (req, res) => {
   const { data: booking, error: bookingError } = await supabase
     .from('bookings')
     .select(
-      'id, business_id, status, start_date, end_date, rental_day_mode, total_price, booking_items(item_id, quantity, price_at_booking, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, items(name))',
+      'id, business_id, status, start_date, end_date, rental_day_mode, total_price, booking_items(item_id, quantity, price_at_booking, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, bundle_id, bundle_instance_id, bundle_name, bundle_quantity, items(name))',
     )
     .eq('id', id)
     .maybeSingle();
@@ -1040,6 +1049,9 @@ router.patch('/bookings/:id/items', async (req, res) => {
       quantity: it.quantity,
       price_per_day: it.price_at_booking,
       subtotal: it.subtotal,
+      bundle_instance_id: it.bundle_instance_id,
+      bundle_name: it.bundle_name,
+      bundle_quantity: it.bundle_quantity,
     })),
   });
 });
