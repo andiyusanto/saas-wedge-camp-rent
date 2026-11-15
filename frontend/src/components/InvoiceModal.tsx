@@ -1,7 +1,8 @@
+import { Fragment } from 'react';
 import { Printer, X } from 'lucide-react';
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import type { ReceiptData } from '../utils/formatters';
-import { formatIDR, formatDateIndo, rentalDays, depositLabel, fineLabel, todayStr, addDaysStr } from '../utils/formatters';
+import { formatIDR, formatDateIndo, rentalDays, depositLabel, fineLabel, todayStr, addDaysStr, groupReceiptItemsByBundle } from '../utils/formatters';
 
 // Nota cetak/PDF — dirender dari data yang sama dengan struk WA (lihat
 // buildReceiptData di useTrackings.ts), tanpa library PDF atau endpoint
@@ -98,15 +99,39 @@ export function InvoiceModal({
               </tr>
             </thead>
             <tbody>
-              {data.items.map((item, i) => (
-                <tr key={i} className="border-b border-[#DBD5C1]">
-                  <td className="py-1.5">{item.name}</td>
-                  <td className="py-1.5 text-center">{item.quantity}x</td>
-                  <td className="py-1.5 text-right">
-                    {formatIDR(item.subtotal ?? item.price_per_day * item.quantity * days)}
-                  </td>
-                </tr>
-              ))}
+              {groupReceiptItemsByBundle(data.items).map((group, gi) =>
+                group.bundleName ? (
+                  <Fragment key={gi}>
+                    <tr className="border-b border-[#DBD5C1]">
+                      <td className="py-1.5 font-bold" colSpan={3}>
+                        Paket {group.bundleName}
+                        {group.bundleQuantity && group.bundleQuantity > 1 ? ` ×${group.bundleQuantity}` : ''}
+                      </td>
+                    </tr>
+                    {group.items.map((item, i) => (
+                      <tr key={i} className="border-b border-[#DBD5C1]">
+                        <td className="py-1.5 pl-3 text-[#6E6853]">— {item.name}</td>
+                        <td className="py-1.5 text-center">{item.quantity}x</td>
+                        <td className="py-1.5 text-right">
+                          {formatIDR(item.subtotal ?? item.price_per_day * item.quantity * days)}
+                        </td>
+                      </tr>
+                    ))}
+                  </Fragment>
+                ) : (
+                  <Fragment key={gi}>
+                    {group.items.map((item, i) => (
+                      <tr key={i} className="border-b border-[#DBD5C1]">
+                        <td className="py-1.5">{item.name}</td>
+                        <td className="py-1.5 text-center">{item.quantity}x</td>
+                        <td className="py-1.5 text-right">
+                          {formatIDR(item.subtotal ?? item.price_per_day * item.quantity * days)}
+                        </td>
+                      </tr>
+                    ))}
+                  </Fragment>
+                ),
+              )}
             </tbody>
           </table>
 

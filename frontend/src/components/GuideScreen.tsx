@@ -361,9 +361,20 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           <Ui>Kirim Rincian Baru via WA</Ui> untuk kabari pelanggan.
         </p>
         <Note>
+          Transaksi berisi paket (<SectionLink id="g-katalog">bagian 5</SectionLink>) tampil terkelompok di{' '}
+          <Ui>Ubah Alat</Ui> di bawah judul "Paket X" — selama tidak disentuh, label paketnya tetap ada. Mengubah
+          jumlah atau menghapus salah satu baris komponen melepas label paket untuk SISA baris di grup itu juga
+          (bukan cuma baris yang diubah), tapi harga baris lain yang tidak disentuh tidak ikut berubah. Alat baru
+          yang ditambah lewat Ubah Alat tidak pernah ikut jadi bagian paket.
+        </Note>
+        <Note>
           Tombol <Ui>Cetak Nota</Ui> di tiap kartu transaksi membuka versi nota yang bisa langsung dicetak atau
           disimpan sebagai PDF lewat dialog print browser (pilih tujuan "Simpan sebagai PDF") — tidak perlu aplikasi
           tambahan.
+        </Note>
+        <Note>
+          Struk WA dan Nota Sewa untuk transaksi berisi paket menampilkan "Paket X ×N" sebagai satu baris ringkas,
+          dengan rincian alat penyusunnya di bawahnya — bukan daftar alat lepas tanpa pengelompokan.
         </Note>
       </Section>
 
@@ -404,6 +415,14 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           sebelahnya untuk versi cetak/PDF (lihat <SectionLink id="g-transaksi-aktif">bagian 3</SectionLink>).
         </Note>
         <Note>
+          Kalau punya paket (<SectionLink id="g-katalog">bagian 5</SectionLink>), bagian <Ui>Pilih Paket</Ui>
+          muncul di atas daftar alat satuan — centang paket, atur jumlah paketnya, lalu tetap bisa menambah alat
+          lain di luar paket itu lewat daftar alat biasa di bawahnya (dua baris terpisah kalau alatnya sama,
+          harganya memang beda). Tidak butuh salah satu komponen paket? Kurangi atau hapus barisnya di rincian
+          paket sebelum Simpan — muncul info "Isi paket diubah", harga paket berkurang persis sebesar porsi alat
+          yang dikurangi/dihapus itu, komponen lain tetap harga semula.
+        </Note>
+        <Note>
           Cara tanggal ambil &amp; kembali dihitung jadi "berapa hari" tergantung pengaturan{' '}
           <Ui>Cara Hitung Durasi Sewa</Ui> di tab Kelola Usaha (<SectionLink id="g-kelola-usaha">bagian 7</SectionLink>) — default <strong>per malam</strong> (ambil
           Sabtu, kembali Minggu = 1 hari, tanggal ambil &amp; kembali tidak boleh sama). Kalau usahamu pakai{' '}
@@ -441,6 +460,32 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         <PackageDaysIllustration />
         <ReadinessIllustration />
 
+        <h4 className="text-sm font-bold text-[#26302B] pt-2">Paket Alat (gabungan beberapa alat jadi satu)</h4>
+        <p>
+          Untuk paket yang sering disewa bersamaan (mis. "Paket Tektok" = tenda + carrier + headlamp), buka tab{' '}
+          <Ui>Paket</Ui> di samping tab <Ui>Alat</Ui> di layar ini — terlihat dan bisa dikelola oleh pemilik{' '}
+          <strong>maupun karyawan</strong>, sama seperti tab Alat.
+        </p>
+        <Steps
+          items={[
+            <>Tekan <Ui>Tambah Paket</Ui>, isi nama paket dan pilih minimal 2 alat (atau 1 alat dengan jumlah
+              minimal 2) dari katalog beserta jumlah masing-masing.</>,
+            <>Pilih <Ui>Cara Harga Paket</Ui>: <Ui>Ikuti harga alat</Ui> (total otomatis dari harga katalog tiap
+              alat komponen, bisa ditambah potongan opsional persen atau nominal Rp per hari) atau{' '}
+              <Ui>Harga paket sendiri</Ui> (nominal tetap per hari, bisa bertingkat sama seperti harga alat biasa).</>,
+            <>Simpan — paket langsung bisa dipilih di Catat Transaksi (<SectionLink id="g-catat">bagian 4</SectionLink>).</>,
+          ]}
+        />
+        <Note>
+          Paket <strong>bukan</strong> alat baru dengan stok sendiri — saat dipilih di Catat Transaksi, paket
+          otomatis dipecah jadi alat satuan penyusunnya. Kalender ketersediaan, jeda persiapan, dan denda telat
+          semuanya tetap dihitung per alat seperti biasa, tidak ada rumus stok tambahan untuk paket.
+        </Note>
+        <Note>
+          Paket yang salah satu alat penyusunnya sedang <Ui>Nonaktif</Ui> tidak bisa dipilih — muncul tanda
+          peringatan di kartu paket (di layar ini) dan di Catat Transaksi, sampai alat itu diaktifkan lagi atau
+          dikeluarkan dari resep paket (lewat <Ui>Ubah</Ui>).
+        </Note>
         <h4 className="text-sm font-bold text-[#26302B] pt-2">Impor dari Excel (banyak alat sekaligus)</h4>
         <p>
           Dipakai saat pertama kali mengisi banyak alat sekaligus, atau mengubah harga banyak alat dalam satu waktu —
