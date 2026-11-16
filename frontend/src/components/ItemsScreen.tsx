@@ -14,6 +14,7 @@ import { ConfirmModal } from './ConfirmModal';
 import { ImportItemsModal } from './ImportItemsModal';
 import { ImagePreviewModal } from './ImagePreviewModal';
 import { BundlesScreen } from './BundlesScreen';
+import { BarangJualScreen } from './BarangJualScreen';
 
 // Diturunkan live dari katalog sendiri, bukan tabel enum/lookup terpisah —
 // sama seperti pola setara di Bilbo-Outdoors. Kategori sengaja ikut pola
@@ -608,7 +609,7 @@ export function ItemsScreen({
   // fitur sekunder terhadap katalog alat (progressive disclosure,
   // CLAUDE.md bagian 5), jadi disembunyikan di bawah tab ini, bukan
   // entri Navbar/App.tsx sendiri.
-  const [catalogTab, setCatalogTab] = useState<'alat' | 'paket'>('alat');
+  const [catalogTab, setCatalogTab] = useState<'alat' | 'paket' | 'barang_jual'>('alat');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Semua');
   const [modalItem, setModalItem] = useState<Item | 'new' | null>(null);
@@ -680,7 +681,7 @@ export function ItemsScreen({
         </div>
 
         <div className="flex gap-2 pt-2 border-t border-[#E6E1D2]">
-          {(['alat', 'paket'] as const).map((tab) => (
+          {(['alat', 'paket', 'barang_jual'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setCatalogTab(tab)}
@@ -688,7 +689,7 @@ export function ItemsScreen({
                 catalogTab === tab ? 'bg-[#2B4739] text-[#FBFAF4] shadow-xs' : 'bg-[#F1EEE2] text-[#26302B] border border-[#DBD5C1] hover:bg-[#E6E1D2]'
               }`}
             >
-              {tab === 'alat' ? 'Alat' : 'Paket'}
+              {tab === 'alat' ? 'Alat' : tab === 'paket' ? 'Paket' : 'Barang Jual'}
             </button>
           ))}
         </div>
@@ -726,6 +727,8 @@ export function ItemsScreen({
 
       {catalogTab === 'paket' ? (
         <BundlesScreen businessId={businessId} writable={writable} session={session} />
+      ) : catalogTab === 'barang_jual' ? (
+        <BarangJualScreen businessId={businessId} writable={writable} session={session} />
       ) : loading ? (
         <p className="text-sm text-[#6E6853]">Memuat...</p>
       ) : filtered.length === 0 ? (

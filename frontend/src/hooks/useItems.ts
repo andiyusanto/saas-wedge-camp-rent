@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
 export type Item = {
@@ -106,8 +106,12 @@ export function useItems(businessId: string | undefined) {
     return { error: error?.message ?? null };
   }
 
-  const items = allItems.filter((i) => !i.deactivated_at);
-  const inactiveItems = allItems.filter((i) => i.deactivated_at);
+  // Memoized -- lihat catatan di useBundles.ts (bug "Maximum update depth
+  // exceeded" ditemukan 16 Nov 2026 akibat pola .filter() polos yang
+  // membuat referensi array baru tiap render, dipakai sebagai dependency
+  // useEffect di tempat lain). Dijaga preventif di sini juga.
+  const items = useMemo(() => allItems.filter((i) => !i.deactivated_at), [allItems]);
+  const inactiveItems = useMemo(() => allItems.filter((i) => i.deactivated_at), [allItems]);
 
   return { items, inactiveItems, loading, refresh, addItem, updateItem, setItemActive };
 }

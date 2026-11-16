@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
 // Paket Alat ("resep"), Tahap 1 (brief 15 Nov 2026, migration 064) --
@@ -163,8 +163,16 @@ export function useBundles(businessId: string | undefined) {
     return { error: error?.message ?? null };
   }
 
-  const bundles = allBundles.filter((b) => !b.deactivated_at);
-  const inactiveBundles = allBundles.filter((b) => b.deactivated_at);
+  // Bug ditemukan saat E2E Barang Jual (16 Nov 2026): .filter() di sini
+  // TANPA useMemo membuat array BARU setiap kali hook ini dipanggil --
+  // NewBookingModal.tsx memakai `bundles` sebagai dependency useEffect
+  // prefill (Paket Alat Tahap 2, perbaikan race kondisi loading), jadi
+  // referensi baru terus-menerus memicu useEffect itu berulang tiap
+  // render apa pun (termasuk sekadar klik stepper alat/barang jual lain)
+  // -> "Maximum update depth exceeded". useMemo di sini membuat referensi
+  // STABIL selama `allBundles` sungguhan tidak berubah.
+  const bundles = useMemo(() => allBundles.filter((b) => !b.deactivated_at), [allBundles]);
+  const inactiveBundles = useMemo(() => allBundles.filter((b) => b.deactivated_at), [allBundles]);
 
   return { bundles, inactiveBundles, loading, refresh, addBundle, updateBundle, setBundleActive };
 }
