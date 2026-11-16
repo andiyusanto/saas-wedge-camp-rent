@@ -5,7 +5,7 @@
 // cuma dicek truthy (bukan format/validitas tanggal sungguhan).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isValidDateStr, validateOptionalTotalPriceAndReason } from '../validation.js';
+import { isValidDateStr, validateOptionalTotalPriceAndReason, validateDpPaid } from '../validation.js';
 
 test('isValidDateStr menolak format dan tanggal tidak valid', () => {
   assert.equal(isValidDateStr('2026-11-10'), true);
@@ -33,4 +33,23 @@ test('validateOptionalTotalPriceAndReason: reason maksimal 500 karakter', () => 
   assert.equal(validateOptionalTotalPriceAndReason(undefined, undefined), null);
   assert.equal(validateOptionalTotalPriceAndReason(undefined, 'a'.repeat(500)), null);
   assert.notEqual(validateOptionalTotalPriceAndReason(undefined, 'a'.repeat(501)), null);
+});
+
+// Celah ditemukan koordinator 17 Nov 2026 (investigasi "Lebih Rp" di
+// Riwayat, brief Pelunasan) -- POST /bookings sebelumnya percaya mentah
+// dp_paid tanpa batas atas, bisa membuat booking BARU langsung "lebih
+// bayar" sejak lahir.
+test('validateDpPaid: tolak dp_paid melebihi total_price', () => {
+  assert.notEqual(validateDpPaid(50_000, 45_000), null);
+  assert.equal(validateDpPaid(45_000, 45_000), null); // pas sama, boleh (LUNAS sejak awal)
+  assert.equal(validateDpPaid(20_000, 45_000), null);
+});
+
+test('validateDpPaid: tolak dp_paid negatif', () => {
+  assert.notEqual(validateDpPaid(-1, 45_000), null);
+});
+
+test('validateDpPaid: dp_paid/total_price kosong dianggap 0 (lolos, perilaku lama)', () => {
+  assert.equal(validateDpPaid(undefined, undefined), null);
+  assert.equal(validateDpPaid(0, 0), null);
 });

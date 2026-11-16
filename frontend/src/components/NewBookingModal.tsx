@@ -616,6 +616,15 @@ export function NewBookingModal({
       setError('Centang konfirmasi tanpa jaminan dulu, atau pilih jenis jaminan.');
       return;
     }
+    // Celah ditemukan koordinator 17 Nov 2026 (investigasi "Lebih Rp" di
+    // Riwayat) -- DP tidak boleh melebihi Total Harga, DIPERKUAT lagi
+    // server-side (POST /bookings, validateDpPaid()) supaya jalur lain
+    // yang mungkin memanggil endpoint ini langsung tidak bisa melewati
+    // validasi ini.
+    if ((Number(dpPaid) || 0) > totalPrice) {
+      setError('DP tidak boleh melebihi Total Harga.');
+      return;
+    }
 
     setSubmitting(true);
 

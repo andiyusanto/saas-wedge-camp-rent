@@ -7,6 +7,7 @@ import { isBusinessWritable, SUBSCRIPTION_LOCKED_MESSAGE } from '../lib/subscrip
 import { getCustomerPhotoSignedUrl } from '../lib/r2.js';
 import { computeBundleComponentRatesSnapshot } from '../lib/pricing.js';
 import { mergeDuplicateSaleItemRequests } from '../lib/saleItems.js';
+import { validateDpPaid } from '../lib/validation.js';
 
 const router = Router();
 
@@ -96,6 +97,22 @@ router.post('/bookings', async (req, res) => {
     res.status(400).json({ error: 'Tanggal kembali harus setelah tanggal ambil' });
     return;
   }
+
+  // Celah ditemukan koordinator 17 Nov 2026 (dari investigasi "Lebih Rp"
+  // di Riwayat): endpoint ini sebelumnya percaya mentah dp_paid dari
+  // client tanpa batas atas sama sekali -- bisa membuat booking BARU
+  // langsung "lebih bayar" sejak lahir. total_price sendiri TETAP
+  // dipercaya dari client (pola lama, tidak diubah -- harga final tetap
+  // di tangan vendor, bisa override manual) -- validateDpPaid() CUMA
+  // membandingkan dp_paid terhadap total_price yang SAMA-SAMA dikirim
+  // client dalam satu payload ini, bukan menghitung ulang harga apa pun.
+  const dpError = validateDpPaid(dp_paid, total_price);
+  if (dpError) {
+    res.status(400).json({ error: dpError });
+    return;
+  }
+  const dpPaidNum = Number(dp_paid) || 0;
+  const totalPriceNum = Number(total_price) || 0;
 
   // Jaminan uang tanpa jumlah bukan jaminan sungguhan — divalidasi di
   // sini (SEBELUM insert bookings/booking_items apa pun, supaya tidak
@@ -320,8 +337,8 @@ router.post('/bookings', async (req, res) => {
         end_date,
         status,
         picked_up_at: pickedUpAt,
-        total_price: Number(total_price) || 0,
-        dp_paid: Number(dp_paid) || 0,
+        total_price: totalPriceNum,
+        dp_paid: dpPaidNum,
         // Dibaca trigger log_initial_dp_payment() (migration 067) untuk
         // mencatat baris booking_payments kind='dp' pertama secara atomik
         // dalam transaksi insert ini -- Express TIDAK memanggil RPC apa

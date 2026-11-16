@@ -28,3 +28,18 @@ export function validateOptionalTotalPriceAndReason(total_price: unknown, reason
   }
   return null;
 }
+
+// Celah ditemukan koordinator 17 Nov 2026 (investigasi "Lebih Rp" di
+// Riwayat, brief Pelunasan): POST /bookings sebelumnya percaya mentah
+// dp_paid dari client tanpa batas atas sama sekali -- bisa membuat
+// booking BARU langsung "lebih bayar" sejak lahir, kasus yang tidak
+// pernah masuk akal (beda dari "lebih bayar" SETELAH Ubah Alat/Ubah
+// Jadwal mengurangi total setelah sudah dibayar, yang memang dibiarkan
+// terjadi by design -- lihat computeRemainingBalance, TIDAK di-clamp).
+export function validateDpPaid(dp_paid: unknown, total_price: unknown): string | null {
+  const dpPaid = Number(dp_paid) || 0;
+  const totalPrice = Number(total_price) || 0;
+  if (dpPaid < 0) return 'DP tidak boleh negatif';
+  if (dpPaid > totalPrice) return 'DP tidak boleh melebihi Total Harga';
+  return null;
+}
