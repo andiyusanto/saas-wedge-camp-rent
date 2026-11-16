@@ -105,7 +105,12 @@ export function applyBundleDiscount(
   discountValue: number | null,
 ): ItemDayRates {
   if (!discountType || !discountValue) return rates;
-  const apply = (v: number) => (discountType === 'percent' ? Math.max(0, v * (1 - discountValue / 100)) : Math.max(0, v - discountValue));
+  // Dibulatkan ke rupiah terdekat SETIAP TINGKAT (koordinator 16 Nov
+  // 2026) -- tarif ganjil × persen bisa desimal (mis. Rp37.665 × 10% =
+  // Rp3.766,5). Dibulatkan di sini (bukan di total akhir) supaya total
+  // N-hari tetap konsisten dengan tarif per-hari yang ditampilkan.
+  const apply = (v: number) =>
+    Math.round(discountType === 'percent' ? Math.max(0, v * (1 - discountValue / 100)) : Math.max(0, v - discountValue));
   return {
     price_per_day: apply(rates.price_per_day),
     day2_rate: apply(rates.day2_rate),
@@ -165,13 +170,20 @@ export function computeBundleComponentRatesSnapshot(
 ): ItemDayRates {
   const standaloneTotal = quantity * computeItemRentalPrice(catalogRates, days);
   const ratio = standaloneTotal > 0 ? subtotal / standaloneTotal : 0;
+  // Dibulatkan ke rupiah terdekat (koordinator 16 Nov 2026) -- rasio ×
+  // tarif katalog bisa desimal. Konsekuensi: menjumlahkan tarif
+  // terbulatkan ini untuk N hari yang SAMA bisa berselisih dari
+  // `subtotal` asli sampai beberapa rupiah (selisih pembulatan per
+  // tingkat) -- diterima, karena ini cuma memengaruhi Perpanjang/Ubah
+  // Jadwal/denda telat (hari TAMBAHAN di luar transaksi awal), bukan
+  // subtotal booking_items.subtotal yang sudah tersimpan terpisah.
   return {
-    price_per_day: catalogRates.price_per_day * ratio,
-    day2_rate: catalogRates.day2_rate * ratio,
-    day3_rate: catalogRates.day3_rate * ratio,
-    day4_rate: catalogRates.day4_rate * ratio,
-    day5_rate: catalogRates.day5_rate * ratio,
-    extra_day_rate: catalogRates.extra_day_rate * ratio,
+    price_per_day: Math.round(catalogRates.price_per_day * ratio),
+    day2_rate: Math.round(catalogRates.day2_rate * ratio),
+    day3_rate: Math.round(catalogRates.day3_rate * ratio),
+    day4_rate: Math.round(catalogRates.day4_rate * ratio),
+    day5_rate: Math.round(catalogRates.day5_rate * ratio),
+    extra_day_rate: Math.round(catalogRates.extra_day_rate * ratio),
   };
 }
 

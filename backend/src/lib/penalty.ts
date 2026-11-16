@@ -116,7 +116,11 @@ export function computeLateFee(
   dailyRate: number,
 ): number {
   const blocks = computeLateBlocks(hoursLateValue, toleranceHours);
-  return blocks * BLOCK_RATE * dailyRate;
+  // Dibulatkan ke rupiah terdekat (koordinator 16 Nov 2026) -- blok ganjil
+  // (setengah hari, BLOCK_RATE=0.5) × tarif ganjil bisa desimal (mis.
+  // 1 blok × 0.5 × Rp37.665 = Rp18.832,5). Diterima: denda ini cuma
+  // SARAN, vendor tetap bisa ubah manual, dan selisihnya ≤ Rp0,5.
+  return Math.round(blocks * BLOCK_RATE * dailyRate);
 }
 
 // Denda keterlambatan bertingkat (migration 034) — rumus marginal ala
@@ -159,7 +163,9 @@ export function computeTieredLateFee(
     const nextDayMarginal =
       computeItemRentalPrice(rates, rentDuration + fullLateDays + 1) -
       computeItemRentalPrice(rates, rentDuration + fullLateDays);
-    fee += BLOCK_RATE * nextDayMarginal;
+    // Dibulatkan ke rupiah terdekat (koordinator 16 Nov 2026) -- marginal
+    // ganjil × 50% bisa desimal, sama alasan computeLateFee() di atas.
+    fee += Math.round(BLOCK_RATE * nextDayMarginal);
   }
   return fee;
 }
@@ -239,6 +245,10 @@ export function computeHourlyLateFee(
 
   const rawFee = hours * perHourRate;
   const cap = capEnabled ? fullDayFeeTotal : null;
-  const fee = cap != null ? Math.min(rawFee, cap) : rawFee;
+  // Math.round sebagai jaring pengaman (koordinator 16 Nov 2026) -- hours
+  // dan perHourRate sudah integer jadi rawFee selalu bulat di jalur normal,
+  // tapi fullDayFeeTotal (cap, dijumlahkan dari beberapa alat oleh
+  // pemanggil) bisa saja membawa sisa desimal dari sumber lain.
+  const fee = Math.round(cap != null ? Math.min(rawFee, cap) : rawFee);
   return { fee, hours, cap, capped: cap != null && rawFee > cap, needsManualInput: false };
 }

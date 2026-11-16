@@ -178,7 +178,11 @@ export function applyBundleDiscount(
   discountValue: number | null,
 ): ItemDayRates {
   if (!discountType || !discountValue) return rates;
-  const apply = (v: number) => (discountType === 'percent' ? Math.max(0, v * (1 - discountValue / 100)) : Math.max(0, v - discountValue));
+  // Dibulatkan ke rupiah terdekat per tingkat (koordinator 16 Nov 2026,
+  // pola sama backend/src/lib/pricing.ts) -- tarif ganjil × persen bisa
+  // desimal.
+  const apply = (v: number) =>
+    Math.round(discountType === 'percent' ? Math.max(0, v * (1 - discountValue / 100)) : Math.max(0, v - discountValue));
   return {
     price_per_day: apply(rates.price_per_day),
     day2_rate: apply(rates.day2_rate),
