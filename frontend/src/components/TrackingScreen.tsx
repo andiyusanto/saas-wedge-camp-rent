@@ -53,6 +53,7 @@ import {
   bookingStatusLabel,
   generateWhatsAppReceipt,
   getWhatsAppShareUrl,
+  groupReceiptItemsByBundle,
 } from '../utils/formatters';
 
 type StatusFilter = 'all' | 'overdue' | 'active' | 'pending_pickup';
@@ -340,7 +341,26 @@ export function TrackingScreen({
                       </span>
                     </div>
                     <p className="text-xs text-[#6E6853] truncate">
-                      {r.items.map((i) => `${i.name} ×${i.quantity}`).join(', ')}
+                      {/* Paket Alat Tahap 2 -- grup ber-bundle_instance_id
+                          sama tampil "Paket X ×N" + rincian, bukan
+                          komponen lepas (brief bagian D), reuse
+                          groupReceiptItemsByBundle() yang sudah ada. */}
+                      {groupReceiptItemsByBundle(
+                        r.items.map((i) => ({
+                          name: i.name,
+                          quantity: i.quantity,
+                          price_per_day: 0,
+                          bundle_instance_id: i.bundle_instance_id,
+                          bundle_name: i.bundle_name,
+                          bundle_quantity: i.bundle_quantity,
+                        })),
+                      )
+                        .map((group) =>
+                          group.bundleName
+                            ? `Paket ${group.bundleName}${group.bundleQuantity && group.bundleQuantity > 1 ? ` ×${group.bundleQuantity}` : ''}`
+                            : group.items.map((i) => `${i.name} ×${i.quantity}`).join(', '),
+                        )
+                        .join(', ')}
                     </p>
                     <p className="text-xs text-[#6E6853]">
                       {formatDateIndo(r.start_date)} s/d {formatDateIndo(r.end_date)} · {formatIDR(r.estimated_price)}
@@ -571,7 +591,14 @@ export function TrackingScreen({
             customerPhone: confirmPrefillTarget.customer_phone,
             startDate: confirmPrefillTarget.start_date,
             endDate: confirmPrefillTarget.end_date,
-            items: confirmPrefillTarget.items.map((i) => ({ itemId: i.item_id, quantity: i.quantity })),
+            items: confirmPrefillTarget.items.map((i) => ({
+              itemId: i.item_id,
+              quantity: i.quantity,
+              bundleId: i.bundle_id,
+              bundleInstanceId: i.bundle_instance_id,
+              bundleName: i.bundle_name,
+              bundleQuantity: i.bundle_quantity,
+            })),
             estimatedPrice: confirmPrefillTarget.estimated_price,
           }}
           onSaved={handleBookingSavedForRequest}

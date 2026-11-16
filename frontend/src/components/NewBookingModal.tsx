@@ -202,7 +202,19 @@ export type BookingRequestPrefill = {
   customerPhone: string;
   startDate: string;
   endDate: string;
-  items: { itemId: string; quantity: number }[];
+  // Penanda paket (migration 065, Paket Alat Tahap 2) -- null untuk alat
+  // lepas. Baris ber-bundleInstanceId sama dikelompokkan ulang jadi satu
+  // pilihan paket saat prefill (lihat useEffect di bawah), KECUALI
+  // bundle-nya sudah dinonaktifkan/tidak ditemukan lagi, fallback ke
+  // komponen lepas + peringatan.
+  items: {
+    itemId: string;
+    quantity: number;
+    bundleId: string | null;
+    bundleInstanceId: string | null;
+    bundleName: string | null;
+    bundleQuantity: number | null;
+  }[];
   // Cuma buat ditampilkan sebagai konteks ("Dari pesanan online, perkiraan
   // Rp X") — BUKAN dipakai menghitung total_price transaksi (itu tetap
   // dihitung dari harga katalog SAAT INI seperti biasa, lihat rencana 2.13
@@ -280,18 +292,59 @@ export function NewBookingModal({
   const [autoOpenWA, setAutoOpenWA] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [bundlePrefillWarning, setBundlePrefillWarning] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
     if (requestPrefill) {
       setStartDate(requestPrefill.startDate);
       setEndDate(requestPrefill.endDate);
-      setQuantities(Object.fromEntries(requestPrefill.items.map((i) => [i.itemId, i.quantity])));
-      // Pesanan Online Tahap 1 belum punya paket (Tahap 2) — prefill
-      // paket selalu kosong, pelanggan cuma bisa pesan alat satuan.
-      setBundleQuantities({});
-      setBundleInstanceIds({});
+
+      // Paket Alat Tahap 2 — kelompokkan baris ber-bundleInstanceId sama
+      // jadi satu pilihan paket (bukan alat lepas satu-satu), KECUALI
+      // bundle-nya sudah dinonaktifkan/dihapus dari katalog sejak
+      // pesanan masuk — fallback ke komponen lepas (dari snapshot
+      // bundleName+quantity pesanan ini, bukan resep live yang mungkin
+      // sudah berubah) + peringatan non-blocking.
+      const plainQuantities: Record<string, number> = {};
+      const nextBundleQuantities: Record<string, number> = {};
+      const nextBundleInstanceIds: Record<string, string> = {};
+      const fallbackBundleNames = new Set<string>();
+      const groupsByInstance = new Map<string, typeof requestPrefill.items>();
+      for (const item of requestPrefill.items) {
+        if (!item.bundleInstanceId) {
+          plainQuantities[item.itemId] = (plainQuantities[item.itemId] ?? 0) + item.quantity;
+          continue;
+        }
+        const group = groupsByInstance.get(item.bundleInstanceId) ?? [];
+        group.push(item);
+        groupsByInstance.set(item.bundleInstanceId, group);
+      }
+      for (const group of groupsByInstance.values()) {
+        const bundleId = group[0].bundleId!;
+        const liveBundle = bundles.find((b) => b.id === bundleId);
+        if (liveBundle) {
+          // instance_id BARU (bukan dipakai ulang dari pesanan) —
+          // instance harus unik per transaksi akhir, sama seperti
+          // bundle yang baru dipilih manual oleh staf.
+          nextBundleQuantities[bundleId] = group[0].bundleQuantity ?? 1;
+          nextBundleInstanceIds[bundleId] = crypto.randomUUID();
+        } else {
+          for (const item of group) {
+            plainQuantities[item.itemId] = (plainQuantities[item.itemId] ?? 0) + item.quantity;
+          }
+          fallbackBundleNames.add(group[0].bundleName ?? 'paket');
+        }
+      }
+      setQuantities(plainQuantities);
+      setBundleQuantities(nextBundleQuantities);
+      setBundleInstanceIds(nextBundleInstanceIds);
       setBundleComponentOverrides({});
+      setBundlePrefillWarning(
+        fallbackBundleNames.size > 0
+          ? `Paket ${Array.from(fallbackBundleNames).join(', ')} sudah diubah/dinonaktifkan sejak pesanan masuk — alat tetap terisi otomatis, mohon periksa jumlah & harga.`
+          : null,
+      );
       setCustomerName(requestPrefill.customerName);
       // Review -c1 (tahap 4, poin 2): customer_phone dari booking_requests
       // tersimpan dalam bentuk kanonik "628xxx" (lihat normalizePhone() di
@@ -313,6 +366,7 @@ export function NewBookingModal({
       setBundleQuantities({});
       setBundleInstanceIds({});
       setBundleComponentOverrides({});
+      setBundlePrefillWarning(null);
       setCustomerName('');
       setCustomerPhone('');
     }
@@ -329,7 +383,15 @@ export function NewBookingModal({
     setDepositAmount('');
     setDpPaid('0');
     setError(null);
-  }, [isOpen, preselectedItemId, preselectedStartDate, requestPrefill, business.rental_day_mode]);
+    // bundles sengaja masuk dependency -- useBundles() mulai dari array
+    // kosong sebelum fetch-nya selesai; tanpa ini, prefill paket yang
+    // terjadi SEBELUM bundles termuat akan salah dianggap "tidak
+    // ditemukan" (fallback ke alat lepas padahal paketnya valid).
+    // Re-run di sini aman/idempoten -- efek ini SELALU menurunkan ulang
+    // state yang sama dari requestPrefill, tidak menimpa edit manual
+    // staf (edit manual terjadi di luar efek ini, dependency-nya tidak
+    // berubah karenanya).
+  }, [isOpen, preselectedItemId, preselectedStartDate, requestPrefill, business.rental_day_mode, bundles]);
 
   useEffect(() => {
     return () => {
@@ -652,6 +714,17 @@ export function NewBookingModal({
                 harga final tetap ditentukan di bawah dari katalog saat ini.
               </p>
             </div>
+          )}
+          {/* Paket Alat Tahap 2 -- paket yang dipesan pelanggan sudah
+              dinonaktifkan/resep berubah sejak pesanan masuk: fallback ke
+              komponen LEPAS (sudah terisi otomatis di langkah 3 di bawah,
+              dari snapshot bundle_name+komponen saat pesanan masuk, BUKAN
+              resep live) + peringatan non-blocking ini, bukan dibiarkan
+              diam-diam hilang dari form. */}
+          {bundlePrefillWarning && (
+            <p className="text-[11px] text-[#A65C2A] font-semibold bg-[#FAF0EE] border border-[#A65C2A]/30 rounded-lg p-2.5">
+              {bundlePrefillWarning}
+            </p>
           )}
           <div className="space-y-3 bg-[#F1EEE2] p-4 rounded-xl border border-[#DBD5C1]">
             <h3 className="font-bold text-[#26302B] flex items-center gap-2">

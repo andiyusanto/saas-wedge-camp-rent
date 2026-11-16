@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
-export type BookingRequestItem = { item_id: string; quantity: number; name: string };
+// Penanda paket (migration 065, Paket Alat Tahap 2) -- null untuk alat
+// lepas, pola sama booking_items Tahap 1.
+export type BookingRequestItem = {
+  item_id: string;
+  quantity: number;
+  name: string;
+  bundle_id: string | null;
+  bundle_instance_id: string | null;
+  bundle_name: string | null;
+  bundle_quantity: number | null;
+};
 
 export type BookingRequest = {
   id: string;
@@ -30,11 +40,19 @@ type RawRow = {
   expires_at: string;
   created_at: string;
   confirmation_token: string;
-  booking_request_items: { item_id: string; quantity: number; items: { name: string } | null }[];
+  booking_request_items: {
+    item_id: string;
+    quantity: number;
+    items: { name: string } | null;
+    bundle_id: string | null;
+    bundle_instance_id: string | null;
+    bundle_name: string | null;
+    bundle_quantity: number | null;
+  }[];
 };
 
 const SELECT_FIELDS =
-  'id, status, customer_name, customer_phone, note, start_date, end_date, estimated_price, expires_at, created_at, confirmation_token, booking_request_items(item_id, quantity, items(name))';
+  'id, status, customer_name, customer_phone, note, start_date, end_date, estimated_price, expires_at, created_at, confirmation_token, booking_request_items(item_id, quantity, items(name), bundle_id, bundle_instance_id, bundle_name, bundle_quantity)';
 
 function mapRow(row: RawRow): BookingRequest {
   return {
@@ -53,6 +71,10 @@ function mapRow(row: RawRow): BookingRequest {
       item_id: bri.item_id,
       quantity: bri.quantity,
       name: bri.items?.name ?? 'Alat',
+      bundle_id: bri.bundle_id,
+      bundle_instance_id: bri.bundle_instance_id,
+      bundle_name: bri.bundle_name,
+      bundle_quantity: bri.bundle_quantity,
     })),
   };
 }
