@@ -1,8 +1,12 @@
-import { Fragment } from 'react';
-import { Printer, X } from 'lucide-react';
+import { Fragment, useState } from 'react';
+import { Printer, Settings2, X } from 'lucide-react';
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import type { ReceiptData } from '../utils/formatters';
 import { formatIDR, formatDateIndo, rentalDays, depositLabel, fineLabel, todayStr, addDaysStr, groupReceiptItemsByBundle } from '../utils/formatters';
+import { usePrinterSettings } from '../hooks/usePrinterSettings';
+import { buildThermalReceiptDoc } from '../utils/thermalReceipt';
+import { printThermalReceipt } from '../utils/thermalPrint';
+import { PrinterSetupWizard } from './PrinterSetupWizard';
 
 // Nota cetak/PDF — dirender dari data yang sama dengan struk WA (lihat
 // buildReceiptData di useTrackings.ts), tanpa library PDF atau endpoint
@@ -19,11 +23,24 @@ export function InvoiceModal({
   onClose: () => void;
   data: ReceiptData | null;
 }) {
+  const { settings, saveSettings } = usePrinterSettings();
+  const [wizardOpen, setWizardOpen] = useState(false);
+
   if (!isOpen || !data) return null;
 
   const days = rentalDays(data.startDate, data.endDate, data.rentalDayMode);
   const remaining = Math.max(0, data.totalPrice - data.dpPaid);
   const totalFines = data.fines.reduce((sum, f) => sum + f.amount, 0);
+
+  async function handlePrintThermal() {
+    if (!data) return;
+    if (!settings || settings.connection === 'none') {
+      setWizardOpen(true);
+      return;
+    }
+    const doc = buildThermalReceiptDoc(data, settings.paperWidth);
+    await printThermalReceipt(doc, settings.paperWidth, settings.connection === 'bluetooth' ? 'bluetooth' : 'usb');
+  }
 
   return (
     <ModalBackdrop>
@@ -191,16 +208,49 @@ export function InvoiceModal({
           </p>
         </div>
 
-        <div className="p-4 border-t border-[#DBD5C1] shrink-0 print:hidden">
+        <div className="p-4 border-t border-[#DBD5C1] shrink-0 print:hidden space-y-2">
+          <div className="flex gap-2">
+            <button
+              onClick={() => window.print()}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-[#2B4739] text-[#2B4739] font-bold text-sm transition"
+            >
+              <Printer className="w-4 h-4" />
+              Nota / PDF
+            </button>
+            <button
+              onClick={handlePrintThermal}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-sm shadow-md transition"
+            >
+              <Printer className="w-4 h-4" />
+              Cetak Struk
+            </button>
+          </div>
           <button
-            onClick={() => window.print()}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-sm shadow-md transition"
+            onClick={() => setWizardOpen(true)}
+            className="w-full text-center text-xs text-[#6E6853] flex items-center justify-center gap-1"
           >
-            <Printer className="w-4 h-4" />
-            Cetak / Simpan PDF
+            <Settings2 className="w-3 h-3" />
+            Printer: {settings
+              ? settings.connection === 'none'
+                ? 'Belum ada printer'
+                : `${settings.connection === 'bluetooth' ? 'Bluetooth' : 'USB'} · ${settings.paperWidth}mm`
+              : 'Belum diatur'} · Ubah
           </button>
         </div>
       </ModalPanel>
+
+      <PrinterSetupWizard
+        isOpen={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        businessName={data.businessName}
+        onSaved={(next) => {
+          saveSettings(next);
+          if (next.connection !== 'none') {
+            const doc = buildThermalReceiptDoc(data, next.paperWidth);
+            printThermalReceipt(doc, next.paperWidth, next.connection === 'bluetooth' ? 'bluetooth' : 'usb');
+          }
+        }}
+      />
     </ModalBackdrop>
   );
 }

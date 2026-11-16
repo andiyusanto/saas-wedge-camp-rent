@@ -9,6 +9,8 @@ import { RegencySelect } from './RegencySelect';
 import { TIMEZONE_OPTIONS, suggestedTimezoneForProvince, type BusinessTimezone } from '../hooks/useRegencies';
 import { apiFetch } from '../lib/api';
 import { resizeImageToDataUrl } from '../utils/imageResize';
+import { usePrinterSettings } from '../hooks/usePrinterSettings';
+import { PrinterSetupWizard } from './PrinterSetupWizard';
 
 export function BusinessInfoSection({
   session,
@@ -23,6 +25,8 @@ export function BusinessInfoSection({
   ownerEmail: string | null;
   onSave: (input: BusinessUpdateInput) => Promise<{ error: string | null }>;
 }) {
+  const { settings: printerSettings, saveSettings: savePrinterSettings } = usePrinterSettings();
+  const [printerWizardOpen, setPrinterWizardOpen] = useState(false);
   const [name, setName] = useState(business.name);
   const [ownerName, setOwnerName] = useState(business.owner_name ?? '');
   const [phone, setPhone] = useState(business.phone ?? '');
@@ -500,6 +504,24 @@ export function BusinessInfoSection({
         </div>
 
         <div className="flex flex-col gap-2 pt-2 border-t border-[#E6E1D2]">
+          <p className="text-sm font-semibold text-[#26302B]">Printer Struk</p>
+          <p className="text-[11px] text-[#6E6853]">
+            {printerSettings
+              ? printerSettings.connection === 'none'
+                ? 'Belum ada printer diatur — struk dikirim lewat WA / PDF.'
+                : `Diatur: ${printerSettings.connection === 'bluetooth' ? 'Bluetooth' : 'USB'} · kertas ${printerSettings.paperWidth}mm. Pengaturan ini per perangkat (HP/laptop lain diatur sendiri).`
+              : 'Belum diatur di perangkat ini. Pengaturan per perangkat (HP/laptop lain diatur sendiri).'}
+          </p>
+          <button
+            type="button"
+            onClick={() => setPrinterWizardOpen(true)}
+            className="self-start px-3 py-1.5 rounded-lg border border-[#DBD5C1] hover:bg-[#F1EEE2] text-[#26302B] text-xs font-semibold transition"
+          >
+            {printerSettings ? 'Ubah Pengaturan Printer' : 'Siapkan Printer'}
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-2 pt-2 border-t border-[#E6E1D2]">
           <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
             <span className="font-semibold text-[#26302B]">Zona Waktu</span>
             <select
@@ -547,6 +569,13 @@ export function BusinessInfoSection({
           {saved && <span className="text-xs font-semibold text-[#2B4739]">Tersimpan.</span>}
         </div>
       </form>
+
+      <PrinterSetupWizard
+        isOpen={printerWizardOpen}
+        onClose={() => setPrinterWizardOpen(false)}
+        businessName={business.name}
+        onSaved={savePrinterSettings}
+      />
     </div>
   );
 }
