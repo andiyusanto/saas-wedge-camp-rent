@@ -43,16 +43,27 @@ export function shouldRemoveSubscription(statusCode: number | undefined): boolea
   return statusCode === 404 || statusCode === 410;
 }
 
+// Paket Alat Tahap 2 (brief 16 Nov 2026) -- bundleCount opsional (default
+// 0, pola lama "N alat" tidak berubah sama sekali kalau tidak diisi).
+// Diisi -> "{N} paket + {M} alat", bagian yang nol dihilangkan (mis. cuma
+// "2 paket" kalau tidak ada alat lepas). Tetap tanpa harga/alamat, sama
+// seperti sebelumnya.
 export function buildNewOrderPayload(params: {
   customerName: string;
   itemCount: number;
+  bundleCount?: number;
   startDate: string;
   endDate: string;
 }): NewOrderPushPayload {
+  const bundleCount = params.bundleCount ?? 0;
+  const parts: string[] = [];
+  if (bundleCount > 0) parts.push(`${bundleCount} paket`);
+  if (params.itemCount > 0) parts.push(`${params.itemCount} alat`);
+  const countText = parts.length > 0 ? parts.join(' + ') : `${params.itemCount} alat`;
   return {
     type: 'new_booking_request',
     title: 'Pesanan baru dari Etalase Online',
-    body: `${params.customerName} · ${params.itemCount} alat · ${ddmm(params.startDate)} → ${ddmm(params.endDate)}`,
+    body: `${params.customerName} · ${countText} · ${ddmm(params.startDate)} → ${ddmm(params.endDate)}`,
   };
 }
 

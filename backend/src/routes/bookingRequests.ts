@@ -4,6 +4,14 @@ import { createAnonClient } from '../lib/supabaseClient.js';
 import { todayInTz, tzOffsetIso, rentalDuration } from '../lib/dates.js';
 import { computeItemRentalPrice } from '../lib/pricing.js';
 import { sendPushToBusiness, buildNewOrderPayload } from '../lib/webPush.js';
+import {
+  MAX_ITEMS_PER_REQUEST,
+  validateSubmitRows,
+  mergeDuplicateItems,
+  mergeDuplicateBundles,
+  explodeBundleRow,
+} from '../lib/bundleBookingRequest.js';
+import type { PublicPageBundle, ExplodedRow } from '../lib/bundleBookingRequest.js';
 
 const router = Router();
 
@@ -68,43 +76,6 @@ function normalizePhone(raw: string): string {
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const MAX_ITEMS_PER_REQUEST = 20;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-type SubmitItemInput = { item_id: string; quantity: number };
-
-// Review -c1 (ronde ketiga) #2: tanpa ini, quantity negatif/pecahan/string
-// ("-5", 2.5) lolos lewat perbandingan `quantity > remaining` (mis. -5 >
-// 4 = false, lolos validasi stok), merusak estimatedPrice, lalu baru
-// gagal belakangan dengan error RPC mentah. Divalidasi per baris SEBELUM
-// apa pun lain diproses: item_id harus UUID, quantity harus integer 1-20.
-function validateItemRows(raw: unknown): SubmitItemInput[] | null {
-  if (!Array.isArray(raw) || raw.length === 0) return null;
-  const result: SubmitItemInput[] = [];
-  for (const row of raw) {
-    if (
-      typeof row !== 'object' || row === null ||
-      typeof (row as any).item_id !== 'string' || !UUID_RE.test((row as any).item_id) ||
-      typeof (row as any).quantity !== 'number' || !Number.isInteger((row as any).quantity) ||
-      (row as any).quantity < 1 || (row as any).quantity > MAX_ITEMS_PER_REQUEST
-    ) {
-      return null;
-    }
-    result.push({ item_id: (row as any).item_id, quantity: (row as any).quantity });
-  }
-  return result;
-}
-
-// Review -c1 (ronde ketiga) #1: [{A,3},{A,3}] masing-masing lolos cek
-// remaining=4 per baris, padahal total sungguhan (6) melebihi. Digabung
-// per item_id (dijumlahkan) SEBELUM validasi stok/harga/batas apa pun.
-function mergeDuplicateItems(rows: SubmitItemInput[]): SubmitItemInput[] {
-  const merged = new Map<string, number>();
-  for (const row of rows) {
-    merged.set(row.item_id, (merged.get(row.item_id) ?? 0) + row.quantity);
-  }
-  return Array.from(merged.entries()).map(([item_id, quantity]) => ({ item_id, quantity }));
-}
 
 // Bentuk items[] dari get_public_page (019) — sudah difilter aktif saja
 // di dalam RPC itu sendiri (deactivated_at is null), jadi "item tidak ada
@@ -158,21 +129,31 @@ router.post('/public/booking-requests/:slug', perIpLimiter, async (req, res) => 
     return;
   }
 
-  const validatedItems = validateItemRows(items);
+  const validatedRows = validateSubmitRows(items);
 
   if (
     typeof customer_name !== 'string' || customer_name.trim().length < 1 || customer_name.length > 100 ||
     typeof customer_phone !== 'string' ||
     typeof start_date !== 'string' || !DATE_RE.test(start_date) ||
     typeof end_date !== 'string' || !DATE_RE.test(end_date) ||
-    !validatedItems ||
+    !validatedRows ||
     typeof payment_method !== 'string'
   ) {
     res.status(400).json({ error: 'Data pesanan tidak lengkap.' });
     return;
   }
 
-  const requestedItems = mergeDuplicateItems(validatedItems);
+  // Paket Alat Tahap 2: array gabungan baris alat satuan + baris paket
+  // (pre-explosion) — batas jumlah BARIS keranjang tetap dicek di sini
+  // (bukan jumlah unit, yang baru diketahui setelah paket dipecah di
+  // bawah).
+  if (validatedRows.items.length + validatedRows.bundles.length > MAX_ITEMS_PER_REQUEST) {
+    res.status(400).json({ error: 'Terlalu banyak baris di keranjang (maks 20 baris per pesanan).' });
+    return;
+  }
+
+  const requestedItems = mergeDuplicateItems(validatedRows.items);
+  const requestedBundles = mergeDuplicateBundles(validatedRows.bundles);
 
   const normalizedPhone = normalizePhone(customer_phone);
   if (!PHONE_RE.test(normalizedPhone)) {
@@ -182,12 +163,6 @@ router.post('/public/booking-requests/:slug', perIpLimiter, async (req, res) => 
 
   if (end_date < start_date) {
     res.status(400).json({ error: 'Tanggal kembali tidak boleh sebelum tanggal ambil.' });
-    return;
-  }
-
-  const totalQty = requestedItems.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0);
-  if (requestedItems.length > MAX_ITEMS_PER_REQUEST || totalQty < 1 || totalQty > MAX_ITEMS_PER_REQUEST) {
-    res.status(400).json({ error: 'Jumlah alat di luar batas (maks 20 unit per pesanan).' });
     return;
   }
 
@@ -284,7 +259,21 @@ router.post('/public/booking-requests/:slug', perIpLimiter, async (req, res) => 
     res.status(404).json({ error: 'Toko tidak ditemukan.' });
     return;
   }
-  const catalogItems = (fullPageData as { items: PublicPageItem[] }).items;
+  const catalogItems = (fullPageData as { items: PublicPageItem[]; bundles?: PublicPageBundle[] }).items;
+  const catalogBundles = (fullPageData as { items: PublicPageItem[]; bundles?: PublicPageBundle[] }).bundles ?? [];
+  const catalogRatesByItemId = new Map(
+    (catalogItems ?? []).map((i) => [
+      i.id,
+      {
+        price_per_day: i.price_per_day,
+        day2_rate: i.day2_rate,
+        day3_rate: i.day3_rate,
+        day4_rate: i.day4_rate,
+        day5_rate: i.day5_rate,
+        extra_day_rate: i.extra_day_rate,
+      },
+    ]),
+  );
 
   const { data: availabilityRaw, error: availabilityError } = await supabase.rpc('get_public_availability', {
     p_slug: slug,
@@ -318,29 +307,81 @@ router.post('/public/booking-requests/:slug', perIpLimiter, async (req, res) => 
 
   let estimatedPrice = 0;
 
-  for (const requested of requestedItems) {
-    const catalogItem = catalogItems?.find((i) => i.id === requested.item_id);
+  // Pecah tiap baris paket jadi baris per komponen SEKARANG (server-side,
+  // dari resep get_public_page.bundles) -- client anon tidak pernah
+  // dipercaya soal komposisi paket (brief bagian C).
+  const explodedBundleRows: ExplodedRow[] = [];
+  for (const requestedBundle of requestedBundles) {
+    const catalogBundle = catalogBundles.find((b) => b.id === requestedBundle.bundle_id);
+    if (!catalogBundle) {
+      res.status(400).json({ error: 'Salah satu paket tidak ditemukan, sudah tidak aktif, atau salah satu alatnya sudah tidak aktif.' });
+      return;
+    }
+    const exploded = explodeBundleRow(catalogBundle, catalogRatesByItemId, requestedBundle.quantity, rentalDaysCount);
+    if ('error' in exploded) {
+      res.status(400).json({ error: exploded.error });
+      return;
+    }
+    explodedBundleRows.push(...exploded.rows);
+    estimatedPrice += exploded.subtotal;
+  }
+
+  const plainItemRows: ExplodedRow[] = requestedItems.map((i) => ({
+    item_id: i.item_id,
+    quantity: i.quantity,
+    bundle_id: null,
+    bundle_instance_id: null,
+    bundle_name: null,
+    bundle_quantity: null,
+  }));
+
+  const allRows = [...plainItemRows, ...explodedBundleRows];
+
+  // Kebutuhan per item_id DIJUMLAHKAN DULU dari SEMUA sumber (komponen
+  // semua paket + alat satuan lepas yang item_id-nya sama) SEBELUM
+  // dibandingkan ke sisa stok -- brief bagian B/C, poin eksplisit: paket
+  // + alat tambahan yang sama tidak boleh divalidasi terpisah-pisah,
+  // nanti keduanya bisa lolos padahal gabungannya melebihi stok.
+  const combinedQtyByItemId = new Map<string, number>();
+  for (const row of allRows) {
+    combinedQtyByItemId.set(row.item_id, (combinedQtyByItemId.get(row.item_id) ?? 0) + row.quantity);
+  }
+
+  for (const [itemId, totalQtyForItem] of combinedQtyByItemId) {
+    const catalogItem = catalogItems?.find((i) => i.id === itemId);
     if (!catalogItem) {
       res.status(400).json({ error: 'Salah satu alat tidak ditemukan atau sudah tidak aktif.' });
       return;
     }
-    const avail = availability.find((a) => a.id === requested.item_id);
-    if (!avail || requested.quantity > avail.remaining) {
+    const avail = availability.find((a) => a.id === itemId);
+    if (!avail || totalQtyForItem > avail.remaining) {
       res.status(409).json({
         error: `Alat "${catalogItem.name}" tidak cukup untuk tanggal yang dipilih (sisa ${avail?.remaining ?? 0}).`,
       });
       return;
     }
+  }
 
-    // Review -c1: estimated_price TIDAK pernah dipercaya dari klien
-    // (klien bisa kirim Rp0/Rp1, lalu halaman status menampilkan
-    // "Perkiraan Rp0" ke pelanggan, jadi amunisi dispute). Dihitung
-    // server-side dari harga katalog SAAT INI (computeItemRentalPrice(),
-    // sama fungsi yang dipakai form internal/Etalase) × qty — ini murni
-    // tampilan ("Perkiraan: Rp X", rencana 2.1 poin 3/2.13), harga final
-    // tetap dihitung ulang vendor lewat Catat Transaksi biasa saat
-    // konfirmasi.
+  // Review -c1: estimated_price TIDAK pernah dipercaya dari klien (klien
+  // bisa kirim Rp0/Rp1, lalu halaman status menampilkan "Perkiraan Rp0"
+  // ke pelanggan, jadi amunisi dispute). Alat satuan dihitung dari harga
+  // katalog SAAT INI (computeItemRentalPrice()) × qty, paket sudah
+  // dihitung di atas lewat explodeBundleRow -- keduanya murni tampilan
+  // ("Perkiraan: Rp X"), harga final tetap dihitung ulang vendor lewat
+  // Catat Transaksi biasa saat konfirmasi.
+  for (const requested of requestedItems) {
+    const catalogItem = catalogItems!.find((i) => i.id === requested.item_id)!;
     estimatedPrice += computeItemRentalPrice(catalogItem, rentalDaysCount) * requested.quantity;
+  }
+
+  // Jumlah unit TOTAL (gabungan alat satuan + hasil pecahan semua paket)
+  // tetap dibatasi 1-20, sama seperti sebelum paket ada -- dicek di sini
+  // dengan pesan ramah (bukan dibiarkan gagal di create_booking_request
+  // dengan pesan server mentah, catatan koordinator 16 Nov 2026 poin a).
+  const totalQty = allRows.reduce((sum, r) => sum + r.quantity, 0);
+  if (totalQty < 1 || totalQty > MAX_ITEMS_PER_REQUEST) {
+    res.status(400).json({ error: 'Jumlah alat/paket di luar batas (maks 20 unit per pesanan).' });
+    return;
   }
 
   // Batas kedaluwarsa (rencana 2.6 revisi, tahap 5): mana yang lebih dulu
@@ -396,7 +437,7 @@ router.post('/public/booking-requests/:slug', perIpLimiter, async (req, res) => 
     p_payment_method: payment_method,
     p_dp_amount: null,
     p_expires_at: expiresAt.toISOString(),
-    p_items: requestedItems.map((i) => ({ item_id: i.item_id, quantity: i.quantity })),
+    p_items: allRows,
     p_terms_version_id: termsVersionId,
   });
 
@@ -436,7 +477,13 @@ router.post('/public/booking-requests/:slug', perIpLimiter, async (req, res) => 
   void sendPushToBusiness(
     page.business_id,
     secret,
-    buildNewOrderPayload({ customerName: customer_name.trim(), itemCount: totalQty, startDate: start_date, endDate: end_date }),
+    buildNewOrderPayload({
+      customerName: customer_name.trim(),
+      itemCount: requestedItems.reduce((sum, i) => sum + i.quantity, 0),
+      bundleCount: requestedBundles.reduce((sum, b) => sum + b.quantity, 0),
+      startDate: start_date,
+      endDate: end_date,
+    }),
   );
 
   // create_booking_request (037) mengembalikan id baris, bukan token —
