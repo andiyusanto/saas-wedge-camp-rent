@@ -3,6 +3,8 @@ import { X, Wrench, Search, Send, CheckCircle2, AlertTriangle } from 'lucide-rea
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import { useItems } from '../hooks/useItems';
 import type { Item } from '../hooks/useItems';
+import { useSaleItems } from '../hooks/useSaleItems';
+import type { SaleItem } from '../hooks/useSaleItems';
 import { buildReceiptData } from '../hooks/useTrackings';
 import type { TrackingBooking } from '../hooks/useTrackings';
 import { formatIDR, rentalDays, computeItemRentalPrice, generateWhatsAppReceipt, getWhatsAppShareUrl } from '../utils/formatters';
@@ -16,7 +18,11 @@ type SavedResultItem = {
   bundle_instance_id?: string | null;
   bundle_name?: string | null;
 };
-type ActionResult = { error: string | null; data: { total_price: number; items: SavedResultItem[] } | null };
+type SavedResultSaleItem = { sale_item_id: string; name: string; quantity: number; price_at_booking: number; subtotal: number };
+type ActionResult = {
+  error: string | null;
+  data: { total_price: number; items: SavedResultItem[]; sale_items: SavedResultSaleItem[] } | null;
+};
 
 function itemRentalPrice(item: Item, days: number): number {
   return computeItemRentalPrice(
@@ -75,7 +81,12 @@ export function UbahAlatModal({
   businessId: string;
   updateBookingItems: (
     bookingId: string,
-    body: { items: { item_id: string; quantity: number; bundle_instance_id?: string | null }[]; total_price?: number; reason?: string },
+    body: {
+      items: { item_id: string; quantity: number; bundle_instance_id?: string | null }[];
+      sale_items?: { sale_item_id: string; quantity: number }[];
+      total_price?: number;
+      reason?: string;
+    },
   ) => Promise<ActionResult>;
   businessName: string;
   businessAddress: string | null;
@@ -83,9 +94,13 @@ export function UbahAlatModal({
   onDone: () => void;
 }) {
   const { items, inactiveItems } = useItems(businessId);
+  const { saleItems, inactiveSaleItems } = useSaleItems(businessId);
   // Kunci: rowKey(item_id, bundle_instance_id) untuk baris existing (paket
   // ATAU plain), atau rowKey(item_id, null) untuk alat baru yang ditambah.
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  // Barang Jual (habis pakai), v1 (brief 16 Nov 2026) -- keyed sale_item_id
+  // langsung (tidak perlu rowKey, tidak ada konsep paket untuk barang jual).
+  const [saleQuantities, setSaleQuantities] = useState<Record<string, number>>({});
   const [itemSearchQuery, setItemSearchQuery] = useState('');
   const [reason, setReason] = useState('');
   const [overrideTotal, setOverrideTotal] = useState(false);
@@ -93,7 +108,7 @@ export function UbahAlatModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initialisedFor, setInitialisedFor] = useState<string | null>(null);
-  const [savedResult, setSavedResult] = useState<{ total_price: number; items: SavedResultItem[] } | null>(null);
+  const [savedResult, setSavedResult] = useState<{ total_price: number; items: SavedResultItem[]; sale_items: SavedResultSaleItem[] } | null>(null);
 
   // Rules of Hooks: useMemo HARUS di atas early return `!isOpen ||
   // !booking` di bawah, bukan sesudahnya -- bug nyata ditemukan Playwright
@@ -160,6 +175,9 @@ export function UbahAlatModal({
     const initial: Record<string, number> = {};
     for (const bi of booking.items) initial[rowKey(bi.item_id, bi.bundle_instance_id)] = bi.quantity;
     setQuantities(initial);
+    const initialSale: Record<string, number> = {};
+    for (const bsi of booking.sale_items) initialSale[bsi.sale_item_id] = bsi.quantity;
+    setSaleQuantities(initialSale);
     setItemSearchQuery('');
     setReason('');
     setOverrideTotal(false);
@@ -195,10 +213,38 @@ export function UbahAlatModal({
     return qty * itemRentalPrice(catalogItem, days);
   }
 
-  const estimatedTotal = selectedEntries.reduce((sum, [key, qty]) => {
+  const rentalEstimatedTotal = selectedEntries.reduce((sum, [key, qty]) => {
     const itemId = key.split('::')[0];
     return sum + estimateSubtotalForKey(key, itemId, qty);
   }, 0);
+
+  // Barang Jual (habis pakai), v1 -- pola sama existingPlainByItemId:
+  // existing di booking INI (dipertahankan walau barangnya belakangan
+  // dinonaktifkan) + katalog aktif saat ini, digabung sebagai pilihan
+  // picker. Harga existing pakai snapshot lama (price_at_booking),
+  // barang baru pakai harga katalog SEKARANG -- cuma preview, final
+  // tetap dihitung server (mergeSaleItemsForUpdate).
+  const existingSaleByItemId = new Map(booking.sale_items.map((bsi) => [bsi.sale_item_id, bsi]));
+  const saleItemsPicker = useMemo(() => {
+    const existingInactive = inactiveSaleItems.filter((s) => existingSaleByItemId.has(s.id));
+    return [...saleItems, ...existingInactive];
+  }, [saleItems, inactiveSaleItems, existingSaleByItemId]);
+
+  const selectedSaleEntries = Object.entries(saleQuantities).filter(([, qty]) => qty > 0);
+  function estimateSaleSubtotal(saleItemId: string, qty: number): number {
+    const prior = existingSaleByItemId.get(saleItemId);
+    if (prior) return prior.price_at_booking * qty;
+    const catalogItem = saleItemsPicker.find((s) => s.id === saleItemId);
+    return catalogItem ? catalogItem.price * qty : 0;
+  }
+  const saleEstimatedTotal = selectedSaleEntries.reduce((sum, [saleItemId, qty]) => sum + estimateSaleSubtotal(saleItemId, qty), 0);
+  const estimatedTotal = rentalEstimatedTotal + saleEstimatedTotal;
+
+  // Maks stepper = stok SEKARANG + jumlah yang SUDAH tertahan di booking
+  // ini (menambah balik ke jumlah semula tidak butuh stok tambahan).
+  function maxQtyForSaleItem(saleItem: SaleItem): number {
+    return saleItem.stock + (existingSaleByItemId.get(saleItem.id)?.quantity ?? 0);
+  }
 
   function setQuantityForKey(key: string, qty: number, maxUnits?: number) {
     const clamped = Math.max(0, maxUnits != null ? Math.min(qty, maxUnits) : qty);
@@ -223,6 +269,7 @@ export function UbahAlatModal({
         const [itemId, bundleInstanceId] = key.split('::');
         return { item_id: itemId, quantity, bundle_instance_id: bundleInstanceId || null };
       }),
+      sale_items: selectedSaleEntries.map(([sale_item_id, quantity]) => ({ sale_item_id, quantity })),
       reason: reason.trim() || undefined,
       ...(overrideTotal ? { total_price: Number(totalPrice) || 0 } : {}),
     };
@@ -238,7 +285,7 @@ export function UbahAlatModal({
 
   function handleShareWA() {
     if (!booking || !savedResult || !booking.customer?.phone) return;
-    const updatedBooking = { ...booking, items: savedResult.items, total_price: savedResult.total_price };
+    const updatedBooking = { ...booking, items: savedResult.items, sale_items: savedResult.sale_items, total_price: savedResult.total_price };
     const text = generateWhatsAppReceipt(buildReceiptData(updatedBooking, businessName, businessAddress, businessLogoUrl));
     window.open(getWhatsAppShareUrl(booking.customer.phone, text), '_blank');
   }
@@ -279,6 +326,12 @@ export function UbahAlatModal({
                     {it.name} × {it.quantity}
                   </span>
                   <span className="font-semibold">{formatIDR(it.subtotal)}</span>
+                </p>
+              ))}
+              {savedResult.sale_items.map((s, idx) => (
+                <p key={`${s.sale_item_id}-${idx}`} className="flex items-center justify-between">
+                  <span>{s.name} × {s.quantity}</span>
+                  <span className="font-semibold">{formatIDR(s.subtotal)}</span>
                 </p>
               ))}
               <p className="font-bold text-[#26302B] pt-1 border-t border-[#DBD5C1] flex items-center justify-between">
@@ -434,6 +487,56 @@ export function UbahAlatModal({
                   })}
                 </div>
               </>
+            )}
+
+            {/* Barang Jual (habis pakai), v1 (brief 16 Nov 2026) -- bagian
+                lipat, HANYA tampil kalau ada pilihan barang jual (katalog
+                aktif ATAU sudah ada di booking ini). Mengurangi/menghapus
+                di sini otomatis mengembalikan selisih stok server-side
+                (apply_booking_item_and_sale_changes, migration 066). */}
+            {saleItemsPicker.length > 0 && (
+              <details className="space-y-2">
+                <summary className="font-bold text-[#26302B] cursor-pointer text-xs">
+                  Tambahan: barang jual {selectedSaleEntries.length > 0 ? `(${selectedSaleEntries.length})` : ''}
+                </summary>
+                <div className="space-y-1.5 pt-1.5">
+                  {saleItemsPicker.map((saleItem) => {
+                    const qty = saleQuantities[saleItem.id] ?? 0;
+                    const maxQty = maxQtyForSaleItem(saleItem);
+                    return (
+                      <div key={saleItem.id} className="flex items-center justify-between p-2 rounded-lg bg-white border border-[#DBD5C1]">
+                        <div className="flex-1 min-w-0 pr-2">
+                          <p className="font-semibold text-[#26302B] text-xs truncate">
+                            {saleItem.name}
+                            {saleItem.deactivated_at && (
+                              <span className="ml-1.5 text-[9px] font-semibold text-[#A8412E] uppercase">Nonaktif</span>
+                            )}
+                          </p>
+                          <p className="text-[11px] text-[#6E6853]">{formatIDR(saleItem.price)} · Stok: {saleItem.stock}</p>
+                        </div>
+                        <div className="flex items-center gap-1 bg-[#F1EEE2] rounded-lg p-1 border border-[#DBD5C1] shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setSaleQuantities((prev) => ({ ...prev, [saleItem.id]: Math.max(0, qty - 1) }))}
+                            className="w-6 h-6 rounded bg-white font-bold hover:bg-[#DBD5C1] text-[#26302B] transition"
+                          >
+                            -
+                          </button>
+                          <span className="w-6 text-center font-bold text-[#26302B] text-xs">{qty}</span>
+                          <button
+                            type="button"
+                            onClick={() => setSaleQuantities((prev) => ({ ...prev, [saleItem.id]: Math.min(maxQty, qty + 1) }))}
+                            disabled={qty >= maxQty}
+                            className="w-6 h-6 rounded bg-white font-bold hover:bg-[#DBD5C1] text-[#26302B] transition disabled:opacity-30"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </details>
             )}
 
             {selectedEntries.length === 0 && (

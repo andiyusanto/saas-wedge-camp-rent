@@ -950,6 +950,13 @@ function BookingCard({
               </li>
             ))}
           </ul>
+          {/* Barang Jual (habis pakai), v1 (brief 16 Nov 2026) -- ringkas
+              saja ("+2 barang jual"), rincian lengkap ada di struk/Nota. */}
+          {b.sale_items.length > 0 && (
+            <p className="text-[11px] text-[#6E6853]">
+              + {b.sale_items.reduce((sum, s) => sum + s.quantity, 0)} barang jual
+            </p>
+          )}
           <div className="flex items-center justify-between pt-1">
             <span className="text-[#6E6853]">Total Sewa:</span>
             <span className="font-extrabold text-[#26302B] text-sm">{formatIDR(b.total_price)}</span>

@@ -41,6 +41,10 @@ export type TrackingBooking = {
     bundle_name?: string | null;
     bundle_quantity?: number | null;
   }[];
+  // Barang Jual (habis pakai), v1 (brief 16 Nov 2026, migration 066) --
+  // snapshot nama+harga, terpisah dari alat sewa (lihat ReceiptData/
+  // generateWhatsAppReceipt untuk kenapa tidak reuse tipe `items`).
+  sale_items: { sale_item_id: string; name: string; quantity: number; price_at_booking: number; subtotal: number }[];
   deposits: { id: string; type: string; amount: number | null; note: string | null; status: string }[];
   penalties: {
     id: string;
@@ -120,6 +124,12 @@ export function buildReceiptData(
     startDate: b.start_date,
     endDate: b.end_date,
     items: b.items,
+    saleItems: b.sale_items.map((s) => ({
+      name: s.name,
+      quantity: s.quantity,
+      unitPrice: s.price_at_booking,
+      subtotal: s.subtotal,
+    })),
     totalPrice: b.total_price,
     dpPaid: b.dp_paid,
     depositType: activeDeposit?.type ?? null,
@@ -212,6 +222,7 @@ export function useTrackings(session: Session | null) {
     bookingId: string,
     body: {
       items: { item_id: string; quantity: number; bundle_instance_id?: string | null }[];
+      sale_items?: { sale_item_id: string; quantity: number }[];
       total_price?: number;
       reason?: string;
     },
@@ -230,6 +241,7 @@ export function useTrackings(session: Session | null) {
           bundle_name?: string | null;
           bundle_quantity?: number | null;
         }[];
+        sale_items: { sale_item_id: string; name: string; quantity: number; price_at_booking: number; subtotal: number }[];
       }>(session, `/api/bookings/${bookingId}/items`, { method: 'PATCH', body: JSON.stringify(body) });
       await refresh();
       return { error: null, data: result };

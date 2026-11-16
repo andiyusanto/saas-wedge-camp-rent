@@ -7,6 +7,7 @@ import { useItems } from '../hooks/useItems';
 import type { Item } from '../hooks/useItems';
 import { useBundles } from '../hooks/useBundles';
 import type { Bundle } from '../hooks/useBundles';
+import { useSaleItems } from '../hooks/useSaleItems';
 import type { Business } from '../hooks/useBusiness';
 import { apiFetch } from '../lib/api';
 import { useCustomerSearch, fetchCustomerHistorySummary } from '../hooks/useCustomerSearch';
@@ -249,6 +250,7 @@ export function NewBookingModal({
 }) {
   const { items } = useItems(business.id);
   const { bundles } = useBundles(business.id);
+  const { saleItems } = useSaleItems(business.id);
   const { results: customerSuggestions, search: searchCustomers, clear: clearCustomerSuggestions } =
     useCustomerSearch(business.id);
 
@@ -271,6 +273,10 @@ export function NewBookingModal({
   const [endDate, setEndDate] = useState(todayStr());
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [bundleQuantities, setBundleQuantities] = useState<Record<string, number>>({});
+  // Barang Jual (habis pakai), v1 (brief 16 Nov 2026) -- stepper terpisah
+  // dari alat sewa, keyed sale_item_id. TIDAK diisi lewat prefill
+  // Pesanan Online (brief: belum ada di v1 itu, selalu kosong di awal).
+  const [saleQuantities, setSaleQuantities] = useState<Record<string, number>>({});
   // bundle_instance_id harus STABIL selama satu paket masih dipilih di
   // form ini (bukan di-generate ulang tiap render) -- lihat
   // explodeBundleToComponents. overrides: quantity efektif per
@@ -340,6 +346,7 @@ export function NewBookingModal({
       setBundleQuantities(nextBundleQuantities);
       setBundleInstanceIds(nextBundleInstanceIds);
       setBundleComponentOverrides({});
+      setSaleQuantities({});
       setBundlePrefillWarning(
         fallbackBundleNames.size > 0
           ? `Paket ${Array.from(fallbackBundleNames).join(', ')} sudah diubah/dinonaktifkan sejak pesanan masuk — alat tetap terisi otomatis, mohon periksa jumlah & harga.`
@@ -366,6 +373,7 @@ export function NewBookingModal({
       setBundleQuantities({});
       setBundleInstanceIds({});
       setBundleComponentOverrides({});
+      setSaleQuantities({});
       setBundlePrefillWarning(null);
       setCustomerName('');
       setCustomerPhone('');
@@ -450,12 +458,22 @@ export function NewBookingModal({
     [explodedBundles],
   );
 
+  // Barang Jual (habis pakai), v1 -- flat, TIDAK tergantung jumlah hari
+  // (beda dari alat sewa di atas).
+  const selectedSaleEntries = Object.entries(saleQuantities).filter(([, qty]) => qty > 0);
+  const saleItemsTotal = selectedSaleEntries.reduce((sum, [saleItemId, qty]) => {
+    const saleItem = saleItems.find((s) => s.id === saleItemId);
+    return saleItem ? sum + qty * saleItem.price : sum;
+  }, 0);
+
   const totalPrice =
     selectedEntries.reduce((sum, [itemId, qty]) => {
       const item = items.find((i) => i.id === itemId);
       if (!item) return sum;
       return sum + qty * itemRentalPrice(item, days);
-    }, 0) + explodedBundles.reduce((sum, b) => sum + b.exploded.totalForAllInstances, 0);
+    }, 0) +
+    explodedBundles.reduce((sum, b) => sum + b.exploded.totalForAllInstances, 0) +
+    saleItemsTotal;
 
   const remainingPayment = Math.max(0, totalPrice - (Number(dpPaid) || 0));
 
@@ -609,6 +627,9 @@ export function NewBookingModal({
           start_date: startDate,
           end_date: endDate,
           items: selectedItems,
+          ...(selectedSaleEntries.length > 0
+            ? { sale_items: selectedSaleEntries.map(([sale_item_id, quantity]) => ({ sale_item_id, quantity })) }
+            : {}),
           deposit: depositType ? { type: depositType, amount: depositAmount, note: depositNote || null } : null,
           total_price: totalPrice,
           dp_paid: Number(dpPaid) || 0,
@@ -655,6 +676,13 @@ export function NewBookingModal({
             .filter((i): i is NonNullable<typeof i> => i !== null),
         ];
 
+        const receiptSaleItems = selectedSaleEntries
+          .map(([saleItemId, qty]) => {
+            const saleItem = saleItems.find((s) => s.id === saleItemId);
+            return saleItem ? { name: saleItem.name, quantity: qty, unitPrice: saleItem.price, subtotal: qty * saleItem.price } : null;
+          })
+          .filter((s): s is NonNullable<typeof s> => s !== null);
+
         const receiptText = generateWhatsAppReceipt({
           bookingNumber: body.booking_number,
           customerName,
@@ -662,6 +690,7 @@ export function NewBookingModal({
           startDate,
           endDate,
           items: receiptItems,
+          saleItems: receiptSaleItems,
           totalPrice,
           dpPaid: Number(dpPaid) || 0,
           depositType: depositType || null,
@@ -1196,6 +1225,51 @@ export function NewBookingModal({
               ditolak dengan keterangan sisa stok.
             </p>
           </div>
+
+          {/* Barang Jual (habis pakai), v1 (brief 16 Nov 2026) -- bagian
+              lipat, HANYA tampil kalau business punya >=1 barang jual
+              aktif. Flat (tanpa jumlah hari), maks stepper = stok. */}
+          {saleItems.length > 0 && (
+            <details className="space-y-3 bg-[#F1EEE2] p-4 rounded-xl border border-[#DBD5C1]">
+              <summary className="font-bold text-[#26302B] cursor-pointer flex items-center gap-2">
+                <span>Tambahan: barang jual {selectedSaleEntries.length > 0 ? `(${selectedSaleEntries.length})` : ''}</span>
+              </summary>
+              <div className="space-y-1.5 pt-2">
+                {saleItems.map((saleItem) => {
+                  const qty = saleQuantities[saleItem.id] ?? 0;
+                  return (
+                    <div key={saleItem.id} className="flex items-center justify-between p-2 rounded-lg bg-white border border-[#DBD5C1]">
+                      <div className="flex-1 min-w-0 pr-2">
+                        <p className="font-semibold text-[#26302B] text-xs truncate">{saleItem.name}</p>
+                        <p className="text-[11px] text-[#6E6853]">{formatIDR(saleItem.price)} · Stok: {saleItem.stock}</p>
+                      </div>
+                      <div className="flex items-center gap-1 bg-[#F1EEE2] rounded-lg p-1 border border-[#DBD5C1] shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setSaleQuantities((prev) => ({ ...prev, [saleItem.id]: Math.max(0, qty - 1) }))}
+                          className="w-6 h-6 rounded bg-white font-bold hover:bg-[#DBD5C1] text-[#26302B] transition"
+                        >
+                          -
+                        </button>
+                        <span className="w-6 text-center font-bold text-[#26302B] text-xs">{qty}</span>
+                        <button
+                          type="button"
+                          onClick={() => setSaleQuantities((prev) => ({ ...prev, [saleItem.id]: Math.min(saleItem.stock, qty + 1) }))}
+                          disabled={qty >= saleItem.stock}
+                          className="w-6 h-6 rounded bg-white font-bold hover:bg-[#DBD5C1] text-[#26302B] transition disabled:opacity-30"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {saleItemsTotal > 0 && (
+                <p className="text-[11px] text-[#26302B] font-semibold">Subtotal barang jual: {formatIDR(saleItemsTotal)}</p>
+              )}
+            </details>
+          )}
 
           <div className="space-y-3 bg-[#F1EEE2] p-4 rounded-xl border border-[#DBD5C1]">
             <h3 className="font-bold text-[#26302B] flex items-center gap-2">
