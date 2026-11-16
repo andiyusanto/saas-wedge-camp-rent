@@ -135,6 +135,7 @@ export function ReturnModal({
         startDate: booking.start_date,
         endDate: booking.end_date,
         items: booking.items.map((i) => ({ name: i.name, quantity: i.quantity, price_per_day: 0 })),
+        saleItems: booking.sale_items.map((s) => ({ name: s.name, quantity: s.quantity, unitPrice: s.price_at_booking, subtotal: s.subtotal })),
         totalPrice: booking.total_price,
         dpPaid: booking.dp_paid,
         depositType: activeDeposit?.type ?? null,
