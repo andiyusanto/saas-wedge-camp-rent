@@ -854,6 +854,14 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           bukan cuma hari pertama.
         </p>
         <Note>
+          Paket yang kamu buat di <Ui>Katalog &amp; Stok Alat</Ui> (<SectionLink id="g-katalog">bagian 5</SectionLink>) otomatis tampil sebagai bagian "Paket"
+          di ATAS daftar alat — cuma kalau paketnya aktif DAN semua alat di dalamnya juga aktif. Kartu paket
+          menampilkan foto (foto paket kalau diisi, atau otomatis foto alat pertama di dalamnya kalau tidak), isi
+          paket, dan harga — termasuk harga coret + "Hemat Rp..." kalau paketnya pakai potongan. Sisa paket yang
+          bisa dipesan dihitung dari sisa alat komponennya sendiri (bukan stok terpisah) — kalau salah satu alat di
+          dalam paket habis, paketnya ikut tampil habis.
+        </Note>
+        <Note>
           <strong>Ini bukan toko online/checkout</strong> — tidak ada pembayaran online sungguhan di halaman
           publiknya. Secara default calon penyewa cuma bisa cek ketersediaan lalu diarahkan chat WhatsApp, sama
           seperti alur manual yang sudah berjalan sekarang. Kalau fitur <Ui>Pesanan Online</Ui> (<SectionLink id="g-pesanan">bagian 8b</SectionLink>) kamu
@@ -930,7 +938,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           rows={[
             {
               label: 'Konfirmasi',
-              desc: 'Membuka form Catat Transaksi yang SUDAH TERISI dari data pesanan (nama, nomor WA, tanggal, alat) — tinggal dicek/dilengkapi (jaminan, dsb) lalu Simpan seperti transaksi biasa. Begitu disimpan, pesanan ini resmi jadi transaksi aktif dan hilang dari daftar "Pesanan masuk".',
+              desc: 'Membuka form Catat Transaksi yang SUDAH TERISI dari data pesanan (nama, nomor WA, tanggal, alat/paket) — tinggal dicek/dilengkapi (jaminan, dsb) lalu Simpan seperti transaksi biasa. Begitu disimpan, pesanan ini resmi jadi transaksi aktif dan hilang dari daftar "Pesanan masuk".',
             },
             {
               label: 'Tolak',
@@ -938,6 +946,13 @@ export function GuideScreen({ businessName }: { businessName: string }) {
             },
           ]}
         />
+        <Note>
+          Pelanggan juga bisa pesan <Ui>Paket</Ui> (<SectionLink id="g-etalase">bagian 8</SectionLink>), bukan cuma alat satuan — daftar "Pesanan masuk" dan
+          form Konfirmasi menampilkannya sebagai "Paket X ×N" + rincian isinya, bukan alat lepas tak terhubung.
+          Kalau paketnya SUDAH DIUBAH atau dinonaktifkan sejak pesanan itu masuk (mis. kamu edit resepnya di
+          Katalog), form Konfirmasi tetap otomatis mengisi alat-alatnya satu per satu (dari data pesanan asli) +
+          peringatan kecil supaya kamu cek ulang jumlah &amp; harganya — bukan dibiarkan kosong begitu saja.
+        </Note>
         <p>
           Kalau dibiarkan sampai lewat <Ui>Batas konfirmasi</Ui>, pesanan otomatis berubah status jadi kedaluwarsa
           (dicek ulang tiap kali kamu buka tab Transaksi Aktif) — hilang dari "Pesanan masuk", tidak bisa dikonfirmasi
