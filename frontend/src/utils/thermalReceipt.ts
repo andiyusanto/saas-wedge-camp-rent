@@ -86,6 +86,10 @@ export function buildThermalReceiptDoc(data: ReceiptData, paperWidth: PaperWidth
   // Pelunasan (brief 17 Nov 2026) -- sisa tagihan termasuk denda, lihat
   // computeRemainingBalance() di formatters.ts.
   const remaining = computeRemainingBalance(data.totalPrice, totalFines, data.dpPaid);
+  // Perbaikan bug tampilan (koordinator 17 Nov 2026) -- "Total Tagihan"
+  // SEKARANG SELALU termasuk denda (data.totalPrice tetap sewa+barang
+  // jual yang dipercaya apa adanya, tidak dihitung ulang di sini).
+  const totalTagihan = data.totalPrice + totalFines;
 
   const lines: ThermalLine[] = [];
   const textLines: string[] = [];
@@ -162,13 +166,32 @@ export function buildThermalReceiptDoc(data: ReceiptData, paperWidth: PaperWidth
       addPriceRow(`${s.name} (${s.quantity}x)`, formatIDR(s.subtotal));
     }
     addRule();
-    addPriceRow('Total Sewa', formatIDR(rentalSubtotal));
-    addPriceRow('Total Barang Jual', formatIDR(data.saleItems.reduce((sum, s) => sum + s.subtotal, 0)));
-    addPriceRow('Total Tagihan', formatIDR(data.totalPrice));
-  } else {
-    addPriceRow('Total Sewa', formatIDR(data.totalPrice));
   }
-  addPriceRow('DP Terbayar', formatIDR(data.dpPaid));
+
+  // Rincian Denda (koordinator 17 Nov 2026: dipindah ke SEBELUM Total
+  // Tagihan, sebelumnya muncul setelah Jaminan Sewa di bagian bawah --
+  // isi/itemisasinya TIDAK berubah, cuma posisinya, supaya "Total
+  // Tagihan" di bawahnya sudah mencerminkan semua denda).
+  if (data.fines.length > 0) {
+    addText('RINCIAN DENDA', { bold: true });
+    for (const f of data.fines) {
+      const label = `${fineLabel(f.type)}${f.item_name ? ` (${f.item_name})` : ''}${f.description ? ` - ${f.description}` : ''}`;
+      addPriceRow(label, formatIDR(f.amount));
+    }
+    addPriceRow('Total Denda', formatIDR(totalFines));
+    addRule();
+  }
+
+  addPriceRow('Total Sewa', formatIDR(rentalSubtotal));
+  if (data.saleItems.length > 0) {
+    addPriceRow('Total Barang Jual', formatIDR(data.saleItems.reduce((sum, s) => sum + s.subtotal, 0)));
+  }
+  addPriceRow('Total Tagihan', formatIDR(totalTagihan));
+  // Perbaikan bug tampilan (koordinator 17 Nov 2026): "DP Terbayar" diganti
+  // "Total Dibayar" -- baris ini SELALU total SEMUA pembayaran (dp_paid),
+  // bukan cuma DP awal, meski riwayat pembayaran di bawahnya tetap
+  // memberi label "DP" untuk baris pertama.
+  addPriceRow('Total Dibayar', formatIDR(data.dpPaid));
   if ((data.payments ?? []).length > 0) {
     addRule();
     addText('RIWAYAT PEMBAYARAN', { bold: true });
@@ -178,7 +201,7 @@ export function buildThermalReceiptDoc(data: ReceiptData, paperWidth: PaperWidth
     }
   }
   if (remaining > 0) {
-    addPriceRow('Sisa Bayar', formatIDR(remaining));
+    addPriceRow('Sisa Tagihan', formatIDR(remaining));
   } else if (remaining < 0) {
     addPriceRow('Lebih Bayar', formatIDR(Math.abs(remaining)));
   } else {
@@ -197,16 +220,6 @@ export function buildThermalReceiptDoc(data: ReceiptData, paperWidth: PaperWidth
           ? 'Akan Diminta Saat Ambil'
           : 'Ditahan di Kasir';
     addText(`Status: ${statusText}`);
-  }
-
-  if (data.fines.length > 0) {
-    addRule();
-    addText('RINCIAN DENDA', { bold: true });
-    for (const f of data.fines) {
-      const label = `${fineLabel(f.type)}${f.item_name ? ` (${f.item_name})` : ''}${f.description ? ` - ${f.description}` : ''}`;
-      addPriceRow(label, formatIDR(f.amount));
-    }
-    addPriceRow('Total Denda', formatIDR(totalFines));
   }
 
   addRule();

@@ -398,33 +398,43 @@ export function generateWhatsAppReceipt(data: ReceiptData): string {
   // denda (lihat computeRemainingBalance), tidak lagi cuma totalPrice-
   // dpPaid seperti sebelumnya.
   const remaining = computeRemainingBalance(data.totalPrice, totalFines, data.dpPaid);
+  // Perbaikan bug tampilan (koordinator 17 Nov 2026, ditemukan dari Nota
+  // reprint Pelunasan): "Total Tagihan" SEBELUMNYA cuma data.totalPrice
+  // (sewa+barang jual), tidak pernah termasuk denda -- padahal "Sisa
+  // Pembayaran"/LUNAS di bawahnya SUDAH termasuk denda (computeRemaining
+  // Balance), jadi dua angka itu tidak nyambung dan pelanggan bisa
+  // mengira salah hitung/lebih bayar. totalTagihan di sini SEKARANG
+  // SELALU = data.totalPrice + totalFines (data.totalPrice tetap angka
+  // akhir sewa+barang jual yang dipercaya -- bisa diedit manual vendor,
+  // TIDAK dihitung ulang dari jumlah item di sini, pola yang sama
+  // seperti sebelumnya).
+  const totalTagihan = data.totalPrice + totalFines;
 
   // Barang Jual (habis pakai), v1 (brief 16 Nov 2026) -- terpisah dari
-  // alat sewa, tidak tergantung jumlah hari. Rental tanpa barang jual
-  // (saleItemsText kosong) menghasilkan struk PERSIS seperti sebelum
-  // fitur ini ada (regresi aman) -- baris "Total Harga Sewa" di bawah
-  // TETAP memakai data.totalPrice langsung seperti semula untuk kasus
-  // itu; cuma saat ADA barang jual baris itu diganti rincian sewa+
-  // barang+total gabungan, supaya override manual (data.totalPrice)
-  // tetap jadi angka akhir yang ditampilkan, bukan dihitung ulang di sini.
+  // alat sewa, tidak tergantung jumlah hari.
   const saleItemsText = data.saleItems
     .map((s) => `• ${s.name} (${s.quantity}x) @${formatIDR(s.unitPrice)} = ${formatIDR(s.subtotal)}`)
     .join('\n');
+  const saleItemsTotal = data.saleItems.reduce((sum, s) => sum + s.subtotal, 0);
   const rentalSubtotal = data.items.reduce(
     (sum, i) => sum + (i.subtotal ?? i.price_per_day * i.quantity * days),
     0,
   );
 
+  // Rincian Denda (brief 17 Nov 2026: dipindah ke SEBELUM Total Tagihan,
+  // sebelumnya muncul setelah Jaminan Sewa di bagian bawah struk --
+  // isi/itemisasinya TIDAK berubah, cuma posisinya).
   let finesText = '';
   if (data.fines.length > 0) {
     finesText =
-      `\n\n*RINCIAN DENDA:*\n` +
+      `*RINCIAN DENDA:*\n` +
       data.fines
         .map(
           (f) =>
             `• [${fineLabel(f.type)}${f.item_name ? ` - ${f.item_name}` : ''}] ${f.description ?? ''}: ${formatIDR(f.amount)}`,
         )
-        .join('\n');
+        .join('\n') +
+      `\nTotal Denda: *${formatIDR(totalFines)}*`;
   }
 
   const paymentsText = (data.payments ?? [])
@@ -457,19 +467,18 @@ ${
 }
 
 ---------------------------------------
-${
-  saleItemsText
-    ? `Total Harga Sewa: *${formatIDR(rentalSubtotal)}*\nTotal Barang Jual: *${formatIDR(data.saleItems.reduce((sum, s) => sum + s.subtotal, 0))}*\nTotal Tagihan: *${formatIDR(data.totalPrice)}*`
-    : `Total Harga Sewa: *${formatIDR(data.totalPrice)}*`
-}
-DP Terbayar: ${formatIDR(data.dpPaid)}
+Total Harga Sewa: *${formatIDR(rentalSubtotal)}*
+${saleItemsText ? `Total Barang Jual: *${formatIDR(saleItemsTotal)}*\n` : ''}${
+  finesText ? `${finesText}\n` : ''
+}Total Tagihan: *${formatIDR(totalTagihan)}*
+Total Dibayar: ${formatIDR(data.dpPaid)}
 ${
   paymentsText
     ? `\n*RIWAYAT PEMBAYARAN:*\n${paymentsText}\n`
     : ''
 }${
   remaining > 0
-    ? `*Sisa Pembayaran: ${formatIDR(remaining)}*`
+    ? `*Sisa Tagihan: ${formatIDR(remaining)}*`
     : remaining < 0
       ? `*Lebih Bayar: ${formatIDR(Math.abs(remaining))}*`
       : `*LUNAS*`
@@ -487,7 +496,7 @@ ${
             : 'DITAHAN DI KASIR'
       }*`
     : ''
-}${finesText}${totalFines > 0 ? `\nTotal Denda: *${formatIDR(totalFines)}*` : ''}
+}
 
 Status Sewa: *${BOOKING_STATUS_LABEL[data.status] ?? data.status}*
 

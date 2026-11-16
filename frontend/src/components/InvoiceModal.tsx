@@ -46,6 +46,10 @@ export function InvoiceModal({
   // computeRemainingBalance(); SENGAJA tidak di-clamp ke 0 supaya
   // "Lebih Bayar" (mis. setelah Ubah Alat mengurangi total) ketahuan.
   const remaining = computeRemainingBalance(data.totalPrice, totalFines, data.dpPaid);
+  // Perbaikan bug tampilan (koordinator 17 Nov 2026, ditemukan dari Nota
+  // reprint Pelunasan): "Total Tagihan" SEKARANG SELALU termasuk denda
+  // (data.totalPrice tetap sewa+barang jual yang dipercaya apa adanya).
+  const totalTagihan = data.totalPrice + totalFines;
 
   async function handlePrintThermal() {
     if (!data) return;
@@ -197,36 +201,56 @@ export function InvoiceModal({
             </table>
           )}
 
+          {/* Rincian Denda (koordinator 17 Nov 2026: dipindah ke SEBELUM
+              Total Tagihan, sebelumnya muncul di bawah Jaminan Sewa --
+              isi/itemisasinya TIDAK berubah, cuma posisinya, supaya
+              "Total Tagihan" di bawah sudah mencerminkan semua denda). */}
+          {data.fines.length > 0 && (
+            <div className="text-xs mb-4">
+              <p className="font-bold mb-1">Rincian Denda</p>
+              {data.fines.map((f, i) => (
+                <div key={i} className="flex justify-between">
+                  <span>
+                    {fineLabel(f.type)}
+                    {f.item_name ? ` (${f.item_name})` : ''}
+                    {f.description ? ` — ${f.description}` : ''}
+                  </span>
+                  <span>{formatIDR(f.amount)}</span>
+                </div>
+              ))}
+              <div className="flex justify-between font-bold border-t border-[#DBD5C1] pt-1 mt-1">
+                <span>Total Denda</span>
+                <span>{formatIDR(totalFines)}</span>
+              </div>
+            </div>
+          )}
+
           <div className="text-xs space-y-1 mb-4">
-            {data.saleItems.length > 0 ? (
-              <>
-                <div className="flex justify-between">
-                  <span>Total Harga Sewa</span>
-                  <span>{formatIDR(data.items.reduce((sum, i) => sum + (i.subtotal ?? i.price_per_day * i.quantity * days), 0))}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Total Barang Jual</span>
-                  <span>{formatIDR(data.saleItems.reduce((sum, s) => sum + s.subtotal, 0))}</span>
-                </div>
-                <div className="flex justify-between font-bold">
-                  <span>Total Tagihan</span>
-                  <strong>{formatIDR(data.totalPrice)}</strong>
-                </div>
-              </>
-            ) : (
+            <div className="flex justify-between">
+              <span>Total Harga Sewa</span>
+              <span>{formatIDR(data.items.reduce((sum, i) => sum + (i.subtotal ?? i.price_per_day * i.quantity * days), 0))}</span>
+            </div>
+            {data.saleItems.length > 0 && (
               <div className="flex justify-between">
-                <span>Total Harga Sewa</span>
-                <strong>{formatIDR(data.totalPrice)}</strong>
+                <span>Total Barang Jual</span>
+                <span>{formatIDR(data.saleItems.reduce((sum, s) => sum + s.subtotal, 0))}</span>
               </div>
             )}
+            <div className="flex justify-between font-bold">
+              <span>Total Tagihan</span>
+              <strong>{formatIDR(totalTagihan)}</strong>
+            </div>
+            {/* Perbaikan bug tampilan (koordinator 17 Nov 2026): "DP
+                Terbayar" diganti "Total Dibayar" -- baris ini SELALU
+                total SEMUA pembayaran (dp_paid), bukan cuma DP awal. */}
             <div className="flex justify-between">
-              <span>DP Terbayar</span>
+              <span>Total Dibayar</span>
               <span>{formatIDR(data.dpPaid)}</span>
             </div>
             <div className="flex justify-between font-bold text-sm border-t border-[#26302B] pt-1">
               {remaining > 0 ? (
                 <>
-                  <span>Sisa Pembayaran</span>
+                  <span>Sisa Tagihan</span>
                   <span>{formatIDR(remaining)}</span>
                 </>
               ) : remaining < 0 ? (
@@ -276,26 +300,6 @@ export function InvoiceModal({
                     ? 'Akan Diminta Saat Ambil'
                     : 'Ditahan di Kasir'}
               </p>
-            </div>
-          )}
-
-          {data.fines.length > 0 && (
-            <div className="text-xs mb-4">
-              <p className="font-bold mb-1">Rincian Denda</p>
-              {data.fines.map((f, i) => (
-                <div key={i} className="flex justify-between">
-                  <span>
-                    {fineLabel(f.type)}
-                    {f.item_name ? ` (${f.item_name})` : ''}
-                    {f.description ? ` — ${f.description}` : ''}
-                  </span>
-                  <span>{formatIDR(f.amount)}</span>
-                </div>
-              ))}
-              <div className="flex justify-between font-bold border-t border-[#DBD5C1] pt-1 mt-1">
-                <span>Total Denda</span>
-                <span>{formatIDR(totalFines)}</span>
-              </div>
             </div>
           )}
 

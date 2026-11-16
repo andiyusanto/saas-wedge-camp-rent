@@ -164,12 +164,41 @@ test('Barang Jual: ditampilkan terpisah dari alat sewa, dengan rincian sewa+bara
   assert.match(joined, /Total Tagihan/);
 });
 
-test('Barang Jual kosong: struk thermal PERSIS seperti sebelum fitur ini ada (regresi)', () => {
+test('Barang Jual kosong: tidak menampilkan bagian BARANG JUAL/Total Barang Jual (regresi)', () => {
+  // Revisi koordinator 17 Nov 2026: "Total Tagihan" SEKARANG SELALU
+  // ditampilkan (bukan cuma saat ada barang jual) -- baris lama yang
+  // menegaskan "TIDAK ADA Total Tagihan tanpa barang jual" sudah tidak
+  // berlaku lagi, lihat test "Total Tagihan termasuk denda" di bawah.
   const doc = buildThermalReceiptDoc(receipt({ saleItems: [] }), 58);
   const joined = doc.textLines.join(' ');
   assert.doesNotMatch(joined, /BARANG JUAL/);
-  assert.doesNotMatch(joined, /Total Tagihan/);
+  assert.doesNotMatch(joined, /Total Barang Jual/);
   assert.match(joined, /Total Sewa/);
+  assert.match(joined, /Total Tagihan/);
+});
+
+test('Total Tagihan termasuk denda, Rincian Denda muncul SEBELUM Total Tagihan, label Total Dibayar (bukan DP Terbayar)', () => {
+  // Bug ditemukan dari Nota reprint Pelunasan (17 Nov 2026): sewa 45rb +
+  // denda kerusakan 30rb, dibayar 75rb -- Total Tagihan SEBELUMNYA cuma
+  // 45rb, tidak termasuk denda.
+  const doc = buildThermalReceiptDoc(
+    receipt({
+      items: [item({ subtotal: 45_000 })],
+      totalPrice: 45_000,
+      dpPaid: 75_000,
+      fines: [{ type: 'kerusakan', amount: 30_000, description: 'Tiang patah', item_name: 'Tenda Dome' }],
+    }),
+    58,
+  );
+  const joined = doc.textLines.join('\n');
+  assert.doesNotMatch(joined, /DP Terbayar/);
+  assert.match(joined, /Total Dibayar.*Rp\s?75\.000/);
+  assert.match(joined, /Total Tagihan.*Rp\s?75\.000/);
+  assert.match(joined, /LUNAS/);
+  assert.doesNotMatch(joined, /Lebih Bayar/);
+  const dendaIdx = joined.indexOf('RINCIAN DENDA');
+  const totalTagihanIdx = joined.indexOf('Total Tagihan');
+  assert.ok(dendaIdx >= 0 && dendaIdx < totalTagihanIdx, 'Rincian Denda harus muncul sebelum Total Tagihan');
 });
 
 test('buildThermalTestReceipt menghasilkan struk tes ringkas', () => {
