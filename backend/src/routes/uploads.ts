@@ -145,6 +145,44 @@ router.post('/uploads/bundle-image', async (req, res) => {
   }
 });
 
+// Foto barang jual (Barang Jual v1, brief 16 Nov 2026) — pola PERSIS
+// item-image/bundle-image (member-writable, bucket publik, folder
+// terpisah), karena sale_items juga member-writable (migration 066).
+router.post('/uploads/sale-item-image', async (req, res) => {
+  if (!req.headers.authorization) {
+    res.status(401).json({ error: 'Belum login' });
+    return;
+  }
+
+  const { businessId, image } = req.body ?? {};
+  if (!businessId) {
+    res.status(400).json({ error: 'Data tidak lengkap' });
+    return;
+  }
+
+  let decoded;
+  try {
+    decoded = decodeImageDataUrl(image);
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+    return;
+  }
+
+  if (!(await requireMembership(req, businessId))) {
+    res.status(403).json({ error: 'Kamu bukan anggota usaha ini' });
+    return;
+  }
+
+  const key = `sale-items/${businessId}/${crypto.randomUUID()}.${decoded.extension}`;
+
+  try {
+    const url = await uploadToR2(key, decoded.buffer, decoded.mimeType);
+    res.status(201).json({ url });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
 // Foto penyewa (opsional) diambil saat Catat Transaksi — bukti visual
 // siapa yang mengambil barang, terpisah dari foto KTP/dokumen jaminan
 // (sengaja tidak menyimpan foto dokumen identitas, lihat diskusi produk:

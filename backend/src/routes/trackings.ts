@@ -18,6 +18,8 @@ import { fetchActiveBookingItems, usedUnitsOn, marginDaysFromReadinessHours } fr
 import { computeBookingTotalPrice, computeBookingItemSubtotal } from '../lib/pricing.js';
 import { mergeBookingItemsForUpdate } from '../lib/bookingItems.js';
 import type { ExistingBookingItemRow, CatalogItemRow } from '../lib/bookingItems.js';
+import { mergeSaleItemsForUpdate } from '../lib/saleItems.js';
+import type { ExistingBookingSaleItemRow, CatalogSaleItemRow } from '../lib/saleItems.js';
 import { isBusinessWritable, SUBSCRIPTION_LOCKED_MESSAGE } from '../lib/subscription.js';
 import { isValidDateStr, validateOptionalTotalPriceAndReason } from '../lib/validation.js';
 
@@ -38,6 +40,14 @@ type BookingItemJoin = {
   bundle_name: string | null;
   bundle_quantity: number | null;
   items: { name: string } | null;
+};
+
+type BookingSaleItemJoin = {
+  sale_item_id: string;
+  name: string;
+  price_at_booking: number;
+  quantity: number;
+  subtotal: number;
 };
 
 // Denda keterlambatan per item booking_items ini — rumus bertingkat
@@ -149,7 +159,7 @@ router.get('/trackings', async (req, res) => {
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select(
-      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_key, rental_day_mode, min_rental_days, max_rental_days, return_deadline_time, return_deadline_next_day, late_fee_mode, late_fee_per_hour, late_fee_per_hour_cap_enabled, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, bundle_id, bundle_instance_id, bundle_name, bundle_quantity, items(name)), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_status_history(status, changed_by_name, created_at), booking_reschedules(action, old_start_date, old_end_date, new_start_date, new_end_date, reason, past_deadline, changed_by_name, created_at), booking_item_changes(old_items, new_items, old_total_price, new_total_price, reason, changed_by_name, created_at)',
+      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_key, rental_day_mode, min_rental_days, max_rental_days, return_deadline_time, return_deadline_next_day, late_fee_mode, late_fee_per_hour, late_fee_per_hour_cap_enabled, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, bundle_id, bundle_instance_id, bundle_name, bundle_quantity, items(name)), booking_sale_items(sale_item_id, name, price_at_booking, quantity, subtotal), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_status_history(status, changed_by_name, created_at), booking_reschedules(action, old_start_date, old_end_date, new_start_date, new_end_date, reason, past_deadline, changed_by_name, created_at), booking_item_changes(old_items, new_items, old_total_price, new_total_price, reason, changed_by_name, created_at)',
     )
     .in('status', ['dipesan', 'aktif'])
     .order('end_date');
@@ -285,6 +295,13 @@ router.get('/trackings', async (req, res) => {
         bundle_instance_id: bi.bundle_instance_id,
         bundle_name: bi.bundle_name,
         bundle_quantity: bi.bundle_quantity,
+      })),
+      sale_items: ((b.booking_sale_items ?? []) as unknown as BookingSaleItemJoin[]).map((bsi) => ({
+        sale_item_id: bsi.sale_item_id,
+        name: bsi.name,
+        quantity: bsi.quantity,
+        price_at_booking: bsi.price_at_booking,
+        subtotal: bsi.subtotal,
       })),
       deposits: b.deposits ?? [],
       penalties: ((b.penalties ?? []) as unknown as PenaltyJoin[]).map((p) => ({
@@ -538,6 +555,31 @@ router.post('/bookings/:id/cancel', async (req, res) => {
   if (depositError) {
     res.status(400).json({ error: depositError.message });
     return;
+  }
+
+  // Barang Jual (habis pakai), v1 (brief 16 Nov 2026, migration 066) --
+  // dipanggil TEPAT SETELAH conditional UPDATE status di atas berhasil
+  // (guard "klik Batalkan dua kali" yang sudah ada otomatis juga
+  // mencegah ini terpanggil dua kali DARI SISI CALLER). RPC-nya sendiri
+  // idempoten (stock_restored_at) -- retry singkat di sini (bukan infra
+  // job baru) kalau sempat gagal jaringan sesaat, supaya stok tidak
+  // "nyangkut" belum kembali hanya karena satu hiccup transien. Gagal
+  // setelah retry: di-log jelas, TAPI TIDAK membatalkan respons sukses
+  // ke klien -- status booking SUDAH tersimpan 'dibatalkan' (bagian
+  // paling penting), dan retry berikutnya (mis. refresh halaman lalu
+  // koreksi manual) tetap aman dipanggil ulang kapan saja karena
+  // idempoten.
+  let saleRestoreError: string | null = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const { error: restoreError } = await supabase.rpc('restore_sale_item_stock_for_booking', { p_booking_id: id });
+    if (!restoreError) {
+      saleRestoreError = null;
+      break;
+    }
+    saleRestoreError = restoreError.message;
+  }
+  if (saleRestoreError) {
+    console.error(`restore_sale_item_stock_for_booking gagal untuk booking ${id} setelah 2 percobaan:`, saleRestoreError);
   }
 
   const { data: actorData } = await supabase.auth.getUser();
@@ -925,11 +967,16 @@ router.patch('/bookings/:id/items', async (req, res) => {
   }
 
   const { id } = req.params;
-  const { items, total_price, reason } = req.body ?? {};
+  const { items, sale_items, total_price, reason } = req.body ?? {};
 
   const requestedItems = items as { item_id: string; quantity: number; bundle_instance_id?: string | null }[] | undefined;
   if (!Array.isArray(requestedItems) || requestedItems.length === 0) {
     res.status(400).json({ error: 'Minimal satu alat harus tersisa.' });
+    return;
+  }
+  const requestedSaleItems = (sale_items as { sale_item_id: string; quantity: number }[] | undefined) ?? [];
+  if (!Array.isArray(requestedSaleItems)) {
+    res.status(400).json({ error: 'Data barang jual tidak valid.' });
     return;
   }
   const inputError = validateOptionalTotalPriceAndReason(total_price, reason);
@@ -1012,7 +1059,32 @@ router.patch('/bookings/:id/items', async (req, res) => {
     return;
   }
 
-  const newTotalPrice = total_price != null ? Number(total_price) : merged.items.reduce((sum, it) => sum + it.subtotal, 0);
+  // Barang Jual (habis pakai), v1 (brief 16 Nov 2026, migration 066) --
+  // pola PERSIS alat sewa di atas: barang yang SUDAH ADA di booking ini
+  // mempertahankan harga snapshot lama, barang BENAR-BENAR BARU pakai
+  // harga katalog SAAT INI (fetch cuma untuk sale_item_id yang belum ada
+  // di booking ini).
+  const { data: existingSaleItemsJoin } = await supabase
+    .from('booking_sale_items')
+    .select('sale_item_id, quantity, price_at_booking, name')
+    .eq('booking_id', id);
+  const existingSaleItems: ExistingBookingSaleItemRow[] = (existingSaleItemsJoin ?? []) as ExistingBookingSaleItemRow[];
+  const existingSaleItemIds = new Set(existingSaleItems.map((e) => e.sale_item_id));
+  const newSaleItemIds = requestedSaleItems.map((r) => r.sale_item_id).filter((saleItemId) => !existingSaleItemIds.has(saleItemId));
+  const { data: catalogSaleRows } =
+    newSaleItemIds.length > 0
+      ? await supabase.from('sale_items').select('id, name, price').in('id', newSaleItemIds).eq('business_id', booking.business_id).is('deactivated_at', null)
+      : { data: [] as CatalogSaleItemRow[] };
+
+  const saleMerged = mergeSaleItemsForUpdate(requestedSaleItems, existingSaleItems, (catalogSaleRows ?? []) as CatalogSaleItemRow[]);
+  if (!saleMerged.ok) {
+    res.status(400).json({ error: saleMerged.error });
+    return;
+  }
+
+  const rentalTotal = merged.items.reduce((sum, it) => sum + it.subtotal, 0);
+  const saleTotal = saleMerged.items.reduce((sum, it) => sum + it.subtotal, 0);
+  const newTotalPrice = total_price != null ? Number(total_price) : rentalTotal + saleTotal;
 
   const { data: actorData } = await supabase.auth.getUser();
   if (!actorData.user) {
@@ -1022,9 +1094,15 @@ router.patch('/bookings/:id/items', async (req, res) => {
   const actorEmail = actorData.user.email ?? actorData.user.id;
   const actorName = await resolveActorName(supabase, booking.business_id, actorData.user.id, actorEmail);
 
-  const { error: rpcError } = await supabase.rpc('apply_booking_item_changes', {
+  // Satu RPC pembungkus (migration 066, catatan koordinator 16 Nov 2026
+  // poin 2) -- dua RPC terpisah berurutan TIDAK atomik, kalau satu
+  // sukses dan satu gagal stok/isi/total bisa tidak sinkron.
+  // apply_booking_item_and_sale_changes memanggil apply_booking_item_changes
+  // yang SUDAH ADA (tidak diubah) di dalam satu transaksi yang sama.
+  const { error: rpcError } = await supabase.rpc('apply_booking_item_and_sale_changes', {
     p_booking_id: id,
     p_new_items: merged.items,
+    p_new_sale_items: saleMerged.items,
     p_new_total_price: newTotalPrice,
     p_reason: String(reason ?? '').trim() || null,
     p_changed_by_name: actorName,
@@ -1052,6 +1130,13 @@ router.patch('/bookings/:id/items', async (req, res) => {
       bundle_instance_id: it.bundle_instance_id,
       bundle_name: it.bundle_name,
       bundle_quantity: it.bundle_quantity,
+    })),
+    sale_items: saleMerged.items.map((it) => ({
+      sale_item_id: it.sale_item_id,
+      name: it.name,
+      quantity: it.quantity,
+      price_at_booking: it.price_at_booking,
+      subtotal: it.subtotal,
     })),
   });
 });

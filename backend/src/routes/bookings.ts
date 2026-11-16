@@ -6,6 +6,7 @@ import { logBookingStatus } from '../lib/audit.js';
 import { isBusinessWritable, SUBSCRIPTION_LOCKED_MESSAGE } from '../lib/subscription.js';
 import { getCustomerPhotoSignedUrl } from '../lib/r2.js';
 import { computeBundleComponentRatesSnapshot } from '../lib/pricing.js';
+import { mergeDuplicateSaleItemRequests } from '../lib/saleItems.js';
 
 const router = Router();
 
@@ -70,6 +71,7 @@ router.post('/bookings', async (req, res) => {
     start_date,
     end_date,
     items,
+    sale_items,
     deposit,
     total_price,
     dp_paid,
@@ -421,6 +423,31 @@ router.post('/bookings', async (req, res) => {
       await supabase.from('bookings').delete().eq('id', bookingRow.id);
       if (createdNewCustomer) await supabase.from('customers').delete().eq('id', customerId);
       res.status(400).json({ error: depositError.message });
+      return;
+    }
+  }
+
+  // Barang Jual (habis pakai), v1 (brief 16 Nov 2026, migration 066) --
+  // opsional, cuma kalau transaksi ini memang punya barang jual. Potong
+  // stok + tulis booking_sale_items ATOMIK lewat SATU RPC
+  // (apply_new_booking_sale_items) sebagai LANGKAH TERAKHIR -- kalau
+  // gagal (mis. stok kurang), unwind manual yang sama seperti kegagalan
+  // booking_items/deposits di atas (pola yang SUDAH ADA di endpoint ini,
+  // bukan ditulis ulang).
+  const requestedSaleItems = sale_items as { sale_item_id: string; quantity: number }[] | undefined;
+  if (Array.isArray(requestedSaleItems) && requestedSaleItems.length > 0) {
+    const merged = mergeDuplicateSaleItemRequests(requestedSaleItems);
+    const { error: saleRpcError } = await supabase.rpc('apply_new_booking_sale_items', {
+      p_booking_id: bookingRow.id,
+      p_items: merged,
+    });
+
+    if (saleRpcError) {
+      await supabase.from('deposits').delete().eq('booking_id', bookingRow.id);
+      await supabase.from('booking_items').delete().eq('booking_id', bookingRow.id);
+      await supabase.from('bookings').delete().eq('id', bookingRow.id);
+      if (createdNewCustomer) await supabase.from('customers').delete().eq('id', customerId);
+      res.status(409).json({ error: saleRpcError.message });
       return;
     }
   }
