@@ -1,5 +1,5 @@
 import type { HistoryBooking } from '../hooks/useHistory';
-import { rentalDays } from './formatters';
+import { rentalDays, computeRemainingBalance } from './formatters';
 import { itemSubtotal, bookingPenaltyByType } from './historyExport';
 
 // Laporan (Riwayat Transaksi -> tab "Laporan", brief 16 Nov 2026,
@@ -28,6 +28,12 @@ export type MonthlyReportRow = {
   totalPemasukan: number;
   sudahDiterima: number;
   piutang: number;
+  // Pelunasan (brief 17 Nov 2026) -- NILAI KAS, dikelompokkan per bulan
+  // `paid_at` (kapan uang BENAR-BENAR masuk), BUKAN bulan start_date
+  // seperti baris lain di tabel ini (nilai transaksi). Dua basis ini
+  // SENGAJA beda dan tidak harus sama jumlahnya per bulan -- lihat
+  // disclaimer baru di LaporanScreen.tsx.
+  uangDiterima: number;
   jumlahTransaksi: number;
   rataRata: number | null; // null kalau jumlahTransaksi 0
   // null = tidak ada pembanding (Januari -- bulan sebelumnya di luar
@@ -46,6 +52,21 @@ export function buildMonthlyReport(bookingsInYearExcludingCancelled: HistoryBook
     const list = byMonth.get(month) ?? [];
     list.push(b);
     byMonth.set(month, list);
+  }
+
+  // "Uang Diterima" (brief 17 Nov 2026) -- dikelompokkan per bulan
+  // paid_at, BUKAN ikut pengelompokan byMonth (start_date) di atas --
+  // satu booking boleh menyumbang payment ke bulan BERBEDA dari bulan
+  // ia mulai disewa (mis. DP dibayar duluan). Caller TIDAK mengecualikan
+  // 'dibatalkan' untuk fungsi ini secara khusus -- booking yang
+  // dibatalkan tapi pembayarannya di-refund (kind='koreksi', amount
+  // negatif) otomatis menetralkan diri sendiri di bulan yang sama.
+  const uangDiterimaByMonth = new Map<number, number>();
+  for (const b of bookingsInYearExcludingCancelled) {
+    for (const p of b.payments) {
+      const month = Number(p.paid_at.slice(5, 7));
+      uangDiterimaByMonth.set(month, (uangDiterimaByMonth.get(month) ?? 0) + p.amount);
+    }
   }
 
   const rows: MonthlyReportRow[] = [];
@@ -70,7 +91,11 @@ export function buildMonthlyReport(bookingsInYearExcludingCancelled: HistoryBook
       pendapatanSewa += b.total_price - saleTotal;
       pendapatanBarangJual += saleTotal;
       sudahDiterima += b.dp_paid;
-      piutang += Math.max(0, b.total_price - b.dp_paid);
+      // Pelunasan (brief 17 Nov 2026) -- piutang SEKARANG termasuk denda
+      // (computeRemainingBalance), di-clamp 0 PER TRANSAKSI (keputusan
+      // koordinator 17 Nov 2026).
+      const bookingFinesTotal = b.penalties.reduce((sum, p) => sum + p.amount, 0);
+      piutang += Math.max(0, computeRemainingBalance(b.total_price, bookingFinesTotal, b.dp_paid));
       dendaTelat += bookingPenaltyByType(b, 'keterlambatan');
       dendaKerusakan += bookingPenaltyByType(b, 'kerusakan-kehilangan');
     }
@@ -93,6 +118,7 @@ export function buildMonthlyReport(bookingsInYearExcludingCancelled: HistoryBook
       totalPemasukan,
       sudahDiterima,
       piutang,
+      uangDiterima: uangDiterimaByMonth.get(month) ?? 0,
       jumlahTransaksi,
       rataRata,
       perubahanPersenVsBulanLalu,

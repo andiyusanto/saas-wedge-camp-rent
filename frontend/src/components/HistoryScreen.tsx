@@ -1,10 +1,18 @@
 import { useState } from 'react';
-import { History, Receipt, Wallet, AlertCircle, CalendarClock, Download, Search, Package, ChevronDown, ChevronUp } from 'lucide-react';
+import type { Session } from '@supabase/supabase-js';
+import { History, Receipt, Wallet, AlertCircle, CalendarClock, Download, Search, Package, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { ModalBackdrop, ModalPanel } from './ModalShell';
 import { useHistory } from '../hooks/useHistory';
 import { StatCard } from './StatCard';
-import { formatDateIndo, formatIDR, bookingStatusLabel } from '../utils/formatters';
+import { formatDateIndo, formatIDR, bookingStatusLabel, computeRemainingBalance } from '../utils/formatters';
+import type { ReceiptData } from '../utils/formatters';
 import { computeHistorySummary, downloadHistoryExcel } from '../utils/historyExport';
 import { LaporanScreen } from './LaporanScreen';
+import { PaymentModal } from './PaymentModal';
+import { InvoiceModal } from './InvoiceModal';
+import { apiFetch } from '../lib/api';
+import { supabase } from '../lib/supabaseClient';
+import type { HistoryBooking } from '../hooks/useHistory';
 
 function firstDayOfMonthStr(): string {
   const d = new Date();
@@ -24,7 +32,47 @@ const STATUS_BADGE: Record<string, string> = {
   dibatalkan: 'bg-white text-[#6E6853] border-[#DBD5C1] line-through',
 };
 
-export function HistoryScreen({ businessId }: { businessId: string }) {
+// Pelunasan + Nota Cetak Ulang + Batalkan/Void (brief 17 Nov 2026) --
+// data tambahan (deposits/pembayaran/batas jam kembali) yang TIDAK ikut
+// query paginasi utama useHistory (supaya tidak membengkakkan fetch yang
+// bisa jadi ribuan baris) -- diambil on-demand cuma saat tombol Nota
+// ditekan, langsung lewat supabase (RLS member-select, bukan Express).
+async function fetchReceiptExtras(bookingId: string): Promise<{
+  deposits: { type: string; note: string | null; status: string }[];
+  payments: { amount: number; method: string | null; kind: string; note: string | null; paid_at: string }[];
+  returnDeadlineTime: string | null;
+  returnDeadlineNextDay: boolean | null;
+} | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('bookings')
+    .select(
+      'return_deadline_time, return_deadline_next_day, deposits(type, note, status), booking_payments(amount, method, kind, note, paid_at)',
+    )
+    .eq('id', bookingId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return {
+    deposits: (data.deposits ?? []) as { type: string; note: string | null; status: string }[],
+    payments: (data.booking_payments ?? []) as { amount: number; method: string | null; kind: string; note: string | null; paid_at: string }[],
+    returnDeadlineTime: data.return_deadline_time ?? null,
+    returnDeadlineNextDay: data.return_deadline_next_day ?? null,
+  };
+}
+
+export function HistoryScreen({
+  businessId,
+  session,
+  businessName,
+  businessAddress,
+  businessLogoUrl,
+}: {
+  businessId: string;
+  session: Session;
+  businessName: string;
+  businessAddress?: string | null;
+  businessLogoUrl?: string | null;
+}) {
   // Sub-tab "Laporan" (brief 16 Nov 2026) -- pemasukan per bulan + per
   // alat, cuma memakai data yang sudah tersimpan. Owner-only otomatis
   // (seluruh HistoryScreen sudah digerbang role==='owner' di App.tsx),
@@ -34,16 +82,66 @@ export function HistoryScreen({ businessId }: { businessId: string }) {
   const [to, setTo] = useState(todayStrLocal);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('semua');
+  // Batalkan/Void (brief 17 Nov 2026) -- Riwayat SEKARANG default
+  // menyembunyikan transaksi dibatalkan (sebelumnya "Semua" menampilkan
+  // semuanya termasuk dibatalkan) -- checkbox ini membatalkan
+  // penyembunyian itu, TERPISAH dari dropdown Status yang tetap bisa
+  // memilih "Dibatalkan" secara eksplisit kapan saja.
+  const [showCancelled, setShowCancelled] = useState(false);
+  const [paymentTarget, setPaymentTarget] = useState<HistoryBooking | null>(null);
+  const [voidTarget, setVoidTarget] = useState<HistoryBooking | null>(null);
+  const [invoiceData, setInvoiceData] = useState<ReceiptData | null>(null);
+  const [notaLoadingId, setNotaLoadingId] = useState<string | null>(null);
 
-  const { bookings, dueTodayCount, loading, error } = useHistory(businessId, from, to);
+  const { bookings, dueTodayCount, loading, error, refresh } = useHistory(businessId, from, to);
 
   const filtered = bookings.filter((b) => {
     const matchesStatus = statusFilter === 'semua' || b.status === statusFilter;
+    const matchesCancelledVisibility = showCancelled || statusFilter === 'dibatalkan' || b.status !== 'dibatalkan';
     const q = searchQuery.toLowerCase();
     const matchesSearch =
       (b.customer?.name ?? '').toLowerCase().includes(q) || (b.booking_number ?? '').toLowerCase().includes(q);
-    return matchesStatus && matchesSearch;
+    return matchesStatus && matchesCancelledVisibility && matchesSearch;
   });
+
+  async function openNota(b: HistoryBooking) {
+    setNotaLoadingId(b.id);
+    const extras = await fetchReceiptExtras(b.id);
+    setNotaLoadingId(null);
+    const activeDeposit = extras?.deposits.find((d) => d.status === 'ditahan') ?? extras?.deposits[0];
+    setInvoiceData({
+      bookingNumber: b.booking_number ?? '-',
+      customerName: b.customer?.name ?? '-',
+      customerPhone: b.customer?.phone ?? '',
+      startDate: b.start_date,
+      endDate: b.end_date,
+      items: b.items.map((i) => ({
+        name: i.name,
+        quantity: i.quantity,
+        price_per_day: i.price_at_booking,
+        subtotal: i.subtotal,
+        bundle_instance_id: i.bundle_instance_id,
+        bundle_name: i.bundle_name,
+      })),
+      saleItems: b.saleItems.map((s) => ({ name: s.name, quantity: s.quantity, unitPrice: s.price_at_booking, subtotal: s.subtotal })),
+      totalPrice: b.total_price,
+      dpPaid: b.dp_paid,
+      depositType: activeDeposit?.type ?? null,
+      depositNote: activeDeposit?.note ?? null,
+      depositStatus: (activeDeposit?.status as 'ditahan' | 'dikembalikan' | null) ?? null,
+      status: b.status,
+      fines: b.penalties.map((p) => ({ type: p.type, amount: p.amount })),
+      businessName,
+      businessAddress,
+      businessLogoUrl,
+      rentalDayMode: b.rental_day_mode,
+      returnDeadlineTime: extras?.returnDeadlineTime ?? null,
+      returnDeadlineNextDay: extras?.returnDeadlineNextDay ?? null,
+      payments: (extras?.payments ?? []).map((p) => ({ amount: p.amount, method: p.method, kind: p.kind, note: p.note, paidAt: p.paid_at })),
+      isReprint: true,
+      reprintedAt: todayStrLocal(),
+    });
+  }
 
   // Transaksi dibatalkan sengaja dikecualikan dari KPI ini — batal artinya
   // transaksinya tidak pernah benar-benar terjadi, jadi tidak boleh ikut
@@ -205,6 +303,10 @@ export function HistoryScreen({ businessId }: { businessId: string }) {
               <option value="dibatalkan">Dibatalkan</option>
             </select>
           </label>
+          <label className="flex items-center gap-1.5 text-xs text-[#6E6853] pt-5">
+            <input type="checkbox" checked={showCancelled} onChange={(e) => setShowCancelled(e.target.checked)} />
+            Tampilkan dibatalkan
+          </label>
           <div className="relative flex-1 min-w-[180px]">
             <label className="flex flex-col gap-1 text-xs text-[#6E6853]">
               Cari
@@ -311,11 +413,13 @@ export function HistoryScreen({ businessId }: { businessId: string }) {
                 <th className="p-3 font-semibold text-right">Total</th>
                 <th className="p-3 font-semibold text-right">Sisa Tagihan</th>
                 <th className="p-3 font-semibold">Status</th>
+                <th className="p-3 font-semibold">Aksi</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((b) => {
-                const remaining = Math.max(0, b.total_price - b.dp_paid);
+                const totalFines = b.penalties.reduce((sum, p) => sum + p.amount, 0);
+                const remaining = computeRemainingBalance(b.total_price, totalFines, b.dp_paid);
                 return (
                   <tr key={b.id} className="border-b border-[#E6E1D2] last:border-0 align-top">
                     <td className="p-3 font-mono font-bold text-[#2B4739]">{b.booking_number ?? '-'}</td>
@@ -328,13 +432,45 @@ export function HistoryScreen({ businessId }: { businessId: string }) {
                     </td>
                     <td className="p-3 text-[#6E6853]">{b.items.map((i) => `${i.name} (${i.quantity}x)`).join(', ')}</td>
                     <td className="p-3 text-right font-bold text-[#26302B] whitespace-nowrap">{formatIDR(b.total_price)}</td>
-                    <td className={`p-3 text-right font-bold whitespace-nowrap ${remaining > 0 ? 'text-[#A8412E]' : 'text-[#2B4739]'}`}>
-                      {remaining > 0 ? formatIDR(remaining) : 'LUNAS'}
+                    <td
+                      className={`p-3 text-right font-bold whitespace-nowrap ${
+                        remaining > 0 ? 'text-[#A8412E]' : remaining < 0 ? 'text-[#A65C2A]' : 'text-[#2B4739]'
+                      }`}
+                    >
+                      {remaining > 0 ? formatIDR(remaining) : remaining < 0 ? `Lebih ${formatIDR(Math.abs(remaining))}` : 'LUNAS'}
                     </td>
                     <td className="p-3">
                       <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold border ${STATUS_BADGE[b.status] ?? ''}`}>
                         {bookingStatusLabel(b.status)}
                       </span>
+                    </td>
+                    <td className="p-3 whitespace-nowrap space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => openNota(b)}
+                        disabled={notaLoadingId === b.id}
+                        className="text-[11px] font-bold text-[#2B4739] underline disabled:opacity-50"
+                      >
+                        {notaLoadingId === b.id ? '...' : 'Nota'}
+                      </button>
+                      {remaining !== 0 && b.status !== 'dibatalkan' && (
+                        <button
+                          type="button"
+                          onClick={() => setPaymentTarget(b)}
+                          className="text-[11px] font-bold text-[#2B4739] underline"
+                        >
+                          Bayar
+                        </button>
+                      )}
+                      {b.status !== 'dibatalkan' && (
+                        <button
+                          type="button"
+                          onClick={() => setVoidTarget(b)}
+                          className="text-[11px] font-bold text-[#A8412E] underline"
+                        >
+                          Batalkan
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );
@@ -345,6 +481,195 @@ export function HistoryScreen({ businessId }: { businessId: string }) {
       )}
       </>
       )}
+
+      <PaymentModal
+        isOpen={paymentTarget !== null}
+        onClose={() => setPaymentTarget(null)}
+        remaining={
+          paymentTarget
+            ? computeRemainingBalance(
+                paymentTarget.total_price,
+                paymentTarget.penalties.reduce((sum, p) => sum + p.amount, 0),
+                paymentTarget.dp_paid,
+              )
+            : 0
+        }
+        onSubmit={async (body) => {
+          try {
+            await apiFetch(session, `/api/bookings/${paymentTarget!.id}/payments`, {
+              method: 'POST',
+              body: JSON.stringify({ ...body, kind: 'pelunasan' }),
+            });
+            await refresh();
+            return { error: null };
+          } catch (err) {
+            return { error: (err as Error).message };
+          }
+        }}
+      />
+
+      <InvoiceModal isOpen={invoiceData !== null} onClose={() => setInvoiceData(null)} data={invoiceData} />
+
+      <VoidModal
+        booking={voidTarget}
+        session={session}
+        onClose={() => setVoidTarget(null)}
+        onDone={() => {
+          setVoidTarget(null);
+          refresh();
+        }}
+      />
     </div>
+  );
+}
+
+// Batalkan/Void (brief 17 Nov 2026) — HistoryScreen SUDAH digerbang
+// role==='owner' di App.tsx, jadi tidak perlu cek owner lagi di sini;
+// alasan WAJIB cuma kalau status transaksi sudah selesai/telat (backend
+// menegakkan ulang, ini cuma UX) — status dipesan/aktif tetap perilaku
+// lama (alasan opsional). Kalau ada pembayaran tercatat, tawarkan
+// "Catat pengembalian dana" (kind='koreksi', boleh pada booking
+// dibatalkan sejak revisi migration 067) sebagai langkah terpisah
+// SETELAH cancel sukses -- supaya "Uang diterima" di Laporan tetap jujur.
+function VoidModal({
+  booking,
+  session,
+  onClose,
+  onDone,
+}: {
+  booking: HistoryBooking | null;
+  session: Session;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [reason, setReason] = useState('');
+  const [refund, setRefund] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [cancelled, setCancelled] = useState(false);
+
+  if (!booking) return null;
+  const reasonRequired = booking.status === 'selesai' || booking.status === 'telat';
+  const hasPayments = booking.dp_paid > 0;
+
+  async function handleCancel() {
+    if (reasonRequired && !reason.trim()) {
+      setError('Alasan wajib diisi untuk membatalkan transaksi yang sudah selesai/terlambat');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await apiFetch(session, `/api/bookings/${booking!.id}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: reason.trim() || undefined }),
+      });
+      setCancelled(true);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+    setSaving(false);
+  }
+
+  async function handleRefund() {
+    setSaving(true);
+    setError(null);
+    try {
+      await apiFetch(session, `/api/bookings/${booking!.id}/payments`, {
+        method: 'POST',
+        body: JSON.stringify({
+          amount: -booking!.dp_paid,
+          kind: 'koreksi',
+          note: `Refund pembatalan${reason.trim() ? `: ${reason.trim()}` : ''}`,
+        }),
+      });
+      handleClose();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+    setSaving(false);
+  }
+
+  function handleClose() {
+    setReason('');
+    setRefund(true);
+    setCancelled(false);
+    setError(null);
+    onDone();
+  }
+
+  return (
+    <ModalBackdrop>
+      <ModalPanel className="bg-white w-full max-w-sm rounded-2xl border border-[#DBD5C1] shadow-xl overflow-hidden">
+        <div className="bg-[#A8412E] px-5 py-4 text-white flex items-center justify-between">
+          <h2 className="text-lg font-bold">Batalkan Transaksi</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/10 text-white transition">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-5 space-y-3 text-sm">
+          {!cancelled ? (
+            <>
+              <p className="text-[#26302B]">
+                Transaksi <strong>{booking.booking_number ?? booking.customer?.name}</strong> (status{' '}
+                <strong>{bookingStatusLabel(booking.status)}</strong>) akan dibatalkan. Tidak bisa dibatalkan ulang/dihapus permanen.
+              </p>
+              {hasPayments && (
+                <p className="text-[#A65C2A] text-xs font-bold">
+                  Ada pembayaran {formatIDR(booking.dp_paid)} tercatat — pastikan sudah dikembalikan ke pelanggan. Pembayaran TIDAK
+                  dihapus otomatis.
+                </p>
+              )}
+              <div>
+                <label className="block text-xs font-bold text-[#6E6853] mb-1">
+                  Alasan {reasonRequired ? '(wajib)' : '(opsional)'}
+                </label>
+                <textarea
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  rows={2}
+                  className="w-full px-3 py-2 rounded-xl border border-[#DBD5C1] text-sm"
+                />
+              </div>
+              {error && <p className="text-xs text-[#A8412E] font-bold">{error}</p>}
+              <button
+                type="button"
+                disabled={saving}
+                onClick={handleCancel}
+                className="w-full py-2.5 rounded-xl bg-[#A8412E] text-white font-bold text-sm disabled:opacity-50"
+              >
+                {saving ? 'Membatalkan...' : 'Batalkan Transaksi'}
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-[#2B4739] font-bold">Transaksi sudah dibatalkan.</p>
+              {hasPayments && (
+                <>
+                  <label className="flex items-center gap-1.5 text-xs text-[#6E6853]">
+                    <input type="checkbox" checked={refund} onChange={(e) => setRefund(e.target.checked)} />
+                    Catat pengembalian dana {formatIDR(booking.dp_paid)} ke pelanggan sekarang
+                  </label>
+                  {error && <p className="text-xs text-[#A8412E] font-bold">{error}</p>}
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={refund ? handleRefund : handleClose}
+                    className="w-full py-2.5 rounded-xl bg-[#2B4739] text-white font-bold text-sm disabled:opacity-50"
+                  >
+                    {saving ? 'Menyimpan...' : refund ? 'Catat Pengembalian & Selesai' : 'Selesai'}
+                  </button>
+                </>
+              )}
+              {!hasPayments && (
+                <button type="button" onClick={handleClose} className="w-full py-2.5 rounded-xl bg-[#2B4739] text-white font-bold text-sm">
+                  Selesai
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </ModalPanel>
+    </ModalBackdrop>
   );
 }

@@ -269,6 +269,18 @@ export type ReceiptSaleItem = {
   subtotal: number;
 };
 
+// Pelunasan + Nota Cetak Ulang (brief 17 Nov 2026, migration 067) --
+// riwayat pembayaran APA ADANYA dari booking_payments (termasuk baris
+// trigger DP awal dan koreksi/refund negatif), dipakai struk WA/A4/
+// thermal buat tampilkan daftar + status LUNAS/sisa.
+export type ReceiptPayment = {
+  amount: number;
+  method: string | null;
+  kind: string;
+  note: string | null;
+  paidAt: string;
+};
+
 export type ReceiptData = {
   bookingNumber: string;
   customerName: string;
@@ -295,6 +307,42 @@ export type ReceiptData = {
   // tidak ada baris "Kembali paling lambat" ditampilkan.
   returnDeadlineTime?: string | null;
   returnDeadlineNextDay?: boolean | null;
+  // Opsional, default kosong/false -- supaya struk yang dibangun dari
+  // TrackingScreen.tsx (belum diisi field ini) tetap identik seperti
+  // sebelum fitur Pelunasan/Nota Ulang ada (regresi aman).
+  payments?: ReceiptPayment[];
+  isReprint?: boolean;
+  reprintedAt?: string | null;
+};
+
+// Pelunasan (brief 17 Nov 2026) -- SATU sumber "sisa tagihan" dipakai di
+// kartu Transaksi Aktif, Riwayat, Nota/struk, ekspor, dan Laporan. Rumus
+// = sewa+barang jual (totalPrice SUDAH gabungan sejak migration 066) +
+// denda - total dibayar. paidTotal HARUS selalu booking.dp_paid (cache
+// yang disinkronkan trigger/RPC add_booking_payment) -- BUKAN Σ
+// booking_payments dihitung ulang di tempat lain, supaya angka ini
+// selalu sinkron dengan sisa tagihan yang divalidasi RPC saat pelunasan
+// (catatan koordinator 17 Nov 2026). SENGAJA TIDAK di-clamp ke 0 --
+// kalau hasilnya negatif ("lebih bayar", mis. setelah Ubah Alat/Ubah
+// Jadwal mengurangi total setelah sudah dibayar), pemanggil yang
+// menentukan tampilannya sendiri (lihat remainingLabel di bawah),
+// supaya vendor sadar ada uang yang mesti dikembalikan/dikoreksi,
+// bukan diam-diam disembunyikan jadi "LUNAS".
+export function computeRemainingBalance(totalPrice: number, penaltiesTotal: number, paidTotal: number): number {
+  return totalPrice + penaltiesTotal - paidTotal;
+}
+
+export const PAYMENT_METHOD_LABEL: Record<string, string> = {
+  tunai: 'Tunai',
+  transfer: 'Transfer',
+  qris: 'QRIS',
+};
+
+export const PAYMENT_KIND_LABEL: Record<string, string> = {
+  dp: 'DP',
+  pelunasan: 'Pelunasan',
+  pembayaran: 'Pembayaran',
+  koreksi: 'Koreksi/Refund',
 };
 
 const BOOKING_STATUS_LABEL: Record<string, string> = {
@@ -345,8 +393,11 @@ export function generateWhatsAppReceipt(data: ReceiptData): string {
     })
     .join('\n');
 
-  const remaining = Math.max(0, data.totalPrice - data.dpPaid);
   const totalFines = data.fines.reduce((sum, f) => sum + f.amount, 0);
+  // Pelunasan (brief 17 Nov 2026) -- sisa tagihan SEKARANG termasuk
+  // denda (lihat computeRemainingBalance), tidak lagi cuma totalPrice-
+  // dpPaid seperti sebelumnya.
+  const remaining = computeRemainingBalance(data.totalPrice, totalFines, data.dpPaid);
 
   // Barang Jual (habis pakai), v1 (brief 16 Nov 2026) -- terpisah dari
   // alat sewa, tidak tergantung jumlah hari. Rental tanpa barang jual
@@ -376,7 +427,14 @@ export function generateWhatsAppReceipt(data: ReceiptData): string {
         .join('\n');
   }
 
-  return `*NOTA SEWA - ${data.businessName.toUpperCase()}*
+  const paymentsText = (data.payments ?? [])
+    .map(
+      (p) =>
+        `• ${formatDateIndo(p.paidAt.slice(0, 10))} ${PAYMENT_KIND_LABEL[p.kind] ?? p.kind}${p.method ? ` (${PAYMENT_METHOD_LABEL[p.method] ?? p.method})` : ''}: ${formatIDR(p.amount)}`,
+    )
+    .join('\n');
+
+  return `${data.isReprint ? `*SALINAN -- dicetak ulang ${formatDateIndo(data.reprintedAt ?? '')}*\n` : ''}*NOTA SEWA - ${data.businessName.toUpperCase()}*
 Kode Booking: *${data.bookingNumber}*
 ---------------------------------------
 Penyewa: *${data.customerName}*
@@ -405,7 +463,17 @@ ${
     : `Total Harga Sewa: *${formatIDR(data.totalPrice)}*`
 }
 DP Terbayar: ${formatIDR(data.dpPaid)}
-*Sisa Pembayaran: ${formatIDR(remaining)}*
+${
+  paymentsText
+    ? `\n*RIWAYAT PEMBAYARAN:*\n${paymentsText}\n`
+    : ''
+}${
+  remaining > 0
+    ? `*Sisa Pembayaran: ${formatIDR(remaining)}*`
+    : remaining < 0
+      ? `*Lebih Bayar: ${formatIDR(Math.abs(remaining))}*`
+      : `*LUNAS*`
+}
 ${
   data.depositType
     ? `\n*JAMINAN SEWA:*\nTipe: *${depositLabel(data.depositType)}*\nCatatan Jaminan: ${data.depositNote || '-'}\nStatus Jaminan: *${

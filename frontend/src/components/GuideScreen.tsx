@@ -378,6 +378,39 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           Struk WA dan Nota Sewa untuk transaksi berisi paket menampilkan "Paket X ×N" sebagai satu baris ringkas,
           dengan rincian alat penyusunnya di bawahnya — bukan daftar alat lepas tanpa pengelompokan.
         </Note>
+
+        <p className="font-bold text-xs mt-2">Pelunasan (melunasi DP)</p>
+        <p>
+          <Ui>Sisa Tagihan</Ui> di tiap kartu sekarang menghitung sewa + barang jual + denda dikurangi yang sudah
+          dibayar — kalau negatif (lebih bayar, mis. setelah Ubah Alat mengurangi total setelah pelanggan sudah
+          bayar), tampil sebagai <Ui>Lebih Bayar</Ui> (bukan "LUNAS") supaya tidak kelupaan dikembalikan/dikoreksi.
+        </p>
+        <Steps
+          items={[
+            <>Tekan <Ui>Catat Pembayaran</Ui> di kartu transaksi (muncul kalau sisa belum 0) — isi nominal (ada
+              tombol cepat "Lunasi sisa"), cara bayar, catatan opsional. Karyawan boleh memakai ini.</>,
+            <>Atau centang <Ui>Lunasi sekarang</Ui> langsung di dialog <Ui>Tandai Barang Diambil</Ui> (sisa saat itu
+              baru sewa+barang jual, denda belum ada) atau di dialog <Ui>Proses Pengembalian</Ui> SETELAH denda
+              diisi (sisa sudah termasuk denda).</>,
+          ]}
+        />
+        <Note>
+          Pembayaran tidak bisa melebihi sisa tagihan — sistem menolaknya. Riwayat pembayaran (termasuk DP awal)
+          bisa dilihat di Nota (<Ui>Cetak Nota</Ui>) bersama status LUNAS/Sisa/Lebih Bayar.
+        </Note>
+
+        <p className="font-bold text-xs mt-2">Batalkan (bukan hapus)</p>
+        <p>
+          Tidak ada hapus permanen transaksi di Sewalog — <Ui>Batalkan</Ui> cuma mengubah status, riwayatnya tetap
+          ada (siapa, kapan, alasan). Karyawan bisa membatalkan transaksi <Ui>Siap Diambil</Ui>/<Ui>Sedang Disewa</Ui>{' '}
+          seperti biasa. <strong>Pemilik usaha</strong> juga bisa membatalkan transaksi yang SUDAH{' '}
+          <Ui>Selesai</Ui>/<Ui>Terlambat</Ui> (lewat <Ui>Riwayat Transaksi</Ui>, <SectionLink id="g-riwayat">bagian 6</SectionLink>) untuk kasus salah input — alasan WAJIB diisi untuk ini.
+        </p>
+        <Note>
+          Membatalkan transaksi yang sudah ada pembayarannya TIDAK menghapus pembayaran itu — muncul peringatan
+          "Ada pembayaran Rp X, pastikan sudah dikembalikan" dan tombol opsional "Catat pengembalian dana" supaya
+          laporan kas tetap jujur. Kalau tidak dicatat, uang itu tetap terhitung diterima di Laporan.
+        </Note>
       </Section>
 
       <Section
@@ -660,8 +693,16 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         />
         <Note>
           Transaksi <Ui>Dibatalkan</Ui> sengaja tidak ikut dihitung di keempat angka ringkasan di atas — batal
-          artinya transaksinya tidak pernah benar-benar terjadi. Daftar tabel di bawah tetap menampilkan semua
-          status termasuk yang dibatalkan, cuma angka ringkasannya yang disaring.
+          artinya transaksinya tidak pernah benar-benar terjadi. Daftar tabel di bawah SEKARANG default
+          menyembunyikan baris Dibatalkan juga (centang <Ui>Tampilkan dibatalkan</Ui> untuk melihatnya lagi) —
+          dropdown Status tetap bisa memilih "Dibatalkan" secara eksplisit kapan saja.
+        </Note>
+        <Note>
+          Tombol <Ui>Nota</Ui> di tiap baris membuka nota yang sama seperti di Transaksi Aktif, ditandai{' '}
+          <Ui>SALINAN — dicetak ulang {'{tanggal}'}</Ui> karena ini cetak ulang, bukan transaksi baru — cocok kalau
+          pelanggan minta bukti transaksi lama. Tombol <Ui>Bayar</Ui> (muncul kalau sisa belum 0) dan{' '}
+          <Ui>Batalkan</Ui> juga ada di sini — lihat <SectionLink id="g-transaksi-aktif">bagian 3</SectionLink>
+          untuk penjelasan Pelunasan &amp; Batalkan/Void.
         </Note>
         <p>
           Filter tanggal (default: awal bulan berjalan sampai hari ini), status, dan pencarian nama/kode booking

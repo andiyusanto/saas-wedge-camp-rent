@@ -38,6 +38,7 @@ function booking(overrides: Partial<HistoryBooking>): HistoryBooking {
     items: [item({})],
     saleItems: [],
     penalties: [],
+    payments: [],
     rental_day_mode: 'per_hari_kalender',
     ...overrides,
   };

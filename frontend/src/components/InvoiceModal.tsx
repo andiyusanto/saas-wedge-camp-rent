@@ -2,7 +2,19 @@ import { Fragment, useState } from 'react';
 import { Printer, Settings2, X } from 'lucide-react';
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import type { ReceiptData } from '../utils/formatters';
-import { formatIDR, formatDateIndo, rentalDays, depositLabel, fineLabel, todayStr, addDaysStr, groupReceiptItemsByBundle } from '../utils/formatters';
+import {
+  formatIDR,
+  formatDateIndo,
+  rentalDays,
+  depositLabel,
+  fineLabel,
+  todayStr,
+  addDaysStr,
+  groupReceiptItemsByBundle,
+  computeRemainingBalance,
+  PAYMENT_METHOD_LABEL,
+  PAYMENT_KIND_LABEL,
+} from '../utils/formatters';
 import { usePrinterSettings } from '../hooks/usePrinterSettings';
 import { buildThermalReceiptDoc } from '../utils/thermalReceipt';
 import { printThermalReceipt } from '../utils/thermalPrint';
@@ -29,8 +41,11 @@ export function InvoiceModal({
   if (!isOpen || !data) return null;
 
   const days = rentalDays(data.startDate, data.endDate, data.rentalDayMode);
-  const remaining = Math.max(0, data.totalPrice - data.dpPaid);
   const totalFines = data.fines.reduce((sum, f) => sum + f.amount, 0);
+  // Pelunasan (brief 17 Nov 2026) -- sisa tagihan termasuk denda, lihat
+  // computeRemainingBalance(); SENGAJA tidak di-clamp ke 0 supaya
+  // "Lebih Bayar" (mis. setelah Ubah Alat mengurangi total) ketahuan.
+  const remaining = computeRemainingBalance(data.totalPrice, totalFines, data.dpPaid);
 
   async function handlePrintThermal() {
     if (!data) return;
@@ -53,6 +68,11 @@ export function InvoiceModal({
         </div>
 
         <div id="print-invoice-root" className="p-6 overflow-y-auto text-sm text-[#26302B]">
+          {data.isReprint && (
+            <p className="text-center text-xs font-bold text-[#A65C2A] mb-2 uppercase tracking-wide">
+              SALINAN — dicetak ulang {formatDateIndo(data.reprintedAt ?? todayStr())}
+            </p>
+          )}
           <div className="text-center pb-4 border-b-2 border-[#26302B] mb-4">
             {data.businessLogoUrl && (
               <img
@@ -204,10 +224,44 @@ export function InvoiceModal({
               <span>{formatIDR(data.dpPaid)}</span>
             </div>
             <div className="flex justify-between font-bold text-sm border-t border-[#26302B] pt-1">
-              <span>Sisa Pembayaran</span>
-              <span>{formatIDR(remaining)}</span>
+              {remaining > 0 ? (
+                <>
+                  <span>Sisa Pembayaran</span>
+                  <span>{formatIDR(remaining)}</span>
+                </>
+              ) : remaining < 0 ? (
+                <>
+                  <span className="text-[#A65C2A]">Lebih Bayar</span>
+                  <span className="text-[#A65C2A]">{formatIDR(Math.abs(remaining))}</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-[#2B4739]">Status</span>
+                  <span className="text-[#2B4739]">LUNAS</span>
+                </>
+              )}
             </div>
           </div>
+
+          {/* Pelunasan: riwayat pembayaran (brief 17 Nov 2026) -- daftar
+              apa adanya dari booking_payments, termasuk DP awal/koreksi.
+              Rental tanpa riwayat payments (field opsional, dari
+              TrackingScreen yang belum diisi) tidak menampilkan blok ini
+              sama sekali -- regresi aman. */}
+          {(data.payments ?? []).length > 0 && (
+            <div className="text-xs mb-4">
+              <p className="font-bold mb-1">Riwayat Pembayaran</p>
+              {(data.payments ?? []).map((p, i) => (
+                <div key={i} className="flex justify-between">
+                  <span>
+                    {formatDateIndo(p.paidAt.slice(0, 10))} — {PAYMENT_KIND_LABEL[p.kind] ?? p.kind}
+                    {p.method ? ` (${PAYMENT_METHOD_LABEL[p.method] ?? p.method})` : ''}
+                  </span>
+                  <span>{formatIDR(p.amount)}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           {data.depositType && (
             <div className="text-xs mb-4 p-2.5 bg-[#F1EEE2] rounded-lg">

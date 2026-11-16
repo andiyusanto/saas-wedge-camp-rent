@@ -2,6 +2,7 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import { createRequestClient, createAnonClient } from '../lib/supabaseClient.js';
 import { isBusinessWritable, SUBSCRIPTION_LOCKED_MESSAGE } from '../lib/subscription.js';
+import { getCallerRole } from '../lib/audit.js';
 
 const router = Router();
 
@@ -30,24 +31,6 @@ router.get('/team/invites/preview', async (req, res) => {
 
   res.json({ businessName: data[0].business_name, role: data[0].role });
 });
-
-async function getCallerRole(
-  supabase: ReturnType<typeof createRequestClient>,
-  businessId: string,
-): Promise<string | null> {
-  const { data: userData } = await supabase.auth.getUser();
-  const userId = userData.user?.id;
-  if (!userId) return null;
-
-  const { data } = await supabase
-    .from('business_members')
-    .select('role')
-    .eq('business_id', businessId)
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  return data?.role ?? null;
-}
 
 // Anggota mana pun (owner/karyawan) boleh lihat daftar anggota — dipakai
 // juga di luar layar Kelola Karyawan (baris "diperbarui oleh X" di

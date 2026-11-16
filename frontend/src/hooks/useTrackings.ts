@@ -54,7 +54,19 @@ export type TrackingBooking = {
     item_id: string | null;
     item_name: string | null;
   }[];
-  history: { status: string; changed_by_name: string; created_at: string }[];
+  history: { status: string; changed_by_name: string; created_at: string; reason: string | null }[];
+  // Pelunasan (brief 17 Nov 2026, migration 067) — riwayat booking_payments
+  // apa adanya (termasuk baris trigger DP awal dan koreksi/refund
+  // negatif), dipakai kartu Transaksi Aktif + struk/nota.
+  payments: {
+    id: string;
+    amount: number;
+    method: string | null;
+    kind: string;
+    note: string | null;
+    paid_at: string;
+    created_by_name: string;
+  }[];
   // Riwayat Ubah Jadwal/Perpanjang (Tahap 2, migration 055).
   reschedule_history: {
     action: 'ubah_jadwal' | 'perpanjang';
@@ -143,6 +155,7 @@ export function buildReceiptData(
     rentalDayMode: b.rental_day_mode,
     returnDeadlineTime: b.return_deadline_time,
     returnDeadlineNextDay: b.return_deadline_next_day,
+    payments: b.payments.map((p) => ({ amount: p.amount, method: p.method, kind: p.kind, note: p.note, paidAt: p.paid_at })),
   };
 }
 
@@ -154,26 +167,61 @@ export function useTrackings(session: Session | null) {
   });
 
   async function postAction(bookingId: string, action: 'cancel' | 'pickup', body?: unknown) {
+    if (!session) return { error: 'Belum login', data: null };
+    try {
+      const data = await apiFetch<{ ok: true; paymentWarning?: string | null }>(
+        session,
+        `/api/bookings/${bookingId}/${action}`,
+        {
+          method: 'POST',
+          ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+        },
+      );
+      await refresh();
+      return { error: null, data };
+    } catch (err) {
+      return { error: (err as Error).message, data: null };
+    }
+  }
+
+  // Batalkan/Void (brief 17 Nov 2026) — reason opsional untuk booking
+  // dipesan/aktif (perilaku lama), WAJIB (ditegakkan backend) untuk owner
+  // membatalkan status selesai/telat.
+  const cancelBooking = (bookingId: string, reason?: string | null) =>
+    postAction(bookingId, 'cancel', reason ? { reason } : undefined);
+  // Dialog konfirmasi jaminan saat Ambil (brief 15 Nov 2026, Bagian B) —
+  // deposit opsional: {type, amount?, note?} kalau vendor pilih/ganti
+  // jaminan di dialog, atau tidak dikirim sama sekali kalau "tanpa
+  // jaminan" (perilaku lama tetap sama, backward-compatible). `payment`
+  // opsional (brief 17 Nov 2026) — "Lunasi sekarang" di PickupConfirmModal.
+  const pickupBooking = (
+    bookingId: string,
+    deposit?: { type: string; amount?: number; note?: string | null },
+    payment?: { amount: number; method?: string | null; note?: string | null },
+  ) =>
+    postAction(
+      bookingId,
+      'pickup',
+      deposit || payment ? { ...(deposit ? { deposit } : {}), ...(payment ? { payment } : {}) } : undefined,
+    );
+
+  // Pelunasan/pembayaran susulan/koreksi SETELAH booking ada (brief 17 Nov
+  // 2026) — DP awal TIDAK lewat sini (trigger log_initial_dp_payment()).
+  // Dipakai "Catat Pembayaran"/"Lunasi sisa" di Transaksi Aktif & Riwayat,
+  // dan dialog Batalkan (kind='koreksi' untuk refund).
+  async function addPayment(
+    bookingId: string,
+    body: { amount: number; method?: string | null; note?: string | null; kind?: 'pelunasan' | 'pembayaran' | 'koreksi' },
+  ) {
     if (!session) return { error: 'Belum login' };
     try {
-      await apiFetch(session, `/api/bookings/${bookingId}/${action}`, {
-        method: 'POST',
-        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-      });
+      await apiFetch(session, `/api/bookings/${bookingId}/payments`, { method: 'POST', body: JSON.stringify(body) });
       await refresh();
       return { error: null };
     } catch (err) {
       return { error: (err as Error).message };
     }
   }
-
-  const cancelBooking = (bookingId: string) => postAction(bookingId, 'cancel');
-  // Dialog konfirmasi jaminan saat Ambil (brief 15 Nov 2026, Bagian B) —
-  // deposit opsional: {type, amount?, note?} kalau vendor pilih/ganti
-  // jaminan di dialog, atau tidak dikirim sama sekali kalau "tanpa
-  // jaminan" (perilaku lama tetap sama, backward-compatible).
-  const pickupBooking = (bookingId: string, deposit?: { type: string; amount?: number; note?: string | null }) =>
-    postAction(bookingId, 'pickup', deposit ? { deposit } : undefined);
 
   // Ubah Jadwal (status dipesan) / Perpanjang (status aktif) — Tahap 2,
   // migration 055. Dua endpoint terpisah, lihat backend/src/routes/trackings.ts.
@@ -261,6 +309,7 @@ export function useTrackings(session: Session | null) {
     refresh,
     cancelBooking,
     pickupBooking,
+    addPayment,
     rescheduleBooking,
     extendBooking,
     updateBookingItems,

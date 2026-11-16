@@ -9,6 +9,8 @@ import {
   depositLabel,
   generateWhatsAppReceipt,
   getWhatsAppShareUrl,
+  computeRemainingBalance,
+  formatIDR,
 } from '../utils/formatters';
 
 export function ReturnModal({
@@ -35,6 +37,12 @@ export function ReturnModal({
   const [lossItemId, setLossItemId] = useState('');
   const [returnDeposit, setReturnDeposit] = useState(true);
   const [autoOpenWA, setAutoOpenWA] = useState(true);
+  // "Lunasi sekarang" (brief 17 Nov 2026) -- ditampilkan SETELAH denda
+  // diisi, jadi sisa yang dihitung di sini sudah termasuk denda telat +
+  // kerusakan/kehilangan yang BARU DIISI di form ini (belum tersimpan),
+  // bukan cuma denda yang sudah ada di booking.penalties.
+  const [lunasiSekarang, setLunasiSekarang] = useState(false);
+  const [payMethod, setPayMethod] = useState('tunai');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initialisedFor, setInitialisedFor] = useState<string | null>(null);
@@ -68,6 +76,13 @@ export function ReturnModal({
   const activeDeposit = booking.deposits.find((d) => d.status === 'ditahan');
   const needsItemChoice = booking.items.length > 1;
   const itemNameById = (id: string) => booking.items.find((i) => i.item_id === id)?.name ?? null;
+
+  // Sisa tagihan FINAL (pola computeRemainingBalance) -- existing
+  // penalties (kalau ada, dari AddFineModal sebelumnya) + denda yang
+  // BARU diisi di form ini (belum tersimpan ke DB).
+  const existingFinesTotal = booking.penalties.reduce((sum, p) => sum + p.amount, 0);
+  const newFinesTotal = (Number(lateFee) || 0) + (Number(damageAmount) || 0) + (Number(lossAmount) || 0);
+  const remainingAfterReturn = computeRemainingBalance(booking.total_price, existingFinesTotal + newFinesTotal, booking.dp_paid);
 
   async function handleConfirm() {
     if (!booking) return;
@@ -103,6 +118,7 @@ export function ReturnModal({
       });
     }
 
+    const willPay = lunasiSekarang && remainingAfterReturn > 0;
     let body: { status: string };
     try {
       body = await apiFetch(session, `/api/bookings/${booking.id}/return`, {
@@ -111,6 +127,7 @@ export function ReturnModal({
           late_fee_amount: Number(lateFee) || 0,
           extra_penalties: extraPenalties,
           return_deposits: hasDeposit && returnDeposit,
+          payment: willPay ? { amount: remainingAfterReturn, method: payMethod } : undefined,
         }),
       });
     } catch (err) {
@@ -137,7 +154,7 @@ export function ReturnModal({
         items: booking.items.map((i) => ({ name: i.name, quantity: i.quantity, price_per_day: 0 })),
         saleItems: booking.sale_items.map((s) => ({ name: s.name, quantity: s.quantity, unitPrice: s.price_at_booking, subtotal: s.subtotal })),
         totalPrice: booking.total_price,
-        dpPaid: booking.dp_paid,
+        dpPaid: willPay ? booking.dp_paid + remainingAfterReturn : booking.dp_paid,
         depositType: activeDeposit?.type ?? null,
         depositNote: activeDeposit?.note ?? null,
         depositStatus: hasDeposit && returnDeposit ? 'dikembalikan' : (activeDeposit?.status as 'ditahan' | null),
@@ -348,6 +365,33 @@ export function ReturnModal({
                   <span className="text-xs font-bold text-[#26302B]">Kembalikan jaminan sekarang</span>
                 </label>
               </div>
+            </div>
+          )}
+
+          {remainingAfterReturn > 0 && (
+            <div className="p-3 rounded-xl bg-[#F1EEE2] border border-[#DBD5C1] space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={lunasiSekarang}
+                  onChange={(e) => setLunasiSekarang(e.target.checked)}
+                  className="w-4 h-4 accent-[#2B4739] shrink-0"
+                />
+                <span className="text-xs font-bold text-[#26302B]">
+                  Lunasi sekarang {formatIDR(remainingAfterReturn)} (termasuk denda)
+                </span>
+              </label>
+              {lunasiSekarang && (
+                <select
+                  value={payMethod}
+                  onChange={(e) => setPayMethod(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg bg-white border border-[#DBD5C1] text-xs text-[#26302B]"
+                >
+                  <option value="tunai">Tunai</option>
+                  <option value="transfer">Transfer</option>
+                  <option value="qris">QRIS</option>
+                </select>
+              )}
             </div>
           )}
 

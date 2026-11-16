@@ -13,7 +13,7 @@ import {
 } from '../lib/penalty.js';
 import type { LateFeeMode } from '../lib/penalty.js';
 import { rentalDuration, dateRange, todayInTz, addDays } from '../lib/dates.js';
-import { logBookingStatus, logBookingReschedule, resolveActorName } from '../lib/audit.js';
+import { logBookingStatus, logBookingReschedule, resolveActorName, getCallerRole } from '../lib/audit.js';
 import { fetchActiveBookingItems, usedUnitsOn, marginDaysFromReadinessHours } from '../lib/availability.js';
 import { computeBookingTotalPrice, computeBookingItemSubtotal } from '../lib/pricing.js';
 import { mergeBookingItemsForUpdate } from '../lib/bookingItems.js';
@@ -101,7 +101,17 @@ type PenaltyJoin = {
   item_id: string | null;
   items: { name: string } | null;
 };
-type StatusHistoryJoin = { status: string; changed_by_name: string; created_at: string };
+type StatusHistoryJoin = { status: string; changed_by_name: string; created_at: string; reason: string | null };
+
+type BookingPaymentJoin = {
+  id: string;
+  amount: number;
+  method: string | null;
+  kind: string;
+  note: string | null;
+  paid_at: string;
+  created_by_name: string;
+};
 type RescheduleHistoryJoin = {
   action: 'ubah_jadwal' | 'perpanjang';
   old_start_date: string;
@@ -159,7 +169,7 @@ router.get('/trackings', async (req, res) => {
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select(
-      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_key, rental_day_mode, min_rental_days, max_rental_days, return_deadline_time, return_deadline_next_day, late_fee_mode, late_fee_per_hour, late_fee_per_hour_cap_enabled, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, bundle_id, bundle_instance_id, bundle_name, bundle_quantity, items(name)), booking_sale_items(sale_item_id, name, price_at_booking, quantity, subtotal), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_status_history(status, changed_by_name, created_at), booking_reschedules(action, old_start_date, old_end_date, new_start_date, new_end_date, reason, past_deadline, changed_by_name, created_at), booking_item_changes(old_items, new_items, old_total_price, new_total_price, reason, changed_by_name, created_at)',
+      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_key, rental_day_mode, min_rental_days, max_rental_days, return_deadline_time, return_deadline_next_day, late_fee_mode, late_fee_per_hour, late_fee_per_hour_cap_enabled, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, bundle_id, bundle_instance_id, bundle_name, bundle_quantity, items(name)), booking_sale_items(sale_item_id, name, price_at_booking, quantity, subtotal), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_payments(id, amount, method, kind, note, paid_at, created_by_name), booking_status_history(status, changed_by_name, created_at, reason), booking_reschedules(action, old_start_date, old_end_date, new_start_date, new_end_date, reason, past_deadline, changed_by_name, created_at), booking_item_changes(old_items, new_items, old_total_price, new_total_price, reason, changed_by_name, created_at)',
     )
     .in('status', ['dipesan', 'aktif'])
     .order('end_date');
@@ -304,6 +314,9 @@ router.get('/trackings', async (req, res) => {
         subtotal: bsi.subtotal,
       })),
       deposits: b.deposits ?? [],
+      payments: ((b.booking_payments ?? []) as unknown as BookingPaymentJoin[])
+        .slice()
+        .sort((x, y) => x.paid_at.localeCompare(y.paid_at)),
       penalties: ((b.penalties ?? []) as unknown as PenaltyJoin[]).map((p) => ({
         id: p.id,
         type: p.type,
@@ -366,13 +379,15 @@ router.post('/bookings/:id/return', async (req, res) => {
   }
 
   const { id } = req.params;
-  const { late_fee_amount, extra_penalties, return_deposits } = req.body ?? {};
+  const { late_fee_amount, extra_penalties, return_deposits, payment } = req.body ?? {};
 
   const supabase = createRequestClient(req);
 
   const { data: booking, error: bookingError } = await supabase
     .from('bookings')
-    .select('id, end_date, created_at, picked_up_at, status, return_deadline_time, return_deadline_next_day, booking_items(item_id)')
+    .select(
+      'id, business_id, end_date, created_at, picked_up_at, status, return_deadline_time, return_deadline_next_day, booking_items(item_id)',
+    )
     .eq('id', id)
     .maybeSingle();
 
@@ -486,7 +501,32 @@ router.post('/bookings/:id/return', async (req, res) => {
     );
   }
 
-  res.json({ ok: true, status: isLate ? 'telat' : 'selesai', hours_late: hLate });
+  // "Lunasi sekarang" di ReturnModal (brief 17 Nov 2026) -- LANGKAH
+  // TERAKHIR, SETELAH denda (penaltyRows) sudah tersimpan di atas --
+  // sisa tagihan yang divalidasi add_booking_payment() baru akurat kalau
+  // denda keterlambatan/kerusakan/kehilangan booking ini SUDAH masuk DB.
+  // Non-blocking sama seperti pickup: gagal = pengembalian tetap sukses,
+  // staf pakai "Catat Pembayaran" manual belakangan.
+  let paymentWarning: string | null = null;
+  if (payment && Number(payment.amount) > 0) {
+    const actorName = actorData.user
+      ? await resolveActorName(supabase, booking.business_id, actorData.user.id, actorData.user.email ?? actorData.user.id)
+      : 'Konfirmasi Pengembalian';
+    const { error: paymentError } = await supabase.rpc('add_booking_payment', {
+      p_booking_id: id,
+      p_amount: Number(payment.amount),
+      p_method: payment.method ?? null,
+      p_note: payment.note ?? null,
+      p_kind: 'pelunasan',
+      p_created_by_name: actorName,
+    });
+    if (paymentError) {
+      console.error(`add_booking_payment gagal saat return booking ${id}:`, paymentError.message);
+      paymentWarning = 'Pengembalian tersimpan, tapi pelunasan gagal dicatat — coba lagi lewat Catat Pembayaran.';
+    }
+  }
+
+  res.json({ ok: true, status: isLate ? 'telat' : 'selesai', hours_late: hLate, paymentWarning });
 });
 
 router.post('/bookings/:id/cancel', async (req, res) => {
@@ -496,11 +536,13 @@ router.post('/bookings/:id/cancel', async (req, res) => {
   }
 
   const { id } = req.params;
+  const reasonInput = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+  const reason = reasonInput.length > 0 ? reasonInput : null;
   const supabase = createRequestClient(req);
 
   const { data: booking, error: bookingError } = await supabase
     .from('bookings')
-    .select('id, status')
+    .select('id, status, business_id')
     .eq('id', id)
     .maybeSingle();
 
@@ -519,9 +561,30 @@ router.post('/bookings/:id/cancel', async (req, res) => {
   // Tidak ada logic di bawah yang spesifik ke 'aktif' (release deposit +
   // update status sama saja berlaku untuk 'dipesan'), jadi perbaikannya
   // cuma memperluas status yang diterima.
-  if (booking.status !== 'aktif' && booking.status !== 'dipesan') {
-    res.status(400).json({ error: 'Transaksi sudah diproses sebelumnya' });
+  const EMPLOYEE_CANCELLABLE = new Set(['aktif', 'dipesan']);
+
+  // Batalkan/Void (brief 17 Nov 2026) — karyawan TETAP dengan aturan lama
+  // (cuma dipesan/aktif, alasan opsional). Owner boleh membatalkan status
+  // APA PUN selain 'dibatalkan' sendiri (termasuk selesai/telat — salah
+  // input yang sudah "ditutup"), TAPI alasan jadi WAJIB untuk perluasan
+  // ini — bukan buat karyawan di jalur lama, supaya tombol Batalkan yang
+  // sudah ada sekarang tidak tiba-tiba minta alasan.
+  if (booking.status === 'dibatalkan') {
+    res.status(400).json({ error: 'Transaksi sudah dibatalkan sebelumnya' });
     return;
+  }
+
+  const isEmployeeCancellable = EMPLOYEE_CANCELLABLE.has(booking.status);
+  if (!isEmployeeCancellable) {
+    const role = await getCallerRole(supabase, booking.business_id);
+    if (role !== 'owner') {
+      res.status(403).json({ error: 'Cuma pemilik usaha yang bisa membatalkan transaksi berstatus ini' });
+      return;
+    }
+    if (!reason) {
+      res.status(400).json({ error: 'Alasan wajib diisi untuk membatalkan transaksi yang sudah selesai/terlambat' });
+      return;
+    }
   }
 
   // UPDATE sendiri dibuat conditional (bukan percaya begitu saja hasil
@@ -529,12 +592,14 @@ router.post('/bookings/:id/cancel', async (req, res) => {
   // dua klik "Batalkan" bersamaan (mis. dua tab/dua staff) dari keduanya
   // "berhasil" dan menjalankan efek samping (release deposit, log status)
   // dua kali. Pola conditional update yang sama dengan confirm_booking_
-  // request (migration 037).
+  // request (migration 037). `.neq('status', 'dibatalkan')` (bukan daftar
+  // status statis) supaya cakupan owner yang lebih luas di atas tetap
+  // konsisten dengan baris yang BENAR-BENAR di-update di sini.
   const { data: updatedRows, error: updateError } = await supabase
     .from('bookings')
     .update({ status: 'dibatalkan', cancelled_at: new Date().toISOString() })
     .eq('id', id)
-    .in('status', ['aktif', 'dipesan'])
+    .neq('status', 'dibatalkan')
     .select('id');
 
   if (updateError) {
@@ -584,10 +649,87 @@ router.post('/bookings/:id/cancel', async (req, res) => {
 
   const { data: actorData } = await supabase.auth.getUser();
   if (actorData.user) {
-    await logBookingStatus(supabase, id, 'dibatalkan', actorData.user.id, actorData.user.email ?? actorData.user.id);
+    await logBookingStatus(
+      supabase,
+      id,
+      'dibatalkan',
+      actorData.user.id,
+      actorData.user.email ?? actorData.user.id,
+      reason,
+    );
   }
 
   res.json({ ok: true });
+});
+
+// Pelunasan/pembayaran susulan/koreksi (brief 17 Nov 2026, migration 067)
+// -- DP AWAL tidak lewat sini (dicatat atomik oleh trigger
+// log_initial_dp_payment() saat booking dibuat, lihat POST /bookings) --
+// endpoint ini CUMA untuk pembayaran SETELAH booking ada: "Catat
+// Pembayaran"/"Lunasi sekarang" di Transaksi Aktif/Riwayat/Pickup/Return.
+// Karyawan boleh memanggil (is_member_of saja, dicek di RPC) -- TIDAK
+// digerbang business_is_writable (pola migration 044, sama seperti
+// pickup/return/cancel -- pelunasan dianggap "menyelesaikan transaksi
+// berjalan"). Validasi sisa tagihan/lebih-bayar/status dibatalkan/role
+// owner untuk kind='koreksi' SEMUA ditegakkan di dalam RPC
+// add_booking_payment(), bukan diulang di sini -- RPC bisa dipanggil
+// langsung lewat supabase-js juga, jadi Express tidak boleh jadi
+// satu-satunya penjaga.
+router.post('/bookings/:id/payments', async (req, res) => {
+  if (!req.headers.authorization) {
+    res.status(401).json({ error: 'Belum login' });
+    return;
+  }
+
+  const { id } = req.params;
+  const { amount, method, note, kind } = req.body ?? {};
+  const supabase = createRequestClient(req);
+
+  if (typeof amount !== 'number' || !Number.isFinite(amount) || amount === 0) {
+    res.status(400).json({ error: 'Nominal pembayaran tidak valid' });
+    return;
+  }
+
+  const ALLOWED_KINDS = new Set(['pelunasan', 'pembayaran', 'koreksi']);
+  const paymentKind = typeof kind === 'string' && ALLOWED_KINDS.has(kind) ? kind : 'pembayaran';
+  const ALLOWED_METHODS = new Set(['tunai', 'transfer', 'qris']);
+  const paymentMethod = typeof method === 'string' && ALLOWED_METHODS.has(method) ? method : null;
+  const paymentNote = typeof note === 'string' && note.trim().length > 0 ? note.trim() : null;
+
+  const { data: booking, error: bookingError } = await supabase
+    .from('bookings')
+    .select('id, business_id')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (bookingError || !booking) {
+    res.status(404).json({ error: 'Transaksi tidak ditemukan' });
+    return;
+  }
+
+  const { data: actorData } = await supabase.auth.getUser();
+  if (!actorData.user) {
+    res.status(401).json({ error: 'Belum login' });
+    return;
+  }
+  const actorName = await resolveActorName(supabase, booking.business_id, actorData.user.id, actorData.user.email ?? actorData.user.id);
+
+  const { data, error } = await supabase.rpc('add_booking_payment', {
+    p_booking_id: id,
+    p_amount: amount,
+    p_method: paymentMethod,
+    p_note: paymentNote,
+    p_kind: paymentKind,
+    p_created_by_name: actorName,
+  });
+
+  if (error) {
+    res.status(400).json({ error: error.message });
+    return;
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  res.json({ ok: true, paymentId: row?.payment_id ?? null, dpPaid: row?.new_dp_paid ?? null });
 });
 
 // Catat denda di tengah masa sewa (mis. penyewa lapor rusak sebelum

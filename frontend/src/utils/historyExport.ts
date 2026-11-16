@@ -1,5 +1,5 @@
 import type { HistoryBooking } from '../hooks/useHistory';
-import { rentalDays, formatDateIndo, bookingStatusLabel } from './formatters';
+import { rentalDays, formatDateIndo, bookingStatusLabel, computeRemainingBalance } from './formatters';
 
 // Export Excel Riwayat Transaksi — permintaan Andi 29 Okt, dikoreksi 3x
 // (lihat commit message). exceljs di-import DINAMIS di buildAndDownload()
@@ -46,7 +46,12 @@ export function computeHistorySummary(bookingsExcludingCancelled: HistoryBooking
   for (const b of bookingsExcludingCancelled) {
     omset += b.total_price;
     sudahDiterima += b.dp_paid;
-    piutang += Math.max(0, b.total_price - b.dp_paid);
+    const bookingFines = b.penalties.reduce((sum, p) => sum + p.amount, 0);
+    // Pelunasan (brief 17 Nov 2026) -- piutang SEKARANG termasuk denda
+    // (computeRemainingBalance), di-clamp 0 PER TRANSAKSI (keputusan
+    // koordinator 17 Nov 2026) -- "lebih bayar" di satu transaksi tidak
+    // boleh mengurangi piutang transaksi lain yang masih nunggak.
+    piutang += Math.max(0, computeRemainingBalance(b.total_price, bookingFines, b.dp_paid));
     for (const p of b.penalties) {
       if (p.type === 'keterlambatan') totalDendaTelat += p.amount;
       else if (KERUSAKAN_TYPES.has(p.type)) totalDendaKerusakan += p.amount;
@@ -206,6 +211,7 @@ export async function downloadLaporanExcel(args: {
     { header: 'Total Pemasukan (Rp)', key: 'totalPemasukan', width: 18 },
     { header: 'Sudah Diterima (Rp)', key: 'sudahDiterima', width: 18 },
     { header: 'Belum Lunas (Rp)', key: 'piutang', width: 16 },
+    { header: 'Uang Diterima (Rp)', key: 'uangDiterima', width: 18 },
     { header: 'Jumlah Transaksi', key: 'jumlahTransaksi', width: 16 },
     { header: 'Rata-rata per Transaksi (Rp)', key: 'rataRata', width: 20 },
     { header: 'Perubahan vs Bulan Lalu (%)', key: 'perubahan', width: 20 },
@@ -221,17 +227,20 @@ export async function downloadLaporanExcel(args: {
       totalPemasukan: row.totalPemasukan,
       sudahDiterima: row.sudahDiterima,
       piutang: row.piutang,
+      uangDiterima: row.uangDiterima,
       jumlahTransaksi: row.jumlahTransaksi,
       rataRata: row.rataRata ?? 0,
       perubahan: row.perubahanPersenVsBulanLalu == null ? 'Tidak ada pembanding' : `${row.perubahanPersenVsBulanLalu.toFixed(1)}%`,
     });
-    for (const key of ['pendapatanSewa', 'pendapatanBarangJual', 'dendaTelat', 'dendaKerusakan', 'totalPemasukan', 'sudahDiterima', 'piutang', 'rataRata']) {
+    for (const key of ['pendapatanSewa', 'pendapatanBarangJual', 'dendaTelat', 'dendaKerusakan', 'totalPemasukan', 'sudahDiterima', 'piutang', 'uangDiterima', 'rataRata']) {
       r.getCell(key).numFmt = '#,##0';
     }
   }
-  const note1 = bulananSheet.addRow(['"Sudah Diterima" mengikuti bulan transaksinya (tanggal ambil) — Sewalog tidak menyimpan tanggal pembayaran sungguhan. Transaksi Dibatalkan tidak dihitung.']);
+  const note1 = bulananSheet.addRow([
+    '"Sudah Diterima"/"Belum Lunas" mengikuti bulan transaksinya (tanggal ambil, termasuk denda) — Transaksi Dibatalkan tidak dihitung. "Uang Diterima" (brief Pelunasan 17 Nov 2026) mengikuti bulan pembayaran BENAR-BENAR dicatat (paid_at), dua basis ini tidak harus sama.',
+  ]);
   note1.getCell(1).font = { italic: true, color: { argb: 'FFA65C2A' } };
-  bulananSheet.mergeCells(note1.number, 1, note1.number, 11);
+  bulananSheet.mergeCells(note1.number, 1, note1.number, 12);
 
   const perAlatSheet = workbook.addWorksheet('Laporan per Alat');
   perAlatSheet.columns = [
@@ -343,7 +352,11 @@ export async function downloadHistoryExcel(allFiltered: HistoryBooking[], filter
       sale_items: b.saleItems.map((s) => `${s.name} (${s.quantity}x)`).join('; '),
       total_price: b.total_price,
       dp_paid: b.dp_paid,
-      remaining: Math.max(0, b.total_price - b.dp_paid),
+      // Pelunasan (brief 17 Nov 2026) -- sisa tagihan termasuk denda.
+      remaining: Math.max(
+        0,
+        computeRemainingBalance(b.total_price, b.penalties.reduce((sum, p) => sum + p.amount, 0), b.dp_paid),
+      ),
       denda_telat: bookingPenaltyByType(b, 'keterlambatan'),
       denda_kerusakan: bookingPenaltyByType(b, 'kerusakan-kehilangan'),
       status: bookingStatusLabel(b.status),
@@ -424,6 +437,37 @@ export async function downloadHistoryExcel(allFiltered: HistoryBooking[], filter
     for (const r of saleRows) {
       const row = penjualanSheet.addRow(r);
       row.getCell('pendapatan').numFmt = '#,##0';
+    }
+  }
+
+  // --- Sheet "Pembayaran" (brief 17 Nov 2026, migration 067) -- riwayat
+  // booking_payments APA ADANYA dari allFiltered (termasuk dibatalkan --
+  // riwayat pembayaran tetap lengkap persis seperti sheet "Transaksi" di
+  // atas), cuma dibuat kalau ada minimal satu baris pembayaran (rental
+  // yang belum sempat mencatat apa pun: sheet kosong tidak perlu ada).
+  const paymentRows = allFiltered.flatMap((b) =>
+    b.payments.map((p) => ({
+      booking_number: b.booking_number ?? '',
+      customer_name: b.customer?.name ?? '',
+      paid_at: excelDate(p.paid_at.slice(0, 10)),
+      kind: p.kind,
+      amount: p.amount,
+    })),
+  );
+  if (paymentRows.length > 0) {
+    const pembayaranSheet = workbook.addWorksheet('Pembayaran');
+    pembayaranSheet.columns = [
+      { header: 'No. Booking', key: 'booking_number', width: 16 },
+      { header: 'Penyewa', key: 'customer_name', width: 22 },
+      { header: 'Tanggal Bayar', key: 'paid_at', width: 14 },
+      { header: 'Jenis', key: 'kind', width: 14 },
+      { header: 'Nominal (Rp)', key: 'amount', width: 16 },
+    ];
+    pembayaranSheet.getRow(1).font = { bold: true };
+    for (const r of paymentRows) {
+      const row = pembayaranSheet.addRow(r);
+      row.getCell('paid_at').numFmt = 'dd-mm-yyyy';
+      row.getCell('amount').numFmt = '#,##0';
     }
   }
 

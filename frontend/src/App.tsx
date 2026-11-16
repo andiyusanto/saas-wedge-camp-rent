@@ -405,7 +405,15 @@ function App() {
         {tab === 'tim' && role === 'owner' && (
           <TeamScreen session={session} businessId={business.id} business={business} onSaveBusiness={updateBusiness} writable={subscription?.writable ?? true} />
         )}
-        {tab === 'riwayat' && role === 'owner' && <HistoryScreen businessId={business.id} />}
+        {tab === 'riwayat' && role === 'owner' && (
+          <HistoryScreen
+            businessId={business.id}
+            session={session}
+            businessName={business.name}
+            businessAddress={business.address}
+            businessLogoUrl={business.logo_url}
+          />
+        )}
         {tab === 'etalase-online' && role === 'owner' && (
           <EtalaseOnlineScreen
             session={session}

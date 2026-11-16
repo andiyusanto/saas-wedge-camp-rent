@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { X, PackageCheck, ShieldCheck } from 'lucide-react';
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import type { TrackingBooking } from '../hooks/useTrackings';
-import { depositLabel } from '../utils/formatters';
+import { depositLabel, computeRemainingBalance, formatIDR } from '../utils/formatters';
 
 type DepositType = '' | 'ktp' | 'sim' | 'stnk' | 'paspor' | 'uang' | 'lainnya';
 
@@ -27,6 +27,7 @@ export function PickupConfirmModal({
   pickupBooking: (
     bookingId: string,
     deposit?: { type: string; amount?: number; note?: string | null },
+    payment?: { amount: number; method?: string | null; note?: string | null },
   ) => Promise<{ error: string | null }>;
   onDone: () => void;
 }) {
@@ -37,6 +38,10 @@ export function PickupConfirmModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initialisedFor, setInitialisedFor] = useState<string | null>(null);
+  // "Lunasi sekarang" (brief 17 Nov 2026) -- belum ada denda saat Ambil,
+  // jadi sisa di sini cuma sewa+barang jual dikurangi yang sudah dibayar.
+  const [lunasiSekarang, setLunasiSekarang] = useState(false);
+  const [payMethod, setPayMethod] = useState('tunai');
 
   // Bug Andi 16 Nov 2026 (pola sama UbahAlatModal.tsx): reset saat ditutup
   // supaya dibuka ulang untuk booking yang sama (mis. batal lalu buka
@@ -55,8 +60,12 @@ export function PickupConfirmModal({
     setDepositAmount(existingDeposit?.amount != null ? String(existingDeposit.amount) : '');
     setConfirmed(false);
     setError(null);
+    setLunasiSekarang(false);
+    setPayMethod('tunai');
     setInitialisedFor(booking.id);
   }
+
+  const remaining = computeRemainingBalance(booking.total_price, 0, booking.dp_paid);
 
   async function handleConfirm() {
     if (!booking) return;
@@ -77,6 +86,7 @@ export function PickupConfirmModal({
       depositType
         ? { type: depositType, amount: depositType === 'uang' ? Number(depositAmount) || 0 : undefined, note: depositNote || null }
         : undefined,
+      lunasiSekarang && remaining > 0 ? { amount: remaining, method: payMethod } : undefined,
     );
 
     setSubmitting(false);
@@ -151,6 +161,31 @@ export function PickupConfirmModal({
                 onChange={(e) => setDepositNote(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
               />
+            </div>
+          )}
+
+          {remaining > 0 && (
+            <div className="p-3 rounded-xl bg-[#F1EEE2] border border-[#DBD5C1] space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={lunasiSekarang}
+                  onChange={(e) => setLunasiSekarang(e.target.checked)}
+                  className="w-4 h-4 accent-[#2B4739] shrink-0"
+                />
+                <span className="text-xs font-bold text-[#26302B]">Lunasi sekarang {formatIDR(remaining)}</span>
+              </label>
+              {lunasiSekarang && (
+                <select
+                  value={payMethod}
+                  onChange={(e) => setPayMethod(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg bg-white border border-[#DBD5C1] text-xs text-[#26302B]"
+                >
+                  <option value="tunai">Tunai</option>
+                  <option value="transfer">Transfer</option>
+                  <option value="qris">QRIS</option>
+                </select>
+              )}
             </div>
           )}
 

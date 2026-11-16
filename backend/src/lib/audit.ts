@@ -1,5 +1,24 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+// Dipindah dari team.ts (private helper getCallerRole) supaya dipakai
+// ulang oleh endpoint lain yang perlu membedakan owner vs karyawan,
+// mis. Batalkan/Void (brief 17 Nov 2026) -- null kalau bukan anggota
+// business ini sama sekali (dicek pemanggil, bukan di sini).
+export async function getCallerRole(supabase: SupabaseClient, businessId: string): Promise<string | null> {
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData.user?.id;
+  if (!userId) return null;
+
+  const { data } = await supabase
+    .from('business_members')
+    .select('role')
+    .eq('business_id', businessId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  return data?.role ?? null;
+}
+
 // Nama tampilan untuk riwayat (Ubah Jadwal/Perpanjang, migration 055) —
 // skema ini TIDAK punya kolom nama untuk karyawan sama sekali (business_
 // members cuma user_id+role), jadi satu-satunya nama asli yang bisa
@@ -30,12 +49,14 @@ export async function logBookingStatus(
   status: string,
   changedBy: string,
   changedByName: string,
+  reason?: string | null,
 ): Promise<void> {
   const { error } = await supabase.from('booking_status_history').insert({
     booking_id: bookingId,
     status,
     changed_by: changedBy,
     changed_by_name: changedByName,
+    reason: reason ?? null,
   });
 
   if (error) {

@@ -5,7 +5,18 @@
 // ambil", denda telat vs rusak/hilang dipisah + nama alat, "Kembali paling
 // lambat", Paket "Paket X xN" + rincian komponen, rupiah dibulatkan.
 import type { ReceiptData } from './formatters';
-import { formatIDR, formatDateIndo, rentalDays, depositLabel, fineLabel, addDaysStr, groupReceiptItemsByBundle } from './formatters';
+import {
+  formatIDR,
+  formatDateIndo,
+  rentalDays,
+  depositLabel,
+  fineLabel,
+  addDaysStr,
+  groupReceiptItemsByBundle,
+  computeRemainingBalance,
+  PAYMENT_METHOD_LABEL,
+  PAYMENT_KIND_LABEL,
+} from './formatters';
 import type { ThermalLine } from './escpos';
 import { sanitizeAscii } from './escpos';
 
@@ -71,8 +82,10 @@ export type ThermalReceiptDoc = { lines: ThermalLine[]; textLines: string[] };
 export function buildThermalReceiptDoc(data: ReceiptData, paperWidth: PaperWidth): ThermalReceiptDoc {
   const width = columnsForPaperWidth(paperWidth);
   const days = rentalDays(data.startDate, data.endDate, data.rentalDayMode);
-  const remaining = Math.max(0, data.totalPrice - data.dpPaid);
   const totalFines = data.fines.reduce((sum, f) => sum + f.amount, 0);
+  // Pelunasan (brief 17 Nov 2026) -- sisa tagihan termasuk denda, lihat
+  // computeRemainingBalance() di formatters.ts.
+  const remaining = computeRemainingBalance(data.totalPrice, totalFines, data.dpPaid);
 
   const lines: ThermalLine[] = [];
   const textLines: string[] = [];
@@ -99,6 +112,9 @@ export function buildThermalReceiptDoc(data: ReceiptData, paperWidth: PaperWidth
     textLines.push('');
   };
 
+  if (data.isReprint) {
+    addText(`SALINAN - dicetak ulang ${formatDateIndo(data.reprintedAt ?? '')}`, { bold: true, align: 'center' });
+  }
   addText(data.businessName.toUpperCase(), { bold: true, align: 'center', doubleHeight: true });
   addText('Nota Sewa Alat Outdoor', { align: 'center' });
   addRule();
@@ -153,7 +169,21 @@ export function buildThermalReceiptDoc(data: ReceiptData, paperWidth: PaperWidth
     addPriceRow('Total Sewa', formatIDR(data.totalPrice));
   }
   addPriceRow('DP Terbayar', formatIDR(data.dpPaid));
-  addPriceRow('Sisa Bayar', formatIDR(remaining));
+  if ((data.payments ?? []).length > 0) {
+    addRule();
+    addText('RIWAYAT PEMBAYARAN', { bold: true });
+    for (const p of data.payments ?? []) {
+      const label = `${formatDateIndo(p.paidAt.slice(0, 10))} ${PAYMENT_KIND_LABEL[p.kind] ?? p.kind}${p.method ? ` (${PAYMENT_METHOD_LABEL[p.method] ?? p.method})` : ''}`;
+      addPriceRow(label, formatIDR(p.amount));
+    }
+  }
+  if (remaining > 0) {
+    addPriceRow('Sisa Bayar', formatIDR(remaining));
+  } else if (remaining < 0) {
+    addPriceRow('Lebih Bayar', formatIDR(Math.abs(remaining)));
+  } else {
+    addText('LUNAS', { bold: true });
+  }
 
   if (data.depositType) {
     addRule();

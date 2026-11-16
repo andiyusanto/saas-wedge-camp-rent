@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { createRequestClient } from '../lib/supabaseClient.js';
 import { fetchActiveBookingItems, usedUnitsOn, marginDaysFromReadinessHours } from '../lib/availability.js';
 import { dateRange, todayInTz, tzOffsetIso, rentalDuration } from '../lib/dates.js';
-import { logBookingStatus } from '../lib/audit.js';
+import { logBookingStatus, resolveActorName } from '../lib/audit.js';
 import { isBusinessWritable, SUBSCRIPTION_LOCKED_MESSAGE } from '../lib/subscription.js';
 import { getCustomerPhotoSignedUrl } from '../lib/r2.js';
 import { computeBundleComponentRatesSnapshot } from '../lib/pricing.js';
@@ -75,6 +75,7 @@ router.post('/bookings', async (req, res) => {
     deposit,
     total_price,
     dp_paid,
+    dp_method,
   } = req.body ?? {};
 
   const requestedItems = items as BookingItemInput[] | undefined;
@@ -321,6 +322,11 @@ router.post('/bookings', async (req, res) => {
         picked_up_at: pickedUpAt,
         total_price: Number(total_price) || 0,
         dp_paid: Number(dp_paid) || 0,
+        // Dibaca trigger log_initial_dp_payment() (migration 067) untuk
+        // mencatat baris booking_payments kind='dp' pertama secara atomik
+        // dalam transaksi insert ini -- Express TIDAK memanggil RPC apa
+        // pun di sini, supaya dp_paid tidak pernah ditulis dua kali.
+        dp_method: ['tunai', 'transfer', 'qris'].includes(dp_method) ? dp_method : null,
         rental_day_mode: bizRow.rental_day_mode,
         min_rental_days: bizRow.min_rental_days,
         max_rental_days: bizRow.max_rental_days,
@@ -523,12 +529,15 @@ router.post('/bookings/:id/pickup', async (req, res) => {
   }
 
   const { id } = req.params;
-  const { deposit } = (req.body ?? {}) as { deposit?: { type: string; amount?: number; note?: string | null } | null };
+  const { deposit, payment } = (req.body ?? {}) as {
+    deposit?: { type: string; amount?: number; note?: string | null } | null;
+    payment?: { amount: number; method?: string | null; note?: string | null } | null;
+  };
   const supabase = createRequestClient(req);
 
   const { data: booking, error: bookingError } = await supabase
     .from('bookings')
-    .select('id, status')
+    .select('id, status, business_id')
     .eq('id', id)
     .maybeSingle();
 
@@ -612,7 +621,33 @@ router.post('/bookings/:id/pickup', async (req, res) => {
     await logBookingStatus(supabase, id, 'aktif', actorData.user.id, actorData.user.email ?? actorData.user.id);
   }
 
-  res.json({ ok: true });
+  // "Lunasi sekarang" di PickupConfirmModal (brief 17 Nov 2026) — LANGKAH
+  // TERAKHIR, non-blocking: status+jaminan di atas SUDAH tersimpan duluan
+  // (pola yang sama seperti restore_sale_item_stock_for_booking saat
+  // Batalkan) — kalau pelunasan gagal (mis. race sisa tagihan berubah),
+  // pickup TETAP sukses, staf cukup pakai "Catat Pembayaran" manual
+  // belakangan. Dicatat kind='pelunasan' (bukan 'dp' — itu cuma untuk
+  // trigger DP awal saat booking dibuat).
+  let paymentWarning: string | null = null;
+  if (payment && Number(payment.amount) > 0) {
+    const actorName = actorData.user
+      ? await resolveActorName(supabase, booking.business_id, actorData.user.id, actorData.user.email ?? actorData.user.id)
+      : 'Konfirmasi Ambil';
+    const { error: paymentError } = await supabase.rpc('add_booking_payment', {
+      p_booking_id: id,
+      p_amount: Number(payment.amount),
+      p_method: payment.method ?? null,
+      p_note: payment.note ?? null,
+      p_kind: 'pelunasan',
+      p_created_by_name: actorName,
+    });
+    if (paymentError) {
+      console.error(`add_booking_payment gagal saat pickup booking ${id}:`, paymentError.message);
+      paymentWarning = 'Barang sudah ditandai diambil, tapi pelunasan gagal dicatat — coba lagi lewat Catat Pembayaran.';
+    }
+  }
+
+  res.json({ ok: true, paymentWarning });
 });
 
 export default router;

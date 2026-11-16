@@ -250,12 +250,21 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
                     <p className="text-[10px] text-[#6E6853] font-semibold uppercase">Sudah Diterima / Belum Lunas</p>
                     <p className="text-sm font-bold text-[#26302B]">{formatIDR(highlightRow.sudahDiterima)} / {formatIDR(highlightRow.piutang)}</p>
                   </div>
+                  <div className="bg-[#FBFAF4] p-3 rounded-xl border border-[#DBD5C1]">
+                    <p className="text-[10px] text-[#6E6853] font-semibold uppercase">Uang Diterima (kas)</p>
+                    <p className="text-sm font-bold text-[#26302B]">{formatIDR(highlightRow.uangDiterima)}</p>
+                  </div>
                 </div>
               )}
 
               <p className="text-[10px] text-[#6E6853] italic">
-                "Sudah diterima" mengikuti bulan transaksinya (tanggal ambil) — Sewalog tidak menyimpan tanggal
-                pembayaran sungguhan. Transaksi berstatus Dibatalkan tidak dihitung.
+                Dua basis berbeda: "Sudah Diterima"/"Belum Lunas" mengikuti bulan transaksinya (tanggal ambil, bisa
+                termasuk denda) — sedangkan "Uang Diterima" (brief Pelunasan 17 Nov 2026) mengikuti bulan
+                PEMBAYARAN BENAR-BENAR DICATAT (tanggal bayar sungguhan, lewat Catat Pembayaran/pelunasan), jadi
+                dua angka ini TIDAK HARUS SAMA per bulan — satu booking boleh membayar DP di bulan berbeda dari
+                bulan ia mulai disewa. Transaksi berstatus Dibatalkan tidak dihitung di "Sudah Diterima"/"Belum
+                Lunas"/nilai transaksi, tapi pembayarannya tetap muncul di "Uang Diterima" kecuali sudah dicatat
+                pengembalian dananya (koreksi/refund) lewat dialog Batalkan.
               </p>
 
               <div className="bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] overflow-x-auto">
@@ -270,6 +279,7 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
                       <th className="p-2.5 font-semibold text-right">Total Pemasukan</th>
                       <th className="p-2.5 font-semibold text-right">Sudah Diterima</th>
                       <th className="p-2.5 font-semibold text-right">Belum Lunas</th>
+                      <th className="p-2.5 font-semibold text-right">Uang Diterima</th>
                       <th className="p-2.5 font-semibold text-right">Jumlah Transaksi</th>
                       <th className="p-2.5 font-semibold text-right">Rata-rata</th>
                     </tr>
@@ -285,6 +295,7 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
                         <td className="p-2.5 text-right font-bold text-[#26302B]">{formatIDR(row.totalPemasukan)}</td>
                         <td className="p-2.5 text-right">{formatIDR(row.sudahDiterima)}</td>
                         <td className="p-2.5 text-right">{formatIDR(row.piutang)}</td>
+                        <td className="p-2.5 text-right font-bold text-[#2B4739]">{formatIDR(row.uangDiterima)}</td>
                         <td className="p-2.5 text-right">{row.jumlahTransaksi}</td>
                         <td className="p-2.5 text-right">{row.rataRata == null ? '-' : formatIDR(row.rataRata)}</td>
                       </tr>

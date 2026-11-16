@@ -50,6 +50,13 @@ export type HistoryBooking = {
   // Snapshot (migration 049) — mode saat booking ini DIBUAT, null untuk
   // baris dari sebelum fitur ini (ditafsirkan 'per_hari_kalender').
   rental_day_mode: RentalDayMode | null;
+  // Pelunasan (brief 17 Nov 2026, migration 067) -- dipakai Laporan
+  // "Uang Diterima" per bulan paid_at (reportAggregation.ts). CATATAN:
+  // kelengkapannya ikut rentang start_date fetch (lihat caller), jadi
+  // pembayaran yang dicatat jauh SEBELUM start_date booking tapi di
+  // LUAR rentang itu (kasus langka, lintas tahun) tidak ikut terhitung —
+  // didokumentasikan sebagai keterbatasan v1, bukan bug.
+  payments: { amount: number; paid_at: string; kind: string }[];
 };
 
 // subtotal/price_at_booking (migration 034), penalties.item_id (migration
@@ -59,7 +66,7 @@ export type HistoryBooking = {
 // persis InvoiceModal.tsx (baris lama sebelum migration 034, tidak
 // di-backfill).
 const SELECT_FIELDS =
-  'id, booking_number, status, start_date, end_date, total_price, dp_paid, rental_day_mode, customers(name, phone), booking_items(quantity, subtotal, price_at_booking, bundle_id, bundle_instance_id, bundle_name, items(id, name, category, variant, size, color, total_units)), booking_sale_items(sale_item_id, name, quantity, price_at_booking, subtotal), penalties(type, amount, item_id)';
+  'id, booking_number, status, start_date, end_date, total_price, dp_paid, rental_day_mode, customers(name, phone), booking_items(quantity, subtotal, price_at_booking, bundle_id, bundle_instance_id, bundle_name, items(id, name, category, variant, size, color, total_units)), booking_sale_items(sale_item_id, name, quantity, price_at_booking, subtotal), penalties(type, amount, item_id), booking_payments(amount, paid_at, kind)';
 
 type RawBooking = {
   id: string;
@@ -92,6 +99,7 @@ type RawBooking = {
     | null;
   booking_sale_items: { sale_item_id: string; name: string; quantity: number; price_at_booking: number; subtotal: number }[] | null;
   penalties: { type: string; amount: number; item_id: string | null }[] | null;
+  booking_payments: { amount: number; paid_at: string; kind: string }[] | null;
 };
 
 function mapBooking(row: RawBooking): HistoryBooking {
@@ -122,6 +130,7 @@ function mapBooking(row: RawBooking): HistoryBooking {
     })),
     saleItems: row.booking_sale_items ?? [],
     penalties: row.penalties ?? [],
+    payments: row.booking_payments ?? [],
   };
 }
 

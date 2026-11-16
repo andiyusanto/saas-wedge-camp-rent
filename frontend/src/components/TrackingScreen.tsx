@@ -41,6 +41,8 @@ import { UbahAlatModal } from './UbahAlatModal';
 import { PickupConfirmModal } from './PickupConfirmModal';
 import { ConfirmModal } from './ConfirmModal';
 import { InvoiceModal } from './InvoiceModal';
+import { PaymentModal } from './PaymentModal';
+import { computeRemainingBalance } from '../utils/formatters';
 import { ScrollableRow } from './ScrollableRow';
 import { StatCard } from './StatCard';
 import type { ReceiptData } from '../utils/formatters';
@@ -89,6 +91,7 @@ export function TrackingScreen({
     refresh,
     cancelBooking,
     pickupBooking,
+    addPayment,
     rescheduleBooking,
     extendBooking,
     updateBookingItems,
@@ -135,6 +138,7 @@ export function TrackingScreen({
     setShowOldRequests((v) => !v);
   }
   const [cancelTarget, setCancelTarget] = useState<TrackingBooking | null>(null);
+  const [paymentTarget, setPaymentTarget] = useState<TrackingBooking | null>(null);
   const [invoiceData, setInvoiceData] = useState<ReceiptData | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -494,11 +498,27 @@ export function TrackingScreen({
               onCancel={() => setCancelTarget(b)}
               onReschedule={() => setRescheduleTarget({ booking: b, mode: b.is_pending_pickup ? 'ubah_jadwal' : 'perpanjang' })}
               onUbahAlat={() => setUbahAlatTarget(b)}
+              onCatatPembayaran={() => setPaymentTarget(b)}
               rescheduleDeadlineDays={rescheduleDeadlineDays}
             />
           ))
         )}
       </div>
+
+      <PaymentModal
+        isOpen={paymentTarget !== null}
+        onClose={() => setPaymentTarget(null)}
+        remaining={
+          paymentTarget
+            ? computeRemainingBalance(
+                paymentTarget.total_price,
+                paymentTarget.penalties.reduce((sum, p) => sum + p.amount, 0),
+                paymentTarget.dp_paid,
+              )
+            : 0
+        }
+        onSubmit={(body) => addPayment(paymentTarget!.id, { ...body, kind: 'pelunasan' })}
+      />
 
       <UbahAlatModal
         isOpen={ubahAlatTarget !== null}
@@ -839,6 +859,7 @@ function BookingCard({
   onCancel,
   onReschedule,
   onUbahAlat,
+  onCatatPembayaran,
   rescheduleDeadlineDays,
 }: {
   session: Session;
@@ -851,13 +872,19 @@ function BookingCard({
   onCancel: () => void;
   onReschedule: () => void;
   onUbahAlat: () => void;
+  onCatatPembayaran: () => void;
   rescheduleDeadlineDays: number | null;
 }) {
   const lateFines = b.penalties.filter((p) => p.type === 'keterlambatan');
   const otherFines = b.penalties.filter((p) => p.type !== 'keterlambatan');
   const totalFines = b.penalties.reduce((sum, p) => sum + p.amount, 0);
   const activeDeposit = b.deposits.find((d) => d.status === 'ditahan');
-  const remaining = Math.max(0, b.total_price - b.dp_paid);
+  // Pelunasan (brief 17 Nov 2026) -- sisa tagihan SEKARANG termasuk denda
+  // (computeRemainingBalance), tidak lagi cuma total_price-dp_paid.
+  // SENGAJA tidak di-clamp ke 0 -- "Lebih Bayar" ditampilkan terpisah di
+  // bawah kalau negatif (mis. setelah Ubah Alat mengurangi total setelah
+  // sudah dibayar), bukan disamakan dengan LUNAS.
+  const remaining = computeRemainingBalance(b.total_price, totalFines, b.dp_paid);
   const [showHistory, setShowHistory] = useState(false);
 
   // Cara hitung denda telat (migration 063): mode 'tanpa_denda' DIPERHALUS
@@ -962,11 +989,20 @@ function BookingCard({
             <span className="font-extrabold text-[#26302B] text-sm">{formatIDR(b.total_price)}</span>
           </div>
           <div className="flex items-center justify-between text-[11px]">
-            <span className="text-[#6E6853]">Sisa Tagihan:</span>
-            <span className={`font-bold ${remaining > 0 ? 'text-[#A8412E]' : 'text-[#2B4739]'}`}>
-              {remaining > 0 ? formatIDR(remaining) : 'LUNAS'}
+            <span className="text-[#6E6853]">{remaining < 0 ? 'Lebih Bayar:' : 'Sisa Tagihan:'}</span>
+            <span className={`font-bold ${remaining > 0 ? 'text-[#A8412E]' : remaining < 0 ? 'text-[#A65C2A]' : 'text-[#2B4739]'}`}>
+              {remaining > 0 ? formatIDR(remaining) : remaining < 0 ? formatIDR(Math.abs(remaining)) : 'LUNAS'}
             </span>
           </div>
+          {remaining !== 0 && (
+            <button
+              type="button"
+              onClick={onCatatPembayaran}
+              className="w-full text-center text-[11px] font-bold text-[#2B4739] underline pt-1"
+            >
+              Catat Pembayaran
+            </button>
+          )}
         </div>
 
         <div className="space-y-3 bg-[#F1EEE2] p-3 rounded-xl border border-[#DBD5C1]">
