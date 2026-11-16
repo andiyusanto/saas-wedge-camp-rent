@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react';
-import { Package, Plus, X, Power } from 'lucide-react';
+import type { Session } from '@supabase/supabase-js';
+import { Package, Plus, X, Power, Upload } from 'lucide-react';
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import { useItems } from '../hooks/useItems';
 import { useBundles } from '../hooks/useBundles';
 import type { Bundle, BundleComponentInput, BundleInput } from '../hooks/useBundles';
 import { formatIDR } from '../utils/formatters';
+import { resizeImageToDataUrl } from '../utils/imageResize';
+import { apiFetch } from '../lib/api';
 
 // Paket Alat Tahap 1 (brief 15 Nov 2026, migration 064) — Katalog Paket.
 // **Keputusan Andi 15 Nov 2026** (revisi dari rencana awal "owner-only"):
@@ -38,11 +41,13 @@ function emptyBundleInput(): BundleInput {
 
 function BundleFormModal({
   businessId,
+  session,
   initial,
   onClose,
   onSaved,
 }: {
   businessId: string;
+  session: Session;
   initial: Bundle | 'new';
   onClose: () => void;
   onSaved: () => void;
@@ -50,6 +55,7 @@ function BundleFormModal({
   const { items } = useItems(businessId);
   const { addBundle, updateBundle } = useBundles(businessId);
   const isNew = initial === 'new';
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const [form, setForm] = useState<BundleInput>(() =>
     isNew
@@ -91,6 +97,23 @@ function BundleFormModal({
       if (quantity > 0) components.push({ item_id: itemId, quantity });
       return { ...prev, components };
     });
+  }
+
+  async function handleUploadImage(file: File) {
+    setUploadingImage(true);
+    setError(null);
+    try {
+      const dataUrl = await resizeImageToDataUrl(file);
+      const body = await apiFetch<{ url: string }>(session, '/api/uploads/bundle-image', {
+        method: 'POST',
+        body: JSON.stringify({ businessId, image: dataUrl }),
+      });
+      setForm((p) => ({ ...p, image_url: body.url }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gagal mengunggah gambar.');
+    } finally {
+      setUploadingImage(false);
+    }
   }
 
   async function handleSubmit() {
@@ -149,6 +172,33 @@ function BundleFormModal({
               onChange={(e) => setForm((p) => ({ ...p, description: e.target.value || null }))}
               className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
             />
+          </div>
+
+          <div>
+            <label className="block font-bold text-[#26302B] mb-1">Foto Paket (opsional)</label>
+            <div className="flex items-center gap-2">
+              {form.image_url && (
+                <img src={form.image_url} alt="Pratinjau" className="h-14 w-14 shrink-0 object-cover rounded-lg border border-[#DBD5C1]" />
+              )}
+              <label className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-dashed border-[#DBD5C1] px-3 py-2.5 text-xs font-semibold text-[#6E6853] hover:bg-[#F1EEE2] cursor-pointer transition">
+                <Upload className="w-4 h-4" />
+                {uploadingImage ? 'Mengunggah...' : 'Upload Gambar'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  disabled={uploadingImage}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleUploadImage(file);
+                    e.target.value = '';
+                  }}
+                  className="hidden"
+                />
+              </label>
+            </div>
+            <p className="text-[11px] text-[#6E6853] mt-1">
+              Kosongkan kalau tidak ada — Etalase otomatis memakai foto komponen pertama paket ini.
+            </p>
           </div>
 
           <div className="space-y-2 bg-[#F1EEE2] p-3 rounded-xl border border-[#DBD5C1]">
@@ -287,9 +337,11 @@ function BundleFormModal({
 
 export function BundlesScreen({
   businessId,
+  session,
   writable = true,
 }: {
   businessId: string;
+  session: Session;
   writable?: boolean;
 }) {
   const { items } = useItems(businessId);
@@ -378,6 +430,7 @@ export function BundlesScreen({
       {modalBundle && (
         <BundleFormModal
           businessId={businessId}
+          session={session}
           initial={modalBundle}
           onClose={() => setModalBundle(null)}
           onSaved={() => setModalBundle(null)}

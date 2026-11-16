@@ -106,6 +106,45 @@ router.post('/uploads/item-image', async (req, res) => {
   }
 });
 
+// Foto paket (Paket Alat Tahap 2, brief 16 Nov 2026) — pola PERSIS
+// item-image (member-writable, bucket publik, folder terpisah) karena
+// bundles juga member-writable (migration 064), bukan owner-only seperti
+// logo/QRIS.
+router.post('/uploads/bundle-image', async (req, res) => {
+  if (!req.headers.authorization) {
+    res.status(401).json({ error: 'Belum login' });
+    return;
+  }
+
+  const { businessId, image } = req.body ?? {};
+  if (!businessId) {
+    res.status(400).json({ error: 'Data tidak lengkap' });
+    return;
+  }
+
+  let decoded;
+  try {
+    decoded = decodeImageDataUrl(image);
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+    return;
+  }
+
+  if (!(await requireMembership(req, businessId))) {
+    res.status(403).json({ error: 'Kamu bukan anggota usaha ini' });
+    return;
+  }
+
+  const key = `bundles/${businessId}/${crypto.randomUUID()}.${decoded.extension}`;
+
+  try {
+    const url = await uploadToR2(key, decoded.buffer, decoded.mimeType);
+    res.status(201).json({ url });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
 // Foto penyewa (opsional) diambil saat Catat Transaksi — bukti visual
 // siapa yang mengambil barang, terpisah dari foto KTP/dokumen jaminan
 // (sengaja tidak menyimpan foto dokumen identitas, lihat diskusi produk:

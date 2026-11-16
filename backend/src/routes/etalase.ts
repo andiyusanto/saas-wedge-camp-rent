@@ -13,6 +13,8 @@ function pad2(n: number): string {
 import { buildWhatsAppUrl } from '../lib/whatsapp.js';
 import { getShareCard, shareCardHash, type ShareCardInput } from '../lib/shareCard.js';
 import { TOKO_PUBLIC_HOST, resolveTokoPageUrl, resolveStatusPageUrl } from '../lib/publicUrls.js';
+import { computeItemRentalPrice, combinedComponentRates, applyBundleDiscount } from '../lib/pricing.js';
+import type { ItemDayRates, BundleComponent } from '../lib/pricing.js';
 
 const router = Router();
 
@@ -35,6 +37,39 @@ type PublicItem = {
   variant: string | null;
   size: string | null;
   color: string | null;
+};
+
+// Paket Alat Tahap 2 (brief 16 Nov 2026, migration 065) — components
+// SUDAH TERURUT item_id (deterministik, sama dengan useBundles.ts/
+// bookingRequests.ts, lihat catatan koordinator soal urutan alokasi).
+type PublicBundleComponent = {
+  item_id: string;
+  quantity: number;
+  name: string;
+  image_url: string | null;
+  price_per_day: number;
+  day2_rate: number;
+  day3_rate: number;
+  day4_rate: number;
+  day5_rate: number;
+  extra_day_rate: number;
+};
+type PublicBundle = {
+  id: string;
+  name: string;
+  image_url: string | null;
+  description: string | null;
+  category: string | null;
+  pricing_mode: 'ikuti_alat' | 'sendiri';
+  price_per_day: number | null;
+  day2_rate: number | null;
+  day3_rate: number | null;
+  day4_rate: number | null;
+  day5_rate: number | null;
+  extra_day_rate: number | null;
+  discount_type: 'percent' | 'nominal' | null;
+  discount_value: number | null;
+  components: PublicBundleComponent[];
 };
 
 type PublicPageData = {
@@ -60,6 +95,7 @@ type PublicPageData = {
   return_deadline_time?: string | null;
   return_deadline_next_day?: boolean | null;
   items: PublicItem[];
+  bundles?: PublicBundle[];
 };
 
 // Dipakai bareng oleh Etalase (PublicPageData) dan halaman status
@@ -320,7 +356,9 @@ type BookingRequestStatus = {
     pay_cash_enabled?: boolean;
     confirmed_at: string;
   } | null;
-  items: { name: string; quantity: number }[];
+  // Penanda paket (migration 065) — null untuk baris alat lepas, pola
+  // sama booking_items Tahap 1.
+  items: { name: string; quantity: number; bundle_name: string | null; bundle_instance_id: string | null; bundle_quantity: number | null }[];
   // Batas jam kembali TETAP (migration 062) — kebijakan LIVE business ini
   // (booking_requests belum jadi transaksi, belum ada snapshot).
   return_deadline_time?: string | null;
@@ -489,8 +527,35 @@ function renderStatusPage(data: BookingRequestStatus, req: import('express').Req
   };
   const label = statusLabel[data.status];
 
-  const itemsListHtml = data.items
-    .map((it) => `<li>${escapeHtml(it.name)} × ${it.quantity}</li>`)
+  // Paket Alat Tahap 2 (brief 16 Nov 2026) — kelompokkan baris ber-
+  // bundle_instance_id sama jadi satu "Paket X ×N" + rincian komponen,
+  // bukan daftar alat lepas (pola sama groupReceiptItemsByBundle(),
+  // frontend/src/utils/formatters.ts — reimplementasi server-side di
+  // sini karena halaman ini dirender Express, bukan React).
+  const itemGroups: { bundleName: string | null; bundleQuantity: number | null; items: typeof data.items }[] = [];
+  const instanceIndex = new Map<string, number>();
+  for (const it of data.items) {
+    if (it.bundle_instance_id) {
+      const existingIdx = instanceIndex.get(it.bundle_instance_id);
+      if (existingIdx != null) {
+        itemGroups[existingIdx].items.push(it);
+        continue;
+      }
+      instanceIndex.set(it.bundle_instance_id, itemGroups.length);
+      itemGroups.push({ bundleName: it.bundle_name, bundleQuantity: it.bundle_quantity, items: [it] });
+    } else {
+      itemGroups.push({ bundleName: null, bundleQuantity: null, items: [it] });
+    }
+  }
+  const itemsListHtml = itemGroups
+    .map((group) => {
+      if (!group.bundleName) {
+        return group.items.map((it) => `<li>${escapeHtml(it.name)} × ${it.quantity}</li>`).join('');
+      }
+      const header = `<li style="font-weight:700;">📦 Paket ${escapeHtml(group.bundleName)}${group.bundleQuantity && group.bundleQuantity > 1 ? ` ×${group.bundleQuantity}` : ''}<ul style="margin:2px 0 0;padding-left:16px;font-weight:400;">`;
+      const rows = group.items.map((it) => `<li>${escapeHtml(it.name)} × ${it.quantity}</li>`).join('');
+      return `${header}${rows}</ul></li>`;
+    })
     .join('');
 
   // Review -c1 (tahap 3 putaran 2, poin 3): teks tombol WA berubah sesuai
@@ -895,6 +960,98 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
     <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#B5AF95" stroke-width="1.5" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8" cy="9.5" r="1.4"/><path d="M4.5 16.5l4.8-5.5 3 3.3 2.4-2.7L19.5 16.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
   </div>`;
 
+  // Paket Alat Tahap 2 (brief 16 Nov 2026) -- bagian "Paket" di ATAS
+  // daftar alat, cuma tampil kalau ada paket aktif (get_public_page
+  // sudah memfilter bundle nonaktif/komponen nonaktif, migration 065).
+  // Kartu TETAP tampil sebagai katalog walau Pesanan Online OFF --
+  // tombol keranjang (`data-bundle-action`) digerbang orderingEnabled
+  // persis sama seperti kartu alat (catatan koordinator poin 4).
+  const bundles = page.bundles ?? [];
+  const bundlesHtml = bundles.length
+    ? `<h2 style="font-size:1rem;margin:0 0 4px;color:#26302B;">Paket</h2>
+    <div class="items" style="margin-bottom:20px;">
+      ${bundles
+        .map((bundle) => {
+          const components: BundleComponent[] = bundle.components.map((c) => ({
+            item_id: c.item_id,
+            quantityPerBundle: c.quantity,
+            catalogRates: {
+              price_per_day: c.price_per_day,
+              day2_rate: c.day2_rate,
+              day3_rate: c.day3_rate,
+              day4_rate: c.day4_rate,
+              day5_rate: c.day5_rate,
+              extra_day_rate: c.extra_day_rate,
+            },
+          }));
+          const combined = combinedComponentRates(components);
+          const effectiveRates: ItemDayRates =
+            bundle.pricing_mode === 'sendiri'
+              ? {
+                  price_per_day: bundle.price_per_day ?? 0,
+                  day2_rate: bundle.day2_rate ?? 0,
+                  day3_rate: bundle.day3_rate ?? 0,
+                  day4_rate: bundle.day4_rate ?? 0,
+                  day5_rate: bundle.day5_rate ?? 0,
+                  extra_day_rate: bundle.extra_day_rate ?? 0,
+                }
+              : applyBundleDiscount(combined, bundle.discount_type, bundle.discount_value);
+          const hematRp = bundle.pricing_mode === 'ikuti_alat' ? combined.price_per_day - effectiveRates.price_per_day : 0;
+          const isiPaket = bundle.components.map((c) => `${c.name} ×${c.quantity}`).join(', ');
+          const bundleImage = bundle.image_url ?? bundle.components[0]?.image_url ?? null;
+          const componentsForClient = bundle.components.map((c) => ({ item_id: c.item_id, quantity: c.quantity }));
+
+          return `<div class="item-card bundle-card" style="background:#FBFAF4;border:1px solid #DBD5C1;border-radius:16px;overflow:hidden;">
+  ${
+    bundleImage
+      ? `<img src="${escapeHtml(bundleImage)}" alt="${escapeHtml(bundle.name)}" class="zoomable" style="width:100%;height:160px;object-fit:cover;display:block;" loading="lazy" onclick="openZoom(this)" />`
+      : NO_PHOTO_ICON
+  }
+  <div style="padding:12px;">
+    <p style="margin:0;font-weight:700;color:#26302B;">📦 ${escapeHtml(bundle.name)}</p>
+    ${bundle.description ? `<p style="margin:3px 0 0;font-size:0.8rem;color:#6E6853;">${escapeHtml(bundle.description)}</p>` : ''}
+    <p style="margin:6px 0 0;font-size:0.75rem;color:#6E6853;">Isi: ${escapeHtml(isiPaket)}</p>
+    <p style="margin:8px 0 0;">
+      ${
+        hematRp > 0
+          ? `<span style="text-decoration:line-through;color:#6E6853;font-size:0.8rem;margin-right:6px;">${formatIDR(combined.price_per_day)}</span>`
+          : ''
+      }
+      <span style="font-weight:700;color:#2B4739;">${formatIDR(effectiveRates.price_per_day)}</span>
+      <span style="font-weight:400;color:#6E6853;font-size:0.75rem;">/hari</span>
+    </p>
+    ${
+      hematRp > 0
+        ? `<p style="margin:2px 0 0;font-size:0.75rem;color:#A65C2A;font-weight:700;">Hemat ${formatIDR(hematRp)}${bundle.discount_type === 'percent' ? ` (${bundle.discount_value}%)` : ''}</p>`
+        : ''
+    }
+    ${
+      effectiveRates.extra_day_rate < effectiveRates.price_per_day
+        ? `<p style="margin:2px 0 0;font-size:0.75rem;color:#6E6853;">Mulai ${formatIDR(effectiveRates.extra_day_rate)}/hari untuk sewa panjang</p>`
+        : ''
+    }
+    <p data-total="bundle-${escapeHtml(bundle.id)}" style="display:none;margin:4px 0 0;font-size:0.8rem;font-weight:700;color:#26302B;"></p>
+    <span data-avail="bundle-${escapeHtml(bundle.id)}" style="display:none;margin-top:6px;padding:2px 8px;border-radius:999px;font-size:0.7rem;font-weight:700;"></span>
+    <div data-bundle-action="${escapeHtml(bundle.id)}" style="display:none;margin-top:8px;">
+      <button type="button" class="pesan-btn-bundle" data-bundle-id="${escapeHtml(bundle.id)}" data-bundle-name="${escapeHtml(bundle.name)}"
+        data-components="${escapeHtml(JSON.stringify(componentsForClient))}"
+        data-price-per-day="${effectiveRates.price_per_day}" data-day2-rate="${effectiveRates.day2_rate}" data-day3-rate="${effectiveRates.day3_rate}"
+        data-day4-rate="${effectiveRates.day4_rate}" data-day5-rate="${effectiveRates.day5_rate}" data-extra-day-rate="${effectiveRates.extra_day_rate}"
+        disabled
+        style="width:100%;min-height:36px;padding:8px 10px;border-radius:10px;border:none;background:#2B4739;color:#fff;font-weight:700;font-size:0.75rem;cursor:pointer;">Pilih</button>
+      <div class="qty-stepper-card" data-stepper="bundle-${escapeHtml(bundle.id)}" style="display:none;align-items:center;justify-content:space-between;gap:6px;border:1px solid #DBD5C1;border-radius:10px;padding:4px;background:#F1EEE2;">
+        <button type="button" class="step-dec-bundle" data-bundle-id="${escapeHtml(bundle.id)}" style="width:30px;height:30px;border-radius:8px;border:1px solid #DBD5C1;background:#fff;font-weight:700;cursor:pointer;">&minus;</button>
+        <span class="step-qty" data-qty="bundle-${escapeHtml(bundle.id)}" style="font-weight:700;color:#26302B;">0</span>
+        <button type="button" class="step-inc-bundle" data-bundle-id="${escapeHtml(bundle.id)}" style="width:30px;height:30px;border-radius:8px;border:1px solid #DBD5C1;background:#fff;font-weight:700;cursor:pointer;">+</button>
+      </div>
+    </div>
+  </div>
+</div>`;
+        })
+        .join('\n')}
+    </div>`
+    : '';
+
   const itemsHtml = page.items.length
     ? page.items
         .map((item) => {
@@ -1139,6 +1296,7 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
   </header>
 
   <section>
+    ${bundlesHtml}
     <h2 style="font-size:1rem;margin:0 0 4px;color:#26302B;">Katalog Alat</h2>
     ${
       page.writable
@@ -1464,6 +1622,32 @@ document.addEventListener('keydown', function (e) {
           }
           updateCardAction(it.id, it.remaining);
         });
+
+        // Paket Alat Tahap 2 -- sisa paket dihitung DI SINI dari
+        // data.items yang sama (min-over-komponen, brief bagian B),
+        // bukan field terpisah dari server. availItemsById dibangun
+        // sekali per fetch untuk dipakai bundleRemaining() tiap kartu.
+        var availItemsById = {};
+        data.items.forEach(function (it) { availItemsById[it.id] = it; });
+        document.querySelectorAll('.pesan-btn-bundle').forEach(function (btn) {
+          var bundleId = btn.dataset.bundleId;
+          var remaining = bundleRemaining(bundleId, availItemsById);
+          var badgeEl = document.querySelector('[data-avail="bundle-' + bundleId + '"]');
+          if (badgeEl) {
+            var b = badgeFor(remaining);
+            badgeEl.textContent = b.text;
+            badgeEl.style.color = b.color;
+            badgeEl.style.background = b.bg;
+            badgeEl.style.display = 'inline-block';
+          }
+          var totalEl = document.querySelector('[data-total="bundle-' + bundleId + '"]');
+          var bundleRates = getBundleRates(bundleId);
+          if (totalEl && bundleRates) {
+            totalEl.textContent = 'Total ' + rentalDaysCount(start, end) + ' hari: ' + formatIDRClient(computeItemRentalPrice(bundleRates, rentalDaysCount(start, end)));
+            totalEl.style.display = 'block';
+          }
+          updateBundleCardAction(bundleId, remaining);
+        });
       })
       .catch(function () {
         status.textContent = 'Gagal memuat ketersediaan.';
@@ -1522,7 +1706,7 @@ document.addEventListener('keydown', function (e) {
         // Review -c1 (poin 3): kontainer tombol/stepper pesan per-kartu
         // cuma ditampilkan kalau Pesanan Online aktif — badge stok & total
         // harga (di luar kontainer ini) TETAP tampil terlepas dari ini.
-        document.querySelectorAll('[data-action]').forEach(function (el) {
+        document.querySelectorAll('[data-action], [data-bundle-action]').forEach(function (el) {
           el.style.display = orderingEnabled ? 'block' : 'none';
         });
       })
@@ -1655,6 +1839,96 @@ document.addEventListener('keydown', function (e) {
     }
   }
 
+  // Paket Alat Tahap 2 -- tarif EFEKTIF paket (sudah termasuk diskon
+  // mode 'ikuti_alat' kalau ada) sudah dihitung SSR dan dititip di
+  // dataset .pesan-btn-bundle (persis pola getItemRates di atas) --
+  // tidak perlu hitung ulang combinedComponentRates/applyBundleDiscount
+  // di klien, cukup baca apa adanya. Harga final tetap dihitung ulang
+  // SERVER saat submit (bookingRequests.ts), ini murni tampilan.
+  function getBundleRates(bundleId) {
+    var btnEl = document.querySelector('.pesan-btn-bundle[data-bundle-id="' + bundleId + '"]');
+    if (!btnEl) return null;
+    return {
+      price_per_day: Number(btnEl.dataset.pricePerDay),
+      day2_rate: Number(btnEl.dataset.day2Rate),
+      day3_rate: Number(btnEl.dataset.day3Rate),
+      day4_rate: Number(btnEl.dataset.day4Rate),
+      day5_rate: Number(btnEl.dataset.day5Rate),
+      extra_day_rate: Number(btnEl.dataset.extraDayRate),
+    };
+  }
+
+  function getBundleComponents(bundleId) {
+    var btnEl = document.querySelector('.pesan-btn-bundle[data-bundle-id="' + bundleId + '"]');
+    if (!btnEl) return [];
+    try {
+      return JSON.parse(btnEl.dataset.components || '[]');
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // Sisa paket = min over komponen, floor(sisa komponen / jumlah per
+  // paket) -- dihitung di klien dari respons /availability yang SUDAH
+  // ADA (data.items, per komponen), TANPA RPC baru (brief bagian B).
+  // Kalau paket+alat satuan sama diminta bersamaan, perhitungan sisa
+  // STOK TETAP per-komponen (angka ini cuma buat tampilan "Sisa X
+  // paket" di kartu) -- penjumlahan gabungan sungguhan ditegakkan
+  // server-side saat submit (bookingRequests.ts).
+  function bundleRemaining(bundleId, availItemsById) {
+    var components = getBundleComponents(bundleId);
+    if (components.length === 0) return 0;
+    var min = Infinity;
+    for (var i = 0; i < components.length; i++) {
+      var avail = availItemsById[components[i].item_id];
+      var remainingForComponent = avail ? Math.floor(avail.remaining / components[i].quantity) : 0;
+      if (remainingForComponent < min) min = remainingForComponent;
+    }
+    return min === Infinity ? 0 : Math.max(0, min);
+  }
+
+  // Pola PERSIS updateCardAction() di atas, selector/atribut beda
+  // (data-bundle-action, .pesan-btn-bundle, .step-inc-bundle/-dec-bundle)
+  // supaya tidak bentrok dengan kartu alat satuan.
+  function updateBundleCardAction(bundleId, remainingOverride) {
+    var actionEl = document.querySelector('[data-bundle-action="' + bundleId + '"]');
+    if (!actionEl) return;
+    if (typeof remainingOverride === 'number') actionEl.dataset.remaining = String(remainingOverride);
+    var remaining = Number(actionEl.dataset.remaining || 0);
+    actionEl.style.display = orderingEnabled ? 'block' : 'none';
+    if (!orderingEnabled) return;
+
+    var btnEl = actionEl.querySelector('.pesan-btn-bundle');
+    var stepperEl = actionEl.querySelector('.qty-stepper-card');
+    var cartEntry = cart.find(function (c) { return c.bundle_id === bundleId; });
+
+    if (cartEntry && cartEntry.quantity > 0) {
+      btnEl.style.display = 'none';
+      stepperEl.style.display = 'flex';
+      stepperEl.querySelector('.step-qty').textContent = String(cartEntry.quantity);
+      stepperEl.querySelector('.step-inc-bundle').disabled = cartEntry.quantity >= remaining;
+      return;
+    }
+
+    stepperEl.style.display = 'none';
+    btnEl.style.display = 'block';
+    if (remaining <= 0) {
+      btnEl.disabled = true;
+      btnEl.textContent = 'Habis';
+    } else {
+      btnEl.disabled = false;
+      btnEl.textContent = 'Tambah';
+    }
+  }
+
+  // Dipakai tombol +/- di dalam modal keranjang (renderCart) yang cuma
+  // punya SATU entry campuran alat/paket -- membedakan mana updater yang
+  // dipanggil (kartu alat vs kartu paket) dari ada-tidaknya bundle_id.
+  function updateEntryCardAction(entry) {
+    if (entry.bundle_id) updateBundleCardAction(entry.bundle_id);
+    else updateCardAction(entry.item_id);
+  }
+
   var cartBar = document.getElementById('cart-bar');
   var cartSummaryDesktop = document.getElementById('cart-summary-desktop');
   var cartSummaryMobile = document.getElementById('cart-summary-mobile');
@@ -1732,7 +2006,14 @@ document.addEventListener('keydown', function (e) {
     var totalQty = cart.reduce(function (sum, c) { return sum + c.quantity; }, 0);
     if (totalQty > 0) {
       cartBar.style.display = 'flex';
-      var totalLabel = totalQty + ' alat · ' + formatIDRClient(cartTotalPrice());
+      // Paket Alat Tahap 2 -- "alat"/"paket" dipisah (bukan selalu
+      // "N alat") karena keranjang sekarang bisa berisi dua-duanya.
+      var itemQty = cart.reduce(function (sum, c) { return sum + (c.bundle_id ? 0 : c.quantity); }, 0);
+      var bundleQty = cart.reduce(function (sum, c) { return sum + (c.bundle_id ? c.quantity : 0); }, 0);
+      var qtyParts = [];
+      if (bundleQty > 0) qtyParts.push(bundleQty + ' paket');
+      if (itemQty > 0) qtyParts.push(itemQty + ' alat');
+      var totalLabel = (qtyParts.length ? qtyParts.join(' + ') : totalQty + ' alat') + ' · ' + formatIDRClient(cartTotalPrice());
       // Ringkasan desktop: nama tiap alat (maks 3, sisanya "+N lainnya")
       // + ringkasan total — permintaan Andi, beda dari HP yang cuma
       // ringkas (nama-nama alat ada di panel yang baru dibuka, bukan di
@@ -1832,11 +2113,11 @@ document.addEventListener('keydown', function (e) {
       decBtn.type = 'button';
       decBtn.textContent = '−';
       decBtn.addEventListener('click', function () {
-        var itemId = cart[idx].item_id;
-        cart[idx].quantity--;
-        if (cart[idx].quantity <= 0) cart.splice(idx, 1);
+        var entry = cart[idx];
+        entry.quantity--;
+        if (entry.quantity <= 0) cart.splice(idx, 1);
         renderCart();
-        updateCardAction(itemId);
+        updateEntryCardAction(entry);
       });
       stepper.appendChild(decBtn);
 
@@ -1848,10 +2129,10 @@ document.addEventListener('keydown', function (e) {
       incBtn.type = 'button';
       incBtn.textContent = '+';
       incBtn.addEventListener('click', function () {
-        var itemId = cart[idx].item_id;
-        if (cart[idx].quantity < cart[idx].remaining) cart[idx].quantity++;
+        var entry = cart[idx];
+        if (entry.quantity < entry.remaining) entry.quantity++;
         renderCart();
-        updateCardAction(itemId);
+        updateEntryCardAction(entry);
       });
       stepper.appendChild(incBtn);
       right.appendChild(stepper);
@@ -1906,6 +2187,49 @@ document.addEventListener('keydown', function (e) {
       if (cart[idx].quantity <= 0) cart.splice(idx, 1);
       renderCart();
       updateCardAction(itemId);
+    });
+  });
+
+  // Paket Alat Tahap 2 -- pola PERSIS tiga listener alat di atas, untuk
+  // kartu paket (.pesan-btn-bundle/.step-inc-bundle/.step-dec-bundle).
+  // Entry keranjang paket pakai field yang SAMA (name/detail/quantity/
+  // remaining/rates) supaya cartTotalPrice/renderCart/renderCartPanel
+  // di atas bisa dipakai TANPA perubahan -- cuma dibedakan lewat
+  // keberadaan bundle_id (bukan item_id).
+  document.querySelectorAll('.pesan-btn-bundle').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (btn.disabled) return;
+      var bundleId = btn.dataset.bundleId;
+      var actionEl = document.querySelector('[data-bundle-action="' + bundleId + '"]');
+      var remaining = Number(actionEl ? actionEl.dataset.remaining : 0) || 0;
+      var existing = cart.find(function (c) { return c.bundle_id === bundleId; });
+      if (existing) {
+        if (existing.quantity < remaining) existing.quantity++;
+      } else {
+        cart.push({ bundle_id: bundleId, name: '📦 ' + btn.dataset.bundleName, detail: '', quantity: 1, remaining: remaining, rates: getBundleRates(bundleId) });
+      }
+      renderCart();
+      updateBundleCardAction(bundleId);
+    });
+  });
+  document.querySelectorAll('.step-inc-bundle').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var bundleId = btn.dataset.bundleId;
+      var entry = cart.find(function (c) { return c.bundle_id === bundleId; });
+      if (entry && entry.quantity < entry.remaining) entry.quantity++;
+      renderCart();
+      updateBundleCardAction(bundleId);
+    });
+  });
+  document.querySelectorAll('.step-dec-bundle').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var bundleId = btn.dataset.bundleId;
+      var idx = cart.findIndex(function (c) { return c.bundle_id === bundleId; });
+      if (idx === -1) return;
+      cart[idx].quantity--;
+      if (cart[idx].quantity <= 0) cart.splice(idx, 1);
+      renderCart();
+      updateBundleCardAction(bundleId);
     });
   });
 
@@ -2010,7 +2334,9 @@ document.addEventListener('keydown', function (e) {
         note: note || null,
         start_date: orderDates.start,
         end_date: orderDates.end,
-        items: cart.map(function (c) { return { item_id: c.item_id, quantity: c.quantity }; }),
+        items: cart.map(function (c) {
+          return c.bundle_id ? { bundle_id: c.bundle_id, quantity: c.quantity } : { item_id: c.item_id, quantity: c.quantity };
+        }),
         payment_method: paymentMethodInput.value,
         terms_version_id: termsContent ? termsVersionId : null,
         website: document.getElementById('order-website').value, // honeypot

@@ -76,7 +76,17 @@ export function useBundles(businessId: string | undefined) {
     }
 
     setLoading(true);
-    const { data } = await supabase.from('bundles').select(SELECT_FIELDS).order('name');
+    // Urutan komponen (item_id) WAJIB deterministik dan SAMA DI SEMUA
+    // RUNTIME (Etalase/get_public_page, Express bookingRequests.ts, dan
+    // prefill Konfirmasi) -- allocateBundlePrice() melempar sisa
+    // pembulatan rupiah ke komponen PERTAMA, jadi urutan yang beda bisa
+    // menghasilkan alokasi beda walau totalnya sama (catatan koordinator
+    // 16 Nov 2026, Paket Alat Tahap 2).
+    const { data } = await supabase
+      .from('bundles')
+      .select(SELECT_FIELDS)
+      .order('name')
+      .order('item_id', { foreignTable: 'bundle_items' });
 
     setAllBundles((data as unknown as Bundle[]) ?? []);
     setLoading(false);
