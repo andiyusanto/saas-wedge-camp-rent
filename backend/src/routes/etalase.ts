@@ -1193,7 +1193,7 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
   }
   .avail-sep { color: #6E6853; font-size: 0.8rem; padding-bottom: 9px; }
   #avail-check { padding: 8px 14px; border-radius: 10px; border: none; background: #2B4739; color: #fff; font-weight: 700; font-size: 0.8rem; cursor: pointer; flex-shrink: 0; }
-  .pesan-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .pesan-btn:disabled, .pesan-btn-bundle:disabled { opacity: 0.5; cursor: not-allowed; }
   @media (max-width: 420px) {
     .avail-controls { flex-direction: column; align-items: stretch; }
     /* flex-basis 130px di .avail-field (atas) dimaksudkan sebagai
