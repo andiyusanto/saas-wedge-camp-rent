@@ -453,13 +453,27 @@ export function HistoryScreen({
                       >
                         {notaLoadingId === b.id ? '...' : 'Nota'}
                       </button>
-                      {remaining !== 0 && b.status !== 'dibatalkan' && (
+                      {/* Perbaikan koordinator 17 Nov 2026: "Bayar" cuma
+                          relevan kalau masih ada sisa (remaining>0) --
+                          Lebih Bayar (remaining<0) ditawari "Pengembalian"
+                          (koreksi/refund), bukan "Bayar", karena tidak ada
+                          yang perlu dibayar lagi. */}
+                      {remaining > 0 && b.status !== 'dibatalkan' && (
                         <button
                           type="button"
                           onClick={() => setPaymentTarget(b)}
                           className="text-[11px] font-bold text-[#2B4739] underline"
                         >
                           Bayar
+                        </button>
+                      )}
+                      {remaining < 0 && b.status !== 'dibatalkan' && (
+                        <button
+                          type="button"
+                          onClick={() => setPaymentTarget(b)}
+                          className="text-[11px] font-bold text-[#A65C2A] underline"
+                        >
+                          Pengembalian
                         </button>
                       )}
                       {b.status !== 'dibatalkan' && (
@@ -494,11 +508,21 @@ export function HistoryScreen({
               )
             : 0
         }
+        mode={
+          paymentTarget &&
+          computeRemainingBalance(
+            paymentTarget.total_price,
+            paymentTarget.penalties.reduce((sum, p) => sum + p.amount, 0),
+            paymentTarget.dp_paid,
+          ) < 0
+            ? 'refund'
+            : 'bayar'
+        }
         onSubmit={async (body) => {
           try {
             await apiFetch(session, `/api/bookings/${paymentTarget!.id}/payments`, {
               method: 'POST',
-              body: JSON.stringify({ ...body, kind: 'pelunasan' }),
+              body: JSON.stringify(body),
             });
             await refresh();
             return { error: null };

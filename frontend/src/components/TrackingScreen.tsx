@@ -517,7 +517,17 @@ export function TrackingScreen({
               )
             : 0
         }
-        onSubmit={(body) => addPayment(paymentTarget!.id, { ...body, kind: 'pelunasan' })}
+        mode={
+          paymentTarget &&
+          computeRemainingBalance(
+            paymentTarget.total_price,
+            paymentTarget.penalties.reduce((sum, p) => sum + p.amount, 0),
+            paymentTarget.dp_paid,
+          ) < 0
+            ? 'refund'
+            : 'bayar'
+        }
+        onSubmit={(body) => addPayment(paymentTarget!.id, body)}
       />
 
       <UbahAlatModal
@@ -994,13 +1004,29 @@ function BookingCard({
               {remaining > 0 ? formatIDR(remaining) : remaining < 0 ? formatIDR(Math.abs(remaining)) : 'LUNAS'}
             </span>
           </div>
-          {remaining !== 0 && (
+          {/* Perbaikan koordinator 17 Nov 2026: "Bayar" cuma relevan kalau
+              masih ada sisa (remaining>0) -- kalau LUNAS (remaining===0)
+              tidak ada aksi yang relevan sama sekali (disembunyikan,
+              bukan cuma dinonaktifkan). Kalau Lebih Bayar (remaining<0),
+              bukan "Bayar" lagi (tidak ada yang perlu dibayar) -- tawarkan
+              "Catat Pengembalian" (koreksi/refund, owner-only, ditegakkan
+              backend) supaya vendor sadar ada uang yang mesti dikembalikan. */}
+          {remaining > 0 && (
             <button
               type="button"
               onClick={onCatatPembayaran}
               className="w-full text-center text-[11px] font-bold text-[#2B4739] underline pt-1"
             >
               Catat Pembayaran
+            </button>
+          )}
+          {remaining < 0 && (
+            <button
+              type="button"
+              onClick={onCatatPembayaran}
+              className="w-full text-center text-[11px] font-bold text-[#A65C2A] underline pt-1"
+            >
+              Catat Pengembalian
             </button>
           )}
         </div>
