@@ -126,6 +126,46 @@ test('komponen paket dihapus -> jumlah alokasi sisa + porsi yang dihapus = total
   assert.equal(remainingSum + headlampShare, totalPaket);
 });
 
+// Skenario WAJIB koordinator 16 Nov 2026 (perbaikan kolom Rupiah --
+// `step` kelipatan sebelumnya menolak nominal sampai satuan, mis.
+// Rp12.555): pastikan perhitungan turunan (total N hari, alokasi paket)
+// tetap BULAT TANPA DESIMAL untuk nominal ganjil seperti ini -- tidak
+// ada operasi di computeItemRentalPrice/allocateBundlePrice yang bisa
+// menghasilkan desimal selama input sudah integer (cuma penjumlahan +
+// Math.floor/Math.round), jadi ini murni tes regresi, bukan perbaikan.
+test('tarif Rp12.555/hari (nominal satuan, bukan kelipatan ribuan) -- total 3 hari tetap bulat & tepat', () => {
+  const rates: ItemDayRates = { price_per_day: 12_555, day2_rate: 12_555, day3_rate: 12_555, day4_rate: 12_555, day5_rate: 12_555, extra_day_rate: 12_555 };
+  const total = computeItemRentalPrice(rates, 3);
+  assert.equal(total, 37_665); // 12555 * 3, bulat, tanpa pembulatan/desimal
+  assert.equal(Number.isInteger(total), true);
+});
+
+test('paket "harga sendiri" Rp12.555/hari + potongan -- alokasi ke komponen tetap bulat & jumlahnya persis total', () => {
+  const tenda12555: ItemDayRates = { price_per_day: 12_555, day2_rate: 12_555, day3_rate: 12_555, day4_rate: 12_555, day5_rate: 12_555, extra_day_rate: 12_555 };
+  const carrier9999: ItemDayRates = { price_per_day: 9_999, day2_rate: 9_999, day3_rate: 9_999, day4_rate: 9_999, day5_rate: 9_999, extra_day_rate: 9_999 };
+  const components: BundleComponent[] = [
+    { item_id: 'tenda', quantityPerBundle: 1, catalogRates: tenda12555 },
+    { item_id: 'carrier', quantityPerBundle: 1, catalogRates: carrier9999 },
+  ];
+  // Paket "harga sendiri" Rp12.555/hari (independen dari katalog komponen) untuk 3 hari.
+  const bundleOwnRates: ItemDayRates = { price_per_day: 12_555, day2_rate: 12_555, day3_rate: 12_555, day4_rate: 12_555, day5_rate: 12_555, extra_day_rate: 12_555 };
+  const totalPaket = computeItemRentalPrice(bundleOwnRates, 3);
+  assert.equal(totalPaket, 37_665);
+  assert.equal(Number.isInteger(totalPaket), true);
+
+  const allocated = allocateBundlePrice(components, totalPaket, 3);
+  for (const a of allocated) assert.equal(Number.isInteger(a.subtotalPerInstance), true);
+  const sum = allocated.reduce((s, a) => s + a.subtotalPerInstance, 0);
+  assert.equal(sum, totalPaket); // alokasi = total persis, tanpa desimal/selisih
+});
+
+test('potongan nominal Rp12.555 pada mode ikuti_alat -- hasil tiap tingkat tetap bulat', () => {
+  const tenda: ItemDayRates = { price_per_day: 50_000, day2_rate: 50_000, day3_rate: 50_000, day4_rate: 50_000, day5_rate: 50_000, extra_day_rate: 50_000 };
+  const discounted = applyBundleDiscount(tenda, 'nominal', 12_555);
+  assert.equal(discounted.price_per_day, 37_445); // 50000 - 12555, bulat
+  assert.equal(Number.isInteger(discounted.price_per_day), true);
+});
+
 test('Perpanjang 1 hari pada paket "harga sendiri" -- tambahan proporsional harga paket, bukan harga katalog komponen', () => {
   // Skenario koordinator: paket harga sendiri Rp75rb/hari, komponen
   // (kalau disewa lepas) totalnya Rp120rb/hari -- rasio 75/120 = 0.625.
