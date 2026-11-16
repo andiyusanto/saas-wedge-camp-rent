@@ -17,7 +17,10 @@ export type HistorySummary = {
   totalDendaKerusakan: number;
 };
 
-const KERUSAKAN_TYPES = new Set(['kerusakan', 'kehilangan']);
+// Diekspor (bukan lokal lagi) supaya reportAggregation.ts (Laporan,
+// koordinator 16 Nov 2026) bisa pakai definisi SAMA PERSIS, bukan
+// menyalin dua rumus yang bisa diam-diam beda.
+export const KERUSAKAN_TYPES = new Set(['kerusakan', 'kehilangan']);
 
 // Diekstrak dari HistoryScreen.tsx (dulu dihitung inline cuma untuk
 // StatCard) supaya satu fungsi yang sama dipakai di layar DAN di export —
@@ -54,11 +57,11 @@ export function computeHistorySummary(bookingsExcludingCancelled: HistoryBooking
   };
 }
 
-function itemSubtotal(item: HistoryBooking['items'][number], days: number): number {
+export function itemSubtotal(item: HistoryBooking['items'][number], days: number): number {
   return item.subtotal ?? item.price_at_booking * item.quantity * days;
 }
 
-function bookingPenaltyByType(b: HistoryBooking, type: 'keterlambatan' | 'kerusakan-kehilangan'): number {
+export function bookingPenaltyByType(b: HistoryBooking, type: 'keterlambatan' | 'kerusakan-kehilangan'): number {
   return b.penalties
     .filter((p) => (type === 'keterlambatan' ? p.type === 'keterlambatan' : KERUSAKAN_TYPES.has(p.type)))
     .reduce((sum, p) => sum + p.amount, 0);
@@ -119,7 +122,7 @@ function buildPerAlatRows(bookingsExcludingCancelled: HistoryBooking[]): PerAlat
 // Date.UTC(y,m-1,d) menghasilkan objek Date yang komponen UTC-nya PERSIS
 // y/m/d yang diminta, apa pun timezone browser vendor — satu-satunya
 // kombinasi yang terbukti tidak pernah bergeser.
-function excelDate(dateStr: string): Date {
+export function excelDate(dateStr: string): Date {
   const [y, m, d] = dateStr.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, d));
 }
@@ -139,6 +142,111 @@ const STATUS_LABEL_FOR_FILTER: Record<string, string> = {
   selesai: 'Selesai',
   dibatalkan: 'Dibatalkan',
 };
+
+// Laporan (brief 16 Nov 2026) — 2 sheet baru dalam SATU file terpisah
+// dari export Riwayat di atas (keputusan koordinator: tombol Unduh
+// Excel di tab Laporan terpisah dari tombol Riwayat yang sudah ada).
+// Nama sheet persis permintaan brief: "Laporan Bulanan" & "Laporan per
+// Alat".
+import type { MonthlyReportRow, PerAlatReportResult } from './reportAggregation';
+
+export async function downloadLaporanExcel(args: {
+  year: number;
+  monthlyRows: MonthlyReportRow[];
+  periodStart: string;
+  periodEnd: string;
+  perAlatResult: PerAlatReportResult;
+}): Promise<void> {
+  const ExcelJS = (await import('exceljs')).default;
+  const workbook = new ExcelJS.Workbook();
+  const MONTH_NAMES_ID = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
+  const bulananSheet = workbook.addWorksheet('Laporan Bulanan');
+  bulananSheet.columns = [
+    { header: 'Bulan', key: 'month', width: 14 },
+    { header: 'Pendapatan Sewa (Rp)', key: 'pendapatanSewa', width: 18 },
+    { header: 'Denda Telat (Rp)', key: 'dendaTelat', width: 16 },
+    { header: 'Denda Rusak/Hilang (Rp)', key: 'dendaKerusakan', width: 18 },
+    { header: 'Total Pemasukan (Rp)', key: 'totalPemasukan', width: 18 },
+    { header: 'Sudah Diterima (Rp)', key: 'sudahDiterima', width: 18 },
+    { header: 'Belum Lunas (Rp)', key: 'piutang', width: 16 },
+    { header: 'Jumlah Transaksi', key: 'jumlahTransaksi', width: 16 },
+    { header: 'Rata-rata per Transaksi (Rp)', key: 'rataRata', width: 20 },
+    { header: 'Perubahan vs Bulan Lalu (%)', key: 'perubahan', width: 20 },
+  ];
+  bulananSheet.getRow(1).font = { bold: true };
+  for (const row of args.monthlyRows) {
+    const r = bulananSheet.addRow({
+      month: MONTH_NAMES_ID[row.month - 1],
+      pendapatanSewa: row.pendapatanSewa,
+      dendaTelat: row.dendaTelat,
+      dendaKerusakan: row.dendaKerusakan,
+      totalPemasukan: row.totalPemasukan,
+      sudahDiterima: row.sudahDiterima,
+      piutang: row.piutang,
+      jumlahTransaksi: row.jumlahTransaksi,
+      rataRata: row.rataRata ?? 0,
+      perubahan: row.perubahanPersenVsBulanLalu == null ? 'Tidak ada pembanding' : `${row.perubahanPersenVsBulanLalu.toFixed(1)}%`,
+    });
+    for (const key of ['pendapatanSewa', 'dendaTelat', 'dendaKerusakan', 'totalPemasukan', 'sudahDiterima', 'piutang', 'rataRata']) {
+      r.getCell(key).numFmt = '#,##0';
+    }
+  }
+  const note1 = bulananSheet.addRow(['"Sudah Diterima" mengikuti bulan transaksinya (tanggal ambil) — Sewalog tidak menyimpan tanggal pembayaran sungguhan. Transaksi Dibatalkan tidak dihitung.']);
+  note1.getCell(1).font = { italic: true, color: { argb: 'FFA65C2A' } };
+  bulananSheet.mergeCells(note1.number, 1, note1.number, 10);
+
+  const perAlatSheet = workbook.addWorksheet('Laporan per Alat');
+  perAlatSheet.columns = [
+    { header: 'Nama Alat', key: 'name', width: 28 },
+    { header: 'Jumlah Sewa', key: 'jumlahTransaksi', width: 14 },
+    { header: 'Total Unit-Hari', key: 'totalUnitHari', width: 16 },
+    { header: 'Pendapatan (Rp)', key: 'pendapatan', width: 18 },
+    { header: 'Keterpakaian (%)', key: 'keterpakaian', width: 16 },
+  ];
+  perAlatSheet.getRow(1).font = { bold: true };
+  for (const row of args.perAlatResult.rows) {
+    const r = perAlatSheet.addRow({
+      name: row.name,
+      jumlahTransaksi: row.jumlahTransaksi,
+      totalUnitHari: row.totalUnitHari,
+      pendapatan: row.pendapatan,
+      keterpakaian: Number(row.keterpakaianPersen.toFixed(1)),
+    });
+    r.getCell('pendapatan').numFmt = '#,##0';
+  }
+  perAlatSheet.addRow([]);
+  if (args.perAlatResult.itemsNeverRented.length > 0) {
+    const headerRow = perAlatSheet.addRow(['Alat Tidak Pernah Disewa di Periode Ini']);
+    headerRow.getCell(1).font = { bold: true };
+    for (const item of args.perAlatResult.itemsNeverRented) perAlatSheet.addRow([item.name]);
+    perAlatSheet.addRow([]);
+  }
+  if (args.perAlatResult.bundleSummary.length > 0) {
+    const headerRow = perAlatSheet.addRow(['Ringkasan per Paket']);
+    headerRow.getCell(1).font = { bold: true };
+    const subHeaderRow = perAlatSheet.addRow(['Nama Paket', 'Jumlah Kali Dipilih', 'Pendapatan (Rp)']);
+    subHeaderRow.font = { bold: true };
+    for (const b of args.perAlatResult.bundleSummary) {
+      const r = perAlatSheet.addRow([`Paket ${b.bundleName}`, b.jumlahKaliDipilih, b.pendapatan]);
+      r.getCell(3).numFmt = '#,##0';
+    }
+  }
+  const note2 = perAlatSheet.addRow(['Keterpakaian dihitung dari hari kalender ambil s/d kembali yang jatuh DI DALAM periode (dipotong kalau sewa melintasi batas periode), dibagi stok alat SAAT INI x jumlah hari periode. Pendapatan per alat dihitung dari rincian alat, bisa sedikit berbeda dari total transaksi bila totalnya diubah manual.']);
+  note2.getCell(1).font = { italic: true, color: { argb: 'FFA65C2A' } };
+  perAlatSheet.mergeCells(note2.number, 1, note2.number, 5);
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `laporan_${args.year}_${args.periodStart}_${args.periodEnd}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
 export async function downloadHistoryExcel(allFiltered: HistoryBooking[], filters: HistoryExportFilters): Promise<void> {
   const ExcelJS = (await import('exceljs')).default;

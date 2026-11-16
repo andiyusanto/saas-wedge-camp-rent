@@ -13,6 +13,15 @@ export type HistoryBookingItem = {
   quantity: number;
   subtotal: number | null;
   price_at_booking: number;
+  // Penanda paket (migration 064, Tahap 1) — ditambah untuk "Ringkasan per
+  // Paket" di Laporan (utils/reportAggregation.ts). null = alat biasa.
+  bundle_id: string | null;
+  bundle_instance_id: string | null;
+  bundle_name: string | null;
+  // total_units SAAT INI (bukan snapshot) — dipakai keterpakaian % di
+  // Laporan. null kalau alat sudah dihapus dari katalog (tidak mungkin
+  // sebenarnya, items tidak pernah di-hard-delete, cuma jaga-jaga join null).
+  total_units: number | null;
 };
 
 export type HistoryBooking = {
@@ -31,12 +40,14 @@ export type HistoryBooking = {
   rental_day_mode: RentalDayMode | null;
 };
 
-// subtotal/price_at_booking (migration 034) dan penalties.item_id (migration
-// 029) ditambah buat sheet "Per Alat" & "Transaksi" di export Excel — lihat
-// utils/historyExport.ts. Pola fallback subtotal null sama persis
-// InvoiceModal.tsx (baris lama sebelum migration 034, tidak di-backfill).
+// subtotal/price_at_booking (migration 034), penalties.item_id (migration
+// 029), bundle_id/bundle_instance_id/bundle_name (migration 064), dan
+// items.total_units ditambah buat Laporan (utils/reportAggregation.ts) &
+// export Excel (utils/historyExport.ts). Pola fallback subtotal null sama
+// persis InvoiceModal.tsx (baris lama sebelum migration 034, tidak
+// di-backfill).
 const SELECT_FIELDS =
-  'id, booking_number, status, start_date, end_date, total_price, dp_paid, rental_day_mode, customers(name, phone), booking_items(quantity, subtotal, price_at_booking, items(id, name, category, variant, size, color)), penalties(type, amount, item_id)';
+  'id, booking_number, status, start_date, end_date, total_price, dp_paid, rental_day_mode, customers(name, phone), booking_items(quantity, subtotal, price_at_booking, bundle_id, bundle_instance_id, bundle_name, items(id, name, category, variant, size, color, total_units)), penalties(type, amount, item_id)';
 
 type RawBooking = {
   id: string;
@@ -53,6 +64,9 @@ type RawBooking = {
         quantity: number;
         subtotal: number | null;
         price_at_booking: number;
+        bundle_id: string | null;
+        bundle_instance_id: string | null;
+        bundle_name: string | null;
         items: {
           id: string;
           name: string;
@@ -60,6 +74,7 @@ type RawBooking = {
           variant: string | null;
           size: string | null;
           color: string | null;
+          total_units: number;
         } | null;
       }[]
     | null;
@@ -87,9 +102,75 @@ function mapBooking(row: RawBooking): HistoryBooking {
       quantity: bi.quantity,
       subtotal: bi.subtotal,
       price_at_booking: bi.price_at_booking,
+      bundle_id: bi.bundle_id,
+      bundle_instance_id: bi.bundle_instance_id,
+      bundle_name: bi.bundle_name,
+      total_units: bi.items?.total_units ?? null,
     })),
     penalties: row.penalties ?? [],
   };
+}
+
+// 'start_date' -- booking yang MULAI di [from,to] (pola Riwayat/sheet
+// "Per Alat" yang sudah ada, dan Laporan Bulanan). 'overlap' -- booking
+// yang RENTANG tanggalnya bersinggungan dengan [from,to] sama sekali
+// (start <= to DAN end >= from) -- dipakai Laporan per Alat supaya
+// keterpakaian bisa dipotong ke periode (koordinator 16 Nov 2026, lihat
+// utils/reportAggregation.ts clipOccupiedDaysToPeriod()) tanpa
+// kehilangan booking yang melintasi batas periode.
+export type HistoryDateFilterMode = 'start_date' | 'overlap';
+
+// Diekstrak dari useHistory() di bawah (TIDAK diubah perilakunya) supaya
+// bisa dipakai juga oleh useLaporanData.ts dengan filter tanggal yang
+// independen dari filter Riwayat. Paginasi (CLAUDE.md bagian 7): halaman
+// DIJALANKAN PARALEL (koordinator 16 Nov 2026) -- jumlah total diketahui
+// lebih dulu lewat count query (head:true, filter SAMA), baru semua
+// request .range() ditembak sekaligus lewat Promise.all, bukan menunggu
+// satu-satu. Latensi didominasi round-trip jaringan, bukan waktu
+// eksekusi Postgres -- untuk ~5.000 booking/tahun (5 halaman), ini
+// mengubah "5x round-trip berurutan" jadi "1x round-trip" (semua
+// berjalan bersamaan), jauh lebih cepat dari sebelumnya tanpa menambah
+// query N+1 apa pun.
+export async function fetchHistoryBookings(
+  businessId: string,
+  from: string,
+  to: string,
+  mode: HistoryDateFilterMode = 'start_date',
+): Promise<{ rows: HistoryBooking[]; error: string | null }> {
+  if (!supabase) return { rows: [], error: null };
+
+  const PAGE_SIZE = 1000;
+
+  // mode 'overlap': booking yang rentangnya bersinggungan dengan [from,to]
+  // -- start_date <= to DAN end_date >= from (termasuk booking yang mulai
+  // sebelum `from` tapi masih berlangsung, atau berakhir sesudah `to`).
+  const countBase = supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('business_id', businessId);
+  const countQuery = mode === 'start_date' ? countBase.gte('start_date', from).lte('start_date', to) : countBase.lte('start_date', to).gte('end_date', from);
+  const { count, error: countError } = await countQuery;
+  if (countError) return { rows: [], error: countError.message };
+
+  const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
+  const pageIndexes = Array.from({ length: totalPages }, (_, i) => i);
+
+  const pageResults = await Promise.all(
+    pageIndexes.map((pageIndex) => {
+      const offset = pageIndex * PAGE_SIZE;
+      const base = supabase!
+        .from('bookings')
+        .select(SELECT_FIELDS)
+        .eq('business_id', businessId)
+        .order('start_date', { ascending: false })
+        .order('id', { ascending: false });
+      const filtered = mode === 'start_date' ? base.gte('start_date', from).lte('start_date', to) : base.lte('start_date', to).gte('end_date', from);
+      return filtered.range(offset, offset + PAGE_SIZE - 1);
+    }),
+  );
+
+  const firstError = pageResults.find((r) => r.error)?.error;
+  if (firstError) return { rows: [], error: firstError.message };
+
+  const rows = pageResults.flatMap((r) => (r.data ?? []) as unknown as RawBooking[]);
+  return { rows: rows.map(mapBooking), error: null };
 }
 
 // Riwayat cuma butuh data tersimpan (transaksi yang range tanggalnya sudah
@@ -113,39 +194,8 @@ export function useHistory(businessId: string | undefined, from: string, to: str
     setLoading(true);
     setError(null);
 
-    // Supabase/PostgREST memotong respons ke max_rows (1.000 di project ini)
-    // TANPA error — periode dengan lebih dari 1.000 transaksi akan
-    // terpotong diam-diam (total omset/piutang & ekspor Excel ikut salah)
-    // kalau cuma satu query. Diambil per halaman lewat .range() sampai
-    // habis (brief skala data 2026-11-11). Urutan WAJIB deterministik+unik
-    // (start_date lalu id sebagai tiebreaker) — tanpa itu PostgREST tidak
-    // menjamin urutan antar-halaman tetap sama, baris bisa dobel/terlompati.
-    const PAGE_SIZE = 1000;
-    async function fetchAllBookings(): Promise<{ rows: RawBooking[]; error: { message: string } | null }> {
-      const rows: RawBooking[] = [];
-      let offset = 0;
-      for (;;) {
-        const { data, error } = await supabase!
-          .from('bookings')
-          .select(SELECT_FIELDS)
-          .eq('business_id', businessId!)
-          .gte('start_date', from)
-          .lte('start_date', to)
-          .order('start_date', { ascending: false })
-          .order('id', { ascending: false })
-          .range(offset, offset + PAGE_SIZE - 1);
-
-        if (error) return { rows, error };
-        const page = (data ?? []) as unknown as RawBooking[];
-        rows.push(...page);
-        if (page.length < PAGE_SIZE) break;
-        offset += PAGE_SIZE;
-      }
-      return { rows, error: null };
-    }
-
     const [{ rows: allRows, error: pageError }, dueTodayResult] = await Promise.all([
-      fetchAllBookings(),
+      fetchHistoryBookings(businessId, from, to, 'start_date'),
       supabase
         .from('bookings')
         .select('id', { count: 'exact', head: true })
@@ -155,12 +205,12 @@ export function useHistory(businessId: string | undefined, from: string, to: str
     ]);
 
     if (pageError) {
-      setError(pageError.message);
+      setError(pageError);
       setLoading(false);
       return;
     }
 
-    setBookings(allRows.map(mapBooking));
+    setBookings(allRows);
     setDueTodayCount(dueTodayResult.count ?? 0);
     setLoading(false);
   }, [businessId, from, to]);

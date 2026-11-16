@@ -576,6 +576,47 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           jarang dipakai.
         </p>
         <Note>Sama seperti Kelola Usaha, tab ini cuma terlihat dan bisa diakses oleh pemilik.</Note>
+
+        <h4 className="text-sm font-bold text-[#26302B] pt-2">Laporan</h4>
+        <p>
+          Sub-tab <Ui>Laporan</Ui> di samping <Ui>Transaksi</Ui> — murni dari data yang sudah tersimpan, <strong>BUKAN</strong>{' '}
+          laporan keuangan/neraca lengkap (tidak ada input pengeluaran). Ada dua bagian: <Ui>Pemasukan per Bulan</Ui>{' '}
+          dan <Ui>Laporan per Alat</Ui>, masing-masing punya tombol <Ui>Unduh Excel</Ui> sendiri (terpisah dari
+          tombol Unduh Excel tab Transaksi) yang berisi kedua sheet laporan sekaligus.
+        </p>
+        <Steps
+          items={[
+            <>
+              <Ui>Pemasukan per Bulan</Ui>: pilih tahun, lihat grafik batang 12 bulan — tekan salah satu batang untuk
+              lihat rincian bulan itu: pendapatan sewa, denda telat, denda rusak/hilang, sudah diterima, belum
+              lunas, jumlah transaksi, rata-rata per transaksi, dan naik/turun (%) dibanding bulan sebelumnya.
+            </>,
+            <>
+              <Ui>Laporan per Alat</Ui>: pilih periode (bulan/tahun/rentang tanggal bebas), lihat tabel per alat —
+              berapa kali disewa, total unit-hari, pendapatan, dan persen keterpakaian. Bisa diurutkan berdasarkan
+              Pendapatan/Keterpakaian/Jumlah Sewa. Alat aktif yang tidak pernah disewa di periode itu ditampilkan
+              terpisah di bawah tabel, begitu juga ringkasan paket (berapa kali tiap paket dipilih) kalau usahamu
+              punya Paket Alat (<SectionLink id="g-katalog">bagian 5</SectionLink>).
+            </>,
+          ]}
+        />
+        <Note>
+          Bulan dihitung dari tanggal AMBIL (konsisten dengan tab Transaksi), dan transaksi Dibatalkan tidak dihitung
+          di kedua bagian. Januari (atau bulan pertama yang ada datanya) tidak punya pembanding "naik/turun" karena
+          tidak ada data bulan sebelumnya dalam tahun yang sama.
+        </Note>
+        <Note>
+          Keterpakaian dihitung dari hari KALENDER ambil s/d kembali yang jatuh DI DALAM periode yang dipilih —
+          kalau sewanya melintasi batas periode (mis. mulai akhir bulan lalu, kembali awal bulan ini), cuma hari
+          yang masuk periode ini yang dihitung, supaya angkanya tidak pernah lebih dari 100%. Dibagi stok alat SAAT
+          INI × jumlah hari periode — kalau stok diubah di tengah periode, perubahan itu tidak dihitung ulang ke
+          belakang.
+        </Note>
+        <Note>
+          Pendapatan per alat dihitung dari rincian/subtotal tiap alat di transaksi — bisa sedikit berbeda dari
+          total transaksi yang tampil di tab Pemasukan per Bulan kalau vendor pernah mengubah total harga transaksi
+          secara manual (mis. lewat diskon khusus yang tidak tercermin di harga per alat).
+        </Note>
       </Section>
       <Section id="g-kelola-usaha" num="7" title="Kelola Usaha" kicker="Info usaha dan kelola staf, digabung jadi satu tab karena sama-sama urusan admin sesekali, bukan dipakai harian.">
         <p>

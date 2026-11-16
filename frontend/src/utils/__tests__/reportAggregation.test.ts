@@ -1,0 +1,185 @@
+// Unit test Laporan (Riwayat Transaksi -> tab "Laporan", brief 16 Nov
+// 2026). buildMonthlyReport/buildPerAlatReport/clipOccupiedDaysToPeriod
+// diuji murni (tanpa Supabase/React) -- fixture HistoryBooking minimal.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { buildMonthlyReport, buildPerAlatReport, clipOccupiedDaysToPeriod } from '../reportAggregation.js';
+import type { HistoryBooking, HistoryBookingItem } from '../../hooks/useHistory.js';
+
+function item(overrides: Partial<HistoryBookingItem>): HistoryBookingItem {
+  return {
+    item_id: 'item-a',
+    name: 'Tenda Dome',
+    category: null,
+    variant: null,
+    size: null,
+    color: null,
+    quantity: 1,
+    subtotal: null,
+    price_at_booking: 10_000,
+    bundle_id: null,
+    bundle_instance_id: null,
+    bundle_name: null,
+    total_units: 5,
+    ...overrides,
+  };
+}
+
+function booking(overrides: Partial<HistoryBooking>): HistoryBooking {
+  return {
+    id: 'b1',
+    booking_number: 'SWL-1',
+    status: 'selesai',
+    start_date: '2026-01-10',
+    end_date: '2026-01-11',
+    total_price: 10_000,
+    dp_paid: 10_000,
+    customer: null,
+    items: [item({})],
+    penalties: [],
+    rental_day_mode: 'per_hari_kalender',
+    ...overrides,
+  };
+}
+
+test('buildMonthlyReport: status batal TIDAK dihitung (caller harus filter sebelum memanggil)', () => {
+  const bookings = [
+    booking({ id: 'b1', start_date: '2026-03-05', total_price: 100_000, dp_paid: 100_000 }),
+    booking({ id: 'b2', start_date: '2026-03-10', total_price: 999_999, status: 'dibatalkan' }),
+  ];
+  // Pola sama computeHistorySummary -- fungsi TIDAK menyaring status,
+  // caller yang filter. Di sini sengaja TIDAK difilter dulu untuk
+  // membuktikan: kalau caller lupa filter, booking batal IKUT
+  // terhitung (bukti fungsi murni ikut apa adanya) -- jadi caller WAJIB
+  // filter, seperti yang akan dilakukan LaporanScreen.tsx.
+  const withoutFilter = buildMonthlyReport(bookings);
+  assert.equal(withoutFilter[2].pendapatanSewa, 100_000 + 999_999); // bulan 3 (index 2) -- bukti TANPA filter ikut salah
+
+  const filtered = buildMonthlyReport(bookings.filter((b) => b.status !== 'dibatalkan'));
+  assert.equal(filtered[2].pendapatanSewa, 100_000); // dengan filter -- benar
+  assert.equal(filtered[2].jumlahTransaksi, 1);
+});
+
+test('buildMonthlyReport: denda telat dan kerusakan/hilang dipisah, totalPemasukan = sewa + keduanya', () => {
+  const bookings = [
+    booking({
+      start_date: '2026-05-01',
+      total_price: 50_000,
+      penalties: [
+        { type: 'keterlambatan', amount: 20_000, item_id: null },
+        { type: 'kerusakan', amount: 15_000, item_id: 'item-a' },
+        { type: 'kehilangan', amount: 5_000, item_id: 'item-a' },
+      ],
+    }),
+  ];
+  const [row] = [buildMonthlyReport(bookings)[4]];
+  assert.equal(row.dendaTelat, 20_000);
+  assert.equal(row.dendaKerusakan, 20_000); // kerusakan + kehilangan
+  assert.equal(row.totalPemasukan, 50_000 + 20_000 + 20_000);
+});
+
+test('buildMonthlyReport: Januari tidak ada pembanding (null), bulan lain dihitung vs bulan sebelumnya', () => {
+  const bookings = [
+    booking({ id: 'jan', start_date: '2026-01-05', total_price: 100_000 }),
+    booking({ id: 'feb', start_date: '2026-02-05', total_price: 150_000 }),
+  ];
+  const rows = buildMonthlyReport(bookings);
+  assert.equal(rows[0].perubahanPersenVsBulanLalu, null); // Januari
+  assert.equal(rows[1].perubahanPersenVsBulanLalu, 50); // (150000-100000)/100000*100
+});
+
+test('buildMonthlyReport: rataRata null kalau jumlahTransaksi 0, bukan NaN/Infinity', () => {
+  const rows = buildMonthlyReport([]);
+  for (const row of rows) {
+    assert.equal(row.jumlahTransaksi, 0);
+    assert.equal(row.rataRata, null);
+  }
+});
+
+test('clipOccupiedDaysToPeriod: booking SEPENUHNYA di dalam periode -> hari penuh', () => {
+  assert.equal(clipOccupiedDaysToPeriod('2026-03-10', '2026-03-12', '2026-03-01', '2026-03-31'), 3);
+});
+
+test('clipOccupiedDaysToPeriod: booking melintasi AWAL periode -- cuma hari di dalam periode dihitung', () => {
+  // Booking 28 Feb - 3 Mar, periode Maret (1-31) -- cuma 1,2,3 Mar = 3 hari.
+  assert.equal(clipOccupiedDaysToPeriod('2026-02-28', '2026-03-03', '2026-03-01', '2026-03-31'), 3);
+});
+
+test('clipOccupiedDaysToPeriod: booking melintasi AKHIR periode -- cuma hari di dalam periode dihitung', () => {
+  // Booking 30 Mar - 2 Apr, periode Maret -- cuma 30,31 Mar = 2 hari.
+  assert.equal(clipOccupiedDaysToPeriod('2026-03-30', '2026-04-02', '2026-03-01', '2026-03-31'), 2);
+});
+
+test('clipOccupiedDaysToPeriod: booking SELURUHNYA di luar periode -> 0', () => {
+  assert.equal(clipOccupiedDaysToPeriod('2026-01-01', '2026-01-05', '2026-03-01', '2026-03-31'), 0);
+});
+
+test('buildPerAlatReport: keterpakaian dipotong ke periode -- tidak pernah >100%, booking melintasi batas dihitung benar', () => {
+  // Alat total_units=2. Booking melintasi SELURUH Februari (28 hari di
+  // 2026, bukan kabisat) dari 1 Jan s/d 28 Feb, quantity 2 -- kalau TIDAK
+  // dipotong ke periode Februari saja, unit-hari mentahnya (59 hari x 2)
+  // akan menghasilkan keterpakaian jauh di atas 100%. Dengan pemotongan,
+  // yang dihitung cuma hari di dalam Februari (28 hari) x 2 unit = 56
+  // unit-hari, dari denominator (2 unit x 28 hari periode) = 56 ->
+  // keterpakaian PERSIS 100%, bukan lebih.
+  const b = booking({
+    id: 'melintasi',
+    start_date: '2026-01-01',
+    end_date: '2026-02-28',
+    items: [item({ item_id: 'item-a', quantity: 2, total_units: 2 })],
+  });
+  const activeItems = [{ id: 'item-a', name: 'Tenda Dome', total_units: 2 }];
+  const result = buildPerAlatReport([b], activeItems, '2026-02-01', '2026-02-28');
+  assert.equal(result.periodDaysCount, 28);
+  const row = result.rows.find((r) => r.itemId === 'item-a')!;
+  assert.equal(row.keterpakaianPersen, 100);
+});
+
+test('buildPerAlatReport: fallback subtotal null -> price_at_booking x quantity x hari, pola InvoiceModal', () => {
+  const b = booking({
+    start_date: '2026-04-01',
+    end_date: '2026-04-03',
+    rental_day_mode: 'per_hari_kalender', // 3 hari inklusif
+    items: [item({ item_id: 'item-a', quantity: 2, price_at_booking: 10_000, subtotal: null })],
+  });
+  const activeItems = [{ id: 'item-a', name: 'Tenda Dome', total_units: 5 }];
+  const result = buildPerAlatReport([b], activeItems, '2026-04-01', '2026-04-30');
+  const row = result.rows.find((r) => r.itemId === 'item-a')!;
+  assert.equal(row.pendapatan, 10_000 * 2 * 3); // 60000
+});
+
+test('buildPerAlatReport: baris komponen paket memakai subtotal teralokasi (bukan harga katalog)', () => {
+  const b = booking({
+    start_date: '2026-06-01',
+    end_date: '2026-06-02',
+    items: [
+      item({ item_id: 'tenda', quantity: 1, subtotal: 27_000, bundle_id: 'bundle-1', bundle_instance_id: 'inst-1', bundle_name: 'Tektok' }),
+      item({ item_id: 'carrier', quantity: 1, subtotal: 31_500, price_at_booking: 35_000, bundle_id: 'bundle-1', bundle_instance_id: 'inst-1', bundle_name: 'Tektok' }),
+    ],
+  });
+  const activeItems = [
+    { id: 'tenda', name: 'Tenda Dome', total_units: 5 },
+    { id: 'carrier', name: 'Carrier', total_units: 5 },
+  ];
+  const result = buildPerAlatReport([b], activeItems, '2026-06-01', '2026-06-30');
+  const tendaRow = result.rows.find((r) => r.itemId === 'tenda')!;
+  const carrierRow = result.rows.find((r) => r.itemId === 'carrier')!;
+  assert.equal(tendaRow.pendapatan, 27_000); // porsi paket, BUKAN harga katalog
+  assert.equal(carrierRow.pendapatan, 31_500); // porsi paket, BUKAN 35000 katalog
+
+  assert.equal(result.bundleSummary.length, 1);
+  assert.equal(result.bundleSummary[0].bundleName, 'Tektok');
+  assert.equal(result.bundleSummary[0].jumlahKaliDipilih, 1);
+  assert.equal(result.bundleSummary[0].pendapatan, 27_000 + 31_500);
+});
+
+test('buildPerAlatReport: alat aktif yang tidak pernah disewa di periode ikut dilaporkan', () => {
+  const b = booking({ items: [item({ item_id: 'item-a' })] });
+  const activeItems = [
+    { id: 'item-a', name: 'Disewa', total_units: 5 },
+    { id: 'item-b', name: 'Tidak Pernah Disewa', total_units: 3 },
+  ];
+  const result = buildPerAlatReport([b], activeItems, '2026-01-01', '2026-01-31');
+  assert.equal(result.itemsNeverRented.length, 1);
+  assert.equal(result.itemsNeverRented[0].id, 'item-b');
+});

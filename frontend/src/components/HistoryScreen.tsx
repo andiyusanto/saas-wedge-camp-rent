@@ -4,6 +4,7 @@ import { useHistory } from '../hooks/useHistory';
 import { StatCard } from './StatCard';
 import { formatDateIndo, formatIDR, bookingStatusLabel } from '../utils/formatters';
 import { computeHistorySummary, downloadHistoryExcel } from '../utils/historyExport';
+import { LaporanScreen } from './LaporanScreen';
 
 function firstDayOfMonthStr(): string {
   const d = new Date();
@@ -24,6 +25,11 @@ const STATUS_BADGE: Record<string, string> = {
 };
 
 export function HistoryScreen({ businessId }: { businessId: string }) {
+  // Sub-tab "Laporan" (brief 16 Nov 2026) -- pemasukan per bulan + per
+  // alat, cuma memakai data yang sudah tersimpan. Owner-only otomatis
+  // (seluruh HistoryScreen sudah digerbang role==='owner' di App.tsx),
+  // tidak perlu gerbang tambahan di sini.
+  const [screenTab, setScreenTab] = useState<'transaksi' | 'laporan'>('transaksi');
   const [from, setFrom] = useState(firstDayOfMonthStr);
   const [to, setTo] = useState(todayStrLocal);
   const [searchQuery, setSearchQuery] = useState('');
@@ -131,21 +137,38 @@ export function HistoryScreen({ businessId }: { businessId: string }) {
             </h2>
             <p className="text-xs text-[#6E6853]">Rekap semua transaksi, termasuk yang sudah selesai atau dibatalkan.</p>
           </div>
-          <button
-            type="button"
-            onClick={handleExport}
-            disabled={filtered.length === 0 || exporting}
-            className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm transition shrink-0 ${
-              filtered.length === 0 || exporting
-                ? 'bg-[#F1EEE2] text-[#6E6853] cursor-not-allowed'
-                : 'bg-[#2B4739] hover:bg-[#1E3429] text-white'
-            }`}
-          >
-            <Download className="w-4 h-4" />
-            <span>{exporting ? 'Menyiapkan...' : 'Unduh Excel'}</span>
-          </button>
+          {screenTab === 'transaksi' && (
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={filtered.length === 0 || exporting}
+              className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm transition shrink-0 ${
+                filtered.length === 0 || exporting
+                  ? 'bg-[#F1EEE2] text-[#6E6853] cursor-not-allowed'
+                  : 'bg-[#2B4739] hover:bg-[#1E3429] text-white'
+              }`}
+            >
+              <Download className="w-4 h-4" />
+              <span>{exporting ? 'Menyiapkan...' : 'Unduh Excel'}</span>
+            </button>
+          )}
         </div>
 
+        <div className="flex gap-2 pt-2 border-t border-[#E6E1D2]">
+          {(['transaksi', 'laporan'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setScreenTab(tab)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                screenTab === tab ? 'bg-[#2B4739] text-[#FBFAF4] shadow-xs' : 'bg-[#F1EEE2] text-[#26302B] border border-[#DBD5C1] hover:bg-[#E6E1D2]'
+              }`}
+            >
+              {tab === 'transaksi' ? 'Transaksi' : 'Laporan'}
+            </button>
+          ))}
+        </div>
+
+        {screenTab === 'transaksi' && (
         <div className="flex flex-wrap items-end gap-3 pt-2 border-t border-[#E6E1D2]">
           <label className="flex flex-col gap-1 text-xs text-[#6E6853]">
             Dari
@@ -198,8 +221,13 @@ export function HistoryScreen({ businessId }: { businessId: string }) {
             </label>
           </div>
         </div>
+        )}
       </div>
 
+      {screenTab === 'laporan' ? (
+        <LaporanScreen businessId={businessId} />
+      ) : (
+      <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard label="Total Transaksi" value={totalTransaksi} color="primary" icon={Receipt} sub={`${from} s/d ${to}`} />
         <StatCard label="Sudah Diterima" value={formatIDR(sudahDiterima)} color="primary" icon={Wallet} sub="Total DP/pembayaran" isText />
@@ -314,6 +342,8 @@ export function HistoryScreen({ businessId }: { businessId: string }) {
             </tbody>
           </table>
         </div>
+      )}
+      </>
       )}
     </div>
   );
