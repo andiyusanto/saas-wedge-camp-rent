@@ -761,6 +761,7 @@ export function EtalaseOnlineScreen({
               {dpMode !== 'none' && (
                 <input
                   type="number"
+                  min={0}
                   value={dpValue}
                   onChange={(e) => setDpValue(e.target.value)}
                   placeholder={dpMode === 'percent' ? 'mis. 50 (%)' : 'mis. 50000 (Rp)'}

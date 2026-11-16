@@ -272,7 +272,6 @@ function ItemFormModal({
                 type="number"
                 required
                 min={0}
-                step={1000}
                 value={form.price_per_day}
                 onChange={(e) => set('price_per_day', Number(e.target.value))}
                 className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] font-bold"
@@ -319,7 +318,6 @@ function ItemFormModal({
                   <input
                     type="number"
                     min={0}
-                    step={1000}
                     value={templateOverRate}
                     onChange={(e) => setTemplateOverRate(e.target.value)}
                     placeholder="mis. 20000"
@@ -381,7 +379,6 @@ function ItemFormModal({
                       <input
                         type="number"
                         min={0}
-                        step={1000}
                         value={tierRaw[key]}
                         onChange={(e) => setTierRaw((prev) => ({ ...prev, [key]: e.target.value }))}
                         placeholder={formatIDR(

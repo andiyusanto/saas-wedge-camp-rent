@@ -448,7 +448,6 @@ export function UbahAlatModal({
                 <input
                   type="number"
                   min={0}
-                  step={1000}
                   value={totalPrice}
                   onChange={(e) => setTotalPrice(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] font-bold"

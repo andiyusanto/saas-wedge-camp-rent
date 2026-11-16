@@ -1195,7 +1195,6 @@ export function NewBookingModal({
                 <input
                   type="number"
                   min={0}
-                  step={5000}
                   value={dpPaid}
                   onChange={(e) => setDpPaid(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] font-bold focus:outline-none focus:ring-1 focus:ring-[#2B4739]"

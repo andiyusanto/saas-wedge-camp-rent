@@ -373,7 +373,6 @@ export function BusinessInfoSection({
                 <input
                   type="number"
                   min={0}
-                  step={1000}
                   value={lateFeePerHour}
                   onChange={(e) => setLateFeePerHour(e.target.value)}
                   placeholder="mis. 10000"

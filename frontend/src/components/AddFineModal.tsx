@@ -158,7 +158,6 @@ export function AddFineModal({
               type="number"
               required
               min={0}
-              step={1000}
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] font-bold text-sm focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
