@@ -150,6 +150,7 @@ const TOC: { id: string; num: string; title: string }[] = [
   { id: 'g-pasang', num: '1b', title: 'Pasang Sewalog di Layar Utama' },
   { id: 'g-kalender', num: '2', title: 'Kalender Ketersediaan' },
   { id: 'g-transaksi-aktif', num: '3', title: 'Transaksi Aktif' },
+  { id: 'g-cetak-thermal', num: '3b', title: 'Cetak Struk ke Printer Thermal' },
   { id: 'g-catat', num: '4', title: 'Catat Transaksi Sewa' },
   { id: 'g-katalog', num: '5', title: 'Katalog & Stok Alat' },
   { id: 'g-riwayat', num: '6', title: 'Riwayat Transaksi' },
@@ -370,12 +371,87 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         <Note>
           Tombol <Ui>Cetak Nota</Ui> di tiap kartu transaksi membuka versi nota yang bisa langsung dicetak atau
           disimpan sebagai PDF lewat dialog print browser (pilih tujuan "Simpan sebagai PDF") — tidak perlu aplikasi
-          tambahan.
+          tambahan. Di jendela yang sama ada juga tombol <Ui>Cetak Struk</Ui> untuk printer struk kecil (thermal) —
+          lihat <SectionLink id="g-cetak-thermal">bagian 3b</SectionLink>.
         </Note>
         <Note>
           Struk WA dan Nota Sewa untuk transaksi berisi paket menampilkan "Paket X ×N" sebagai satu baris ringkas,
           dengan rincian alat penyusunnya di bawahnya — bukan daftar alat lepas tanpa pengelompokan.
         </Note>
+      </Section>
+
+      <Section
+        id="g-cetak-thermal"
+        num="3b"
+        title="Cetak Struk ke Printer Thermal"
+        kicker="Bisa dari HP Android atau laptop. iPhone belum bisa ke printer Bluetooth."
+      >
+        <table className="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr className="border-b border-[#DBD5C1]">
+              <th className="py-1.5 pr-2 font-bold text-[#26302B]">Perangkat</th>
+              <th className="py-1.5 pr-2 font-bold text-[#26302B]">Bisa?</th>
+              <th className="py-1.5 font-bold text-[#26302B]">Cara</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="border-b border-[#E6E1D2]">
+              <td className="py-1.5 pr-2 text-[#26302B]">Android + printer Bluetooth</td>
+              <td className="py-1.5 pr-2 text-[#2B4739] font-bold">Bisa</td>
+              <td className="py-1.5 text-[#6E6853]">Lewat aplikasi bantu RawBT</td>
+            </tr>
+            <tr className="border-b border-[#E6E1D2]">
+              <td className="py-1.5 pr-2 text-[#26302B]">Laptop + USB</td>
+              <td className="py-1.5 pr-2 text-[#2B4739] font-bold">Bisa</td>
+              <td className="py-1.5 text-[#6E6853]">Cetak lewat browser + driver printer</td>
+            </tr>
+            <tr className="border-b border-[#E6E1D2]">
+              <td className="py-1.5 pr-2 text-[#26302B]">iPhone + Bluetooth</td>
+              <td className="py-1.5 pr-2 text-sewa-danger font-bold">Tidak bisa</td>
+              <td className="py-1.5 text-[#6E6853]">Kirim struk WA / simpan PDF</td>
+            </tr>
+            <tr>
+              <td className="py-1.5 pr-2 text-[#26302B]">iPhone + printer Wi-Fi (AirPrint)</td>
+              <td className="py-1.5 pr-2 text-[#2B4739] font-bold">Bisa</td>
+              <td className="py-1.5 text-[#6E6853]">Cetak lewat browser</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p className="font-bold text-xs mt-2">Siapkan sekali di tombol Cetak Struk (Nota) atau kartu Printer Struk di Kelola Usaha</p>
+        <Steps
+          items={[
+            <>Pilih cara printer tersambung: Bluetooth ke HP, kabel USB ke laptop, atau belum punya printer.</>,
+            <>
+              Khusus Bluetooth di Android: pasang aplikasi bantu <Ui>RawBT</Ui> (gratis, sekali saja), sambungkan
+              printer lewat Pengaturan Bluetooth HP (PIN biasanya 0000/1234), lalu buka RawBT dan pilih printer
+              tersebut.
+            </>,
+            <>Pilih ukuran kertas (58 mm paling umum, atau 80 mm) — ukur lebar gulungan kertas kalau tidak yakin.</>,
+            <>Tekan <Ui>Cetak Tes</Ui> — kalau kertas keluar, tekan <Ui>Ya</Ui> untuk menyimpan pengaturan.</>,
+          ]}
+        />
+        <Note>
+          Pengaturan printer disimpan PER PERANGKAT (di HP/laptop itu sendiri), bukan ke akun — kalau usahamu dipakai
+          di beberapa HP, tiap HP perlu disiapkan sendiri-sendiri sekali. Teks kecil <Ui>Printer: ... · Ubah</Ui> di
+          bawah tombol <Ui>Cetak Struk</Ui> membuka ulang wizard ini kapan saja.
+        </Note>
+        <Note>
+          HP Huawei tanpa Google Play (hanya AppGallery): belum ada kepastian RawBT tersedia di sana — kalau tidak
+          ditemukan, cetak lewat Bluetooth belum didukung di HP tersebut untuk sekarang, pakai kirim struk lewat WA
+          atau simpan PDF.
+        </Note>
+
+        <p className="font-bold text-xs mt-2">Masalah umum</p>
+        <FieldsTable
+          rows={[
+            { label: 'Kertas kosong', desc: 'Cek sisi kertas — gosok dengan kuku, sisi yang menghitam adalah sisi cetak, mungkin gulungannya terbalik.' },
+            { label: 'Tulisan terpotong', desc: 'Ukuran kertas yang dipilih salah — ubah lewat teks "Printer: ... · Ubah" ke 58 mm atau 80 mm sesuai printer.' },
+            { label: 'Printer tidak muncul', desc: 'Pastikan sudah dipasangkan (paired) di Pengaturan Bluetooth HP dan dipilih di dalam aplikasi RawBT.' },
+            { label: 'Huruf aneh di struk', desc: 'Biasanya normal setelah dicoba ulang — struk sudah otomatis memakai huruf standar, bukan huruf khusus.' },
+            { label: 'RawBT tidak terbuka', desc: 'Pastikan RawBT sudah terpasang (lihat langkah di atas) — tanpa RawBT terpasang, tombol Cetak Struk tidak bisa meneruskan ke printer Bluetooth.' },
+          ]}
+        />
       </Section>
 
       <Section id="g-catat" num="4" title="Catat Transaksi Sewa" kicker="Form input cepat, dipakai sambil melayani pelanggan yang menunggu.">
@@ -630,6 +706,11 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           plus dropdown ketiga <Ui>Kecamatan (opsional)</Ui> yang muncul begitu Kota dipilih. Kecamatan ikut tampil di
           halaman Etalase publik (<SectionLink id="g-etalase">bagian 8</SectionLink>) supaya calon pelanggan tahu lokasi usahamu lebih persis — rental lama
           tidak wajib mengisinya.
+        </p>
+        <p>
+          Kartu <Ui>Printer Struk</Ui> di tab ini membuka wizard yang sama dengan tombol <Ui>Cetak Struk</Ui> di Nota
+          (<SectionLink id="g-cetak-thermal">bagian 3b</SectionLink>) — berguna kalau mau menyiapkan printer dari sini
+          dulu sebelum ada transaksi.
         </p>
         <p className="font-bold text-xs mt-2">Zona Waktu</p>
         <p>
