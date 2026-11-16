@@ -24,6 +24,17 @@ export type HistoryBookingItem = {
   total_units: number | null;
 };
 
+// Barang Jual (habis pakai), v1 (brief 16 Nov 2026, migration 066) --
+// snapshot nama+harga, dipakai sheet "Penjualan Barang" (historyExport.ts)
+// dan Laporan (reportAggregation.ts).
+export type HistorySaleItem = {
+  sale_item_id: string;
+  name: string;
+  quantity: number;
+  price_at_booking: number;
+  subtotal: number;
+};
+
 export type HistoryBooking = {
   id: string;
   booking_number: string | null;
@@ -34,6 +45,7 @@ export type HistoryBooking = {
   dp_paid: number;
   customer: { name: string; phone: string | null } | null;
   items: HistoryBookingItem[];
+  saleItems: HistorySaleItem[];
   penalties: { type: string; amount: number; item_id: string | null }[];
   // Snapshot (migration 049) — mode saat booking ini DIBUAT, null untuk
   // baris dari sebelum fitur ini (ditafsirkan 'per_hari_kalender').
@@ -47,7 +59,7 @@ export type HistoryBooking = {
 // persis InvoiceModal.tsx (baris lama sebelum migration 034, tidak
 // di-backfill).
 const SELECT_FIELDS =
-  'id, booking_number, status, start_date, end_date, total_price, dp_paid, rental_day_mode, customers(name, phone), booking_items(quantity, subtotal, price_at_booking, bundle_id, bundle_instance_id, bundle_name, items(id, name, category, variant, size, color, total_units)), penalties(type, amount, item_id)';
+  'id, booking_number, status, start_date, end_date, total_price, dp_paid, rental_day_mode, customers(name, phone), booking_items(quantity, subtotal, price_at_booking, bundle_id, bundle_instance_id, bundle_name, items(id, name, category, variant, size, color, total_units)), booking_sale_items(sale_item_id, name, quantity, price_at_booking, subtotal), penalties(type, amount, item_id)';
 
 type RawBooking = {
   id: string;
@@ -78,6 +90,7 @@ type RawBooking = {
         } | null;
       }[]
     | null;
+  booking_sale_items: { sale_item_id: string; name: string; quantity: number; price_at_booking: number; subtotal: number }[] | null;
   penalties: { type: string; amount: number; item_id: string | null }[] | null;
 };
 
@@ -107,6 +120,7 @@ function mapBooking(row: RawBooking): HistoryBooking {
       bundle_name: bi.bundle_name,
       total_units: bi.items?.total_units ?? null,
     })),
+    saleItems: row.booking_sale_items ?? [],
     penalties: row.penalties ?? [],
   };
 }

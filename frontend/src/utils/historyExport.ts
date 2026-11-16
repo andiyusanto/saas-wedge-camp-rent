@@ -15,6 +15,11 @@ export type HistorySummary = {
   piutang: number;
   totalDendaTelat: number;
   totalDendaKerusakan: number;
+  // Barang Jual (habis pakai), v1 (brief 16 Nov 2026, migration 066) --
+  // dijumlahkan dari booking_sale_items, TERPISAH dari omset alat sewa
+  // (b.total_price sudah SELALU gabungan sewa+barang jual sejak fitur
+  // ini, jadi tidak perlu dijumlahkan dobel ke omset).
+  pendapatanBarangJual: number;
 };
 
 // Diekspor (bukan lokal lagi) supaya reportAggregation.ts (Laporan,
@@ -36,6 +41,7 @@ export function computeHistorySummary(bookingsExcludingCancelled: HistoryBooking
   let piutang = 0;
   let totalDendaTelat = 0;
   let totalDendaKerusakan = 0;
+  let pendapatanBarangJual = 0;
 
   for (const b of bookingsExcludingCancelled) {
     omset += b.total_price;
@@ -45,6 +51,7 @@ export function computeHistorySummary(bookingsExcludingCancelled: HistoryBooking
       if (p.type === 'keterlambatan') totalDendaTelat += p.amount;
       else if (KERUSAKAN_TYPES.has(p.type)) totalDendaKerusakan += p.amount;
     }
+    for (const s of b.saleItems) pendapatanBarangJual += s.subtotal;
   }
 
   return {
@@ -54,6 +61,7 @@ export function computeHistorySummary(bookingsExcludingCancelled: HistoryBooking
     piutang,
     totalDendaTelat,
     totalDendaKerusakan,
+    pendapatanBarangJual,
   };
 }
 
@@ -114,6 +122,28 @@ function buildPerAlatRows(bookingsExcludingCancelled: HistoryBooking[]): PerAlat
     .sort((a, b) => b.pendapatan - a.pendapatan);
 }
 
+// Barang Jual (habis pakai), v1 (brief 16 Nov 2026) -- lebih sederhana
+// dari buildPerAlatRows: tidak ada konsep hari/keterpakaian untuk barang
+// habis pakai, cuma jumlah terjual + pendapatan per barang.
+type SaleItemRow = { name: string; jumlahTerjual: number; pendapatan: number };
+
+function buildSaleItemRows(bookingsExcludingCancelled: HistoryBooking[]): SaleItemRow[] {
+  const map = new Map<string, SaleItemRow>();
+  for (const b of bookingsExcludingCancelled) {
+    for (const s of b.saleItems) {
+      const key = s.sale_item_id;
+      const existing = map.get(key);
+      if (existing) {
+        existing.jumlahTerjual += s.quantity;
+        existing.pendapatan += s.subtotal;
+      } else {
+        map.set(key, { name: s.name, jumlahTerjual: s.quantity, pendapatan: s.subtotal });
+      }
+    }
+  }
+  return [...map.values()].sort((a, b) => b.pendapatan - a.pendapatan);
+}
+
 // new Date(Date.UTC(y, m-1, d)) BUKAN new Date(`${s}T00:00:00`) (waktu
 // lokal) atau new Date(s) (diparse UTC tapi oleh exceljs dibaca lagi lewat
 // getUTCFullYear/dst saat serialisasi ke tanggal Excel) — exceljs
@@ -148,7 +178,7 @@ const STATUS_LABEL_FOR_FILTER: Record<string, string> = {
 // Excel di tab Laporan terpisah dari tombol Riwayat yang sudah ada).
 // Nama sheet persis permintaan brief: "Laporan Bulanan" & "Laporan per
 // Alat".
-import type { MonthlyReportRow, PerAlatReportResult } from './reportAggregation';
+import type { MonthlyReportRow, PerAlatReportResult, BarangJualReportRow } from './reportAggregation';
 
 export async function downloadLaporanExcel(args: {
   year: number;
@@ -156,6 +186,11 @@ export async function downloadLaporanExcel(args: {
   periodStart: string;
   periodEnd: string;
   perAlatResult: PerAlatReportResult;
+  // Barang Jual (habis pakai), v1 (brief 16 Nov 2026) -- opsional, cuma
+  // diisi kalau business punya barang jual sama sekali (rental tanpa
+  // barang jual: tidak dikirim, sheet-sheet di bawah TIDAK berubah sama
+  // sekali, regresi aman).
+  barangJualRows?: BarangJualReportRow[];
 }): Promise<void> {
   const ExcelJS = (await import('exceljs')).default;
   const workbook = new ExcelJS.Workbook();
@@ -165,6 +200,7 @@ export async function downloadLaporanExcel(args: {
   bulananSheet.columns = [
     { header: 'Bulan', key: 'month', width: 14 },
     { header: 'Pendapatan Sewa (Rp)', key: 'pendapatanSewa', width: 18 },
+    { header: 'Penjualan Barang (Rp)', key: 'pendapatanBarangJual', width: 18 },
     { header: 'Denda Telat (Rp)', key: 'dendaTelat', width: 16 },
     { header: 'Denda Rusak/Hilang (Rp)', key: 'dendaKerusakan', width: 18 },
     { header: 'Total Pemasukan (Rp)', key: 'totalPemasukan', width: 18 },
@@ -179,6 +215,7 @@ export async function downloadLaporanExcel(args: {
     const r = bulananSheet.addRow({
       month: MONTH_NAMES_ID[row.month - 1],
       pendapatanSewa: row.pendapatanSewa,
+      pendapatanBarangJual: row.pendapatanBarangJual,
       dendaTelat: row.dendaTelat,
       dendaKerusakan: row.dendaKerusakan,
       totalPemasukan: row.totalPemasukan,
@@ -188,13 +225,13 @@ export async function downloadLaporanExcel(args: {
       rataRata: row.rataRata ?? 0,
       perubahan: row.perubahanPersenVsBulanLalu == null ? 'Tidak ada pembanding' : `${row.perubahanPersenVsBulanLalu.toFixed(1)}%`,
     });
-    for (const key of ['pendapatanSewa', 'dendaTelat', 'dendaKerusakan', 'totalPemasukan', 'sudahDiterima', 'piutang', 'rataRata']) {
+    for (const key of ['pendapatanSewa', 'pendapatanBarangJual', 'dendaTelat', 'dendaKerusakan', 'totalPemasukan', 'sudahDiterima', 'piutang', 'rataRata']) {
       r.getCell(key).numFmt = '#,##0';
     }
   }
   const note1 = bulananSheet.addRow(['"Sudah Diterima" mengikuti bulan transaksinya (tanggal ambil) — Sewalog tidak menyimpan tanggal pembayaran sungguhan. Transaksi Dibatalkan tidak dihitung.']);
   note1.getCell(1).font = { italic: true, color: { argb: 'FFA65C2A' } };
-  bulananSheet.mergeCells(note1.number, 1, note1.number, 10);
+  bulananSheet.mergeCells(note1.number, 1, note1.number, 11);
 
   const perAlatSheet = workbook.addWorksheet('Laporan per Alat');
   perAlatSheet.columns = [
@@ -236,6 +273,25 @@ export async function downloadLaporanExcel(args: {
   note2.getCell(1).font = { italic: true, color: { argb: 'FFA65C2A' } };
   perAlatSheet.mergeCells(note2.number, 1, note2.number, 5);
 
+  // Barang Jual (habis pakai), v1 (brief 16 Nov 2026) -- sheet TERPISAH,
+  // cuma dibuat kalau ADA barang jual di periode ini (rental tanpa
+  // barang jual sama sekali: args.barangJualRows kosong/undefined,
+  // tidak ada sheet tambahan sama sekali -- regresi aman).
+  if (args.barangJualRows && args.barangJualRows.length > 0) {
+    const barangJualSheet = workbook.addWorksheet('Penjualan Barang');
+    barangJualSheet.columns = [
+      { header: 'Nama Barang', key: 'name', width: 28 },
+      { header: 'Jumlah Transaksi', key: 'jumlahTransaksi', width: 16 },
+      { header: 'Jumlah Terjual', key: 'jumlahTerjual', width: 16 },
+      { header: 'Pendapatan (Rp)', key: 'pendapatan', width: 18 },
+    ];
+    barangJualSheet.getRow(1).font = { bold: true };
+    for (const row of args.barangJualRows) {
+      const r = barangJualSheet.addRow(row);
+      r.getCell('pendapatan').numFmt = '#,##0';
+    }
+  }
+
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url = URL.createObjectURL(blob);
@@ -266,6 +322,7 @@ export async function downloadHistoryExcel(allFiltered: HistoryBooking[], filter
     { header: 'Tanggal Ambil', key: 'start_date', width: 14 },
     { header: 'Tanggal Kembali', key: 'end_date', width: 14 },
     { header: 'Alat', key: 'items', width: 32 },
+    { header: 'Barang Jual', key: 'sale_items', width: 24 },
     { header: 'Total Harga (Rp)', key: 'total_price', width: 16 },
     { header: 'Sudah Dibayar (Rp)', key: 'dp_paid', width: 16 },
     { header: 'Sisa Tagihan (Rp)', key: 'remaining', width: 16 },
@@ -283,6 +340,7 @@ export async function downloadHistoryExcel(allFiltered: HistoryBooking[], filter
       start_date: excelDate(b.start_date),
       end_date: excelDate(b.end_date),
       items: b.items.map((i) => `${i.name} (${i.quantity}x)`).join('; '),
+      sale_items: b.saleItems.map((s) => `${s.name} (${s.quantity}x)`).join('; '),
       total_price: b.total_price,
       dp_paid: b.dp_paid,
       remaining: Math.max(0, b.total_price - b.dp_paid),
@@ -329,6 +387,7 @@ export async function downloadHistoryExcel(allFiltered: HistoryBooking[], filter
   addLabelRow('Piutang (Rp)', summary.piutang, '#,##0');
   addLabelRow('Total Denda Keterlambatan (Rp)', summary.totalDendaTelat, '#,##0');
   addLabelRow('Total Denda Kerusakan/Hilang (Rp)', summary.totalDendaKerusakan, '#,##0');
+  addLabelRow('Penjualan Barang Jual (Rp)', summary.pendapatanBarangJual, '#,##0');
 
   // --- Sheet "Per Alat" — nonCancelledFiltered juga, dikelompokkan per
   // item_id (pola sama seperti "Peralatan Terlaris" di HistoryScreen.tsx).
@@ -346,6 +405,26 @@ export async function downloadHistoryExcel(allFiltered: HistoryBooking[], filter
     const row = perAlatSheet.addRow(r);
     row.getCell('pendapatan').numFmt = '#,##0';
     row.getCell('dendaKerusakan').numFmt = '#,##0';
+  }
+
+  // --- Sheet "Penjualan Barang" (brief 16 Nov 2026) -- cuma dibuat kalau
+  // ADA penjualan di periode ini, konsisten dengan sheet-sheet lain yang
+  // tetap selalu dibuat tapi kosong kalau tidak relevan, kecuali barang
+  // jual memang fitur opsional (rental tanpa barang jual sama sekali
+  // tidak perlu sheet kosong di export-nya).
+  const saleRows = buildSaleItemRows(nonCancelledFiltered);
+  if (saleRows.length > 0) {
+    const penjualanSheet = workbook.addWorksheet('Penjualan Barang');
+    penjualanSheet.columns = [
+      { header: 'Nama Barang', key: 'name', width: 28 },
+      { header: 'Jumlah Terjual', key: 'jumlahTerjual', width: 16 },
+      { header: 'Pendapatan (Rp)', key: 'pendapatan', width: 18 },
+    ];
+    penjualanSheet.getRow(1).font = { bold: true };
+    for (const r of saleRows) {
+      const row = penjualanSheet.addRow(r);
+      row.getCell('pendapatan').numFmt = '#,##0';
+    }
   }
 
   const buffer = await workbook.xlsx.writeBuffer();

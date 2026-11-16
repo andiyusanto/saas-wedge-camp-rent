@@ -3,8 +3,8 @@
 // diuji murni (tanpa Supabase/React) -- fixture HistoryBooking minimal.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMonthlyReport, buildPerAlatReport, clipOccupiedDaysToPeriod } from '../reportAggregation.js';
-import type { HistoryBooking, HistoryBookingItem } from '../../hooks/useHistory.js';
+import { buildMonthlyReport, buildPerAlatReport, buildBarangJualReport, clipOccupiedDaysToPeriod } from '../reportAggregation.js';
+import type { HistoryBooking, HistoryBookingItem, HistorySaleItem } from '../../hooks/useHistory.js';
 
 function item(overrides: Partial<HistoryBookingItem>): HistoryBookingItem {
   return {
@@ -36,10 +36,15 @@ function booking(overrides: Partial<HistoryBooking>): HistoryBooking {
     dp_paid: 10_000,
     customer: null,
     items: [item({})],
+    saleItems: [],
     penalties: [],
     rental_day_mode: 'per_hari_kalender',
     ...overrides,
   };
+}
+
+function saleItem(overrides: Partial<HistorySaleItem>): HistorySaleItem {
+  return { sale_item_id: 'baterai', name: 'Baterai AA', quantity: 1, price_at_booking: 10_000, subtotal: 10_000, ...overrides };
 }
 
 test('buildMonthlyReport: status batal TIDAK dihitung (caller harus filter sebelum memanggil)', () => {
@@ -182,4 +187,53 @@ test('buildPerAlatReport: alat aktif yang tidak pernah disewa di periode ikut di
   const result = buildPerAlatReport([b], activeItems, '2026-01-01', '2026-01-31');
   assert.equal(result.itemsNeverRented.length, 1);
   assert.equal(result.itemsNeverRented[0].id, 'item-b');
+});
+
+// Barang Jual (habis pakai), v1 (brief 16 Nov 2026, migration 066).
+
+test('buildMonthlyReport: pendapatanBarangJual dipisah, pendapatanSewa dibalik dari total_price (bukan dijumlah dobel)', () => {
+  const b = booking({
+    start_date: '2026-03-05',
+    end_date: '2026-03-06',
+    total_price: 30_000, // sewa 10.000 (item default) + barang jual 20.000
+    saleItems: [saleItem({ subtotal: 20_000 })],
+  });
+  const rows = buildMonthlyReport([b]);
+  const march = rows.find((r) => r.month === 3)!;
+  assert.equal(march.pendapatanBarangJual, 20_000);
+  assert.equal(march.pendapatanSewa, 10_000); // 30.000 - 20.000
+  assert.equal(march.totalPemasukan, 30_000); // rumus TIDAK berubah
+});
+
+test('buildMonthlyReport: tanpa barang jual, pendapatanSewa = total_price PERSIS seperti sebelum fitur ini (regresi)', () => {
+  const b = booking({ start_date: '2026-04-05', end_date: '2026-04-06', total_price: 50_000, saleItems: [] });
+  const rows = buildMonthlyReport([b]);
+  const april = rows.find((r) => r.month === 4)!;
+  assert.equal(april.pendapatanSewa, 50_000);
+  assert.equal(april.pendapatanBarangJual, 0);
+  assert.equal(april.totalPemasukan, 50_000);
+});
+
+test('buildBarangJualReport: jumlah terjual + pendapatan digabung per sale_item_id lintas transaksi', () => {
+  const b1 = booking({ id: 'b1', start_date: '2026-05-01', saleItems: [saleItem({ sale_item_id: 'baterai', quantity: 2, subtotal: 20_000 })] });
+  const b2 = booking({ id: 'b2', start_date: '2026-05-10', saleItems: [saleItem({ sale_item_id: 'baterai', quantity: 1, subtotal: 10_000 })] });
+  const rows = buildBarangJualReport([b1, b2], '2026-05-01', '2026-05-31');
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].jumlahTransaksi, 2);
+  assert.equal(rows[0].jumlahTerjual, 3);
+  assert.equal(rows[0].pendapatan, 30_000);
+});
+
+test('buildBarangJualReport: booking di luar periode tidak ikut dihitung', () => {
+  const inPeriod = booking({ id: 'b1', start_date: '2026-06-10', saleItems: [saleItem({ subtotal: 10_000 })] });
+  const outOfPeriod = booking({ id: 'b2', start_date: '2026-07-01', saleItems: [saleItem({ subtotal: 999_000 })] });
+  const rows = buildBarangJualReport([inPeriod, outOfPeriod], '2026-06-01', '2026-06-30');
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].pendapatan, 10_000);
+});
+
+test('buildBarangJualReport: tanpa barang jual sama sekali -> array kosong', () => {
+  const b = booking({ saleItems: [] });
+  const rows = buildBarangJualReport([b], '2026-01-01', '2026-01-31');
+  assert.deepEqual(rows, []);
 });

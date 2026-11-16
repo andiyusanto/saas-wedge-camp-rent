@@ -18,6 +18,11 @@ import { itemSubtotal, bookingPenaltyByType } from './historyExport';
 export type MonthlyReportRow = {
   month: number; // 1-12
   pendapatanSewa: number;
+  // Barang Jual (habis pakai), v1 (brief 16 Nov 2026, migration 066) --
+  // dipisah dari pendapatanSewa (yang DIBALIK dari b.total_price dikurangi
+  // ini, bukan dijumlah dobel -- lihat buildMonthlyReport di bawah).
+  // totalPemasukan TIDAK berubah rumusnya sama sekali (regresi aman).
+  pendapatanBarangJual: number;
   dendaTelat: number;
   dendaKerusakan: number;
   totalPemasukan: number;
@@ -49,20 +54,28 @@ export function buildMonthlyReport(bookingsInYearExcludingCancelled: HistoryBook
   for (let month = 1; month <= 12; month++) {
     const bookings = byMonth.get(month) ?? [];
     let pendapatanSewa = 0;
+    let pendapatanBarangJual = 0;
     let sudahDiterima = 0;
     let piutang = 0;
     let dendaTelat = 0;
     let dendaKerusakan = 0;
 
     for (const b of bookings) {
-      pendapatanSewa += b.total_price;
+      // b.total_price adalah gabungan sewa+barang jual sejak Barang Jual
+      // v1 -- pendapatanSewa DIBALIK (dikurangi porsi barang jual), BUKAN
+      // dijumlah dobel, supaya totalPemasukan di bawah rumusnya TIDAK
+      // berubah sama sekali (rental tanpa barang jual: saleTotal=0,
+      // pendapatanSewa=b.total_price PERSIS seperti sebelum fitur ini).
+      const saleTotal = b.saleItems.reduce((sum, s) => sum + s.subtotal, 0);
+      pendapatanSewa += b.total_price - saleTotal;
+      pendapatanBarangJual += saleTotal;
       sudahDiterima += b.dp_paid;
       piutang += Math.max(0, b.total_price - b.dp_paid);
       dendaTelat += bookingPenaltyByType(b, 'keterlambatan');
       dendaKerusakan += bookingPenaltyByType(b, 'kerusakan-kehilangan');
     }
 
-    const totalPemasukan = pendapatanSewa + dendaTelat + dendaKerusakan;
+    const totalPemasukan = pendapatanSewa + pendapatanBarangJual + dendaTelat + dendaKerusakan;
     const jumlahTransaksi = bookings.length;
     const rataRata = jumlahTransaksi > 0 ? totalPemasukan / jumlahTransaksi : null;
 
@@ -74,6 +87,7 @@ export function buildMonthlyReport(bookingsInYearExcludingCancelled: HistoryBook
     rows.push({
       month,
       pendapatanSewa,
+      pendapatanBarangJual,
       dendaTelat,
       dendaKerusakan,
       totalPemasukan,
@@ -246,4 +260,45 @@ export function buildPerAlatReport(
     .sort((a, b) => b.pendapatan - a.pendapatan);
 
   return { rows, itemsNeverRented, bundleSummary, periodDaysCount };
+}
+
+// ----------------------------------------------------------------
+// Bagian B tambahan: ringkasan Barang Jual (habis pakai), v1 (brief 16
+// Nov 2026) -- LEBIH SEDERHANA dari buildPerAlatReport: tidak ada
+// konsep hari/keterpakaian/okupansi untuk barang habis pakai (bukan
+// disewa, dibeli putus), cuma jumlah terjual + pendapatan.
+// ----------------------------------------------------------------
+
+export type BarangJualReportRow = { saleItemId: string; name: string; jumlahTransaksi: number; jumlahTerjual: number; pendapatan: number };
+
+// Terima dataset yang SAMA dengan buildPerAlatReport (overlap set) --
+// cuma disaring ke "mulai di periode" di sini juga, konsisten semantik
+// jumlahTransaksi/pendapatan di atas (metrik transaksi, bukan okupansi
+// yang memang tidak ada untuk barang jual).
+export function buildBarangJualReport(bookingsOverlapExcludingCancelled: HistoryBooking[], periodStart: string, periodEnd: string): BarangJualReportRow[] {
+  const startedInPeriod = bookingsOverlapExcludingCancelled.filter(
+    (b) => b.start_date >= periodStart && b.start_date <= periodEnd,
+  );
+
+  type Agg = { name: string; bookingIds: Set<string>; jumlahTerjual: number; pendapatan: number };
+  const bySaleItemId = new Map<string, Agg>();
+  for (const b of startedInPeriod) {
+    for (const s of b.saleItems) {
+      const agg = bySaleItemId.get(s.sale_item_id) ?? { name: s.name, bookingIds: new Set(), jumlahTerjual: 0, pendapatan: 0 };
+      agg.bookingIds.add(b.id);
+      agg.jumlahTerjual += s.quantity;
+      agg.pendapatan += s.subtotal;
+      bySaleItemId.set(s.sale_item_id, agg);
+    }
+  }
+
+  return [...bySaleItemId.entries()]
+    .map(([saleItemId, agg]) => ({
+      saleItemId,
+      name: agg.name,
+      jumlahTransaksi: agg.bookingIds.size,
+      jumlahTerjual: agg.jumlahTerjual,
+      pendapatan: agg.pendapatan,
+    }))
+    .sort((a, b) => b.pendapatan - a.pendapatan);
 }

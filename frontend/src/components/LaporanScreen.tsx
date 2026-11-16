@@ -4,7 +4,7 @@ import { fetchHistoryBookings } from '../hooks/useHistory';
 import type { HistoryBooking } from '../hooks/useHistory';
 import { useItems } from '../hooks/useItems';
 import { formatIDR } from '../utils/formatters';
-import { buildMonthlyReport, buildPerAlatReport } from '../utils/reportAggregation';
+import { buildMonthlyReport, buildPerAlatReport, buildBarangJualReport } from '../utils/reportAggregation';
 import type { MonthlyReportRow, PerAlatReportResult } from '../utils/reportAggregation';
 import { downloadLaporanExcel } from '../utils/historyExport';
 
@@ -48,6 +48,11 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
     () => buildMonthlyReport(monthlyBookings.filter((b) => b.status !== 'dibatalkan')),
     [monthlyBookings],
   );
+  // Barang Jual (habis pakai), v1 (brief 16 Nov 2026) -- kolom/kartu baru
+  // HANYA tampil kalau business ini memang pernah menjual sesuatu di
+  // tahun yang dipilih, supaya rental tanpa barang jual sama sekali
+  // tampil PERSIS seperti sebelum fitur ini ada (regresi).
+  const hasBarangJualDataMonthly = monthlyRows.some((r) => r.pendapatanBarangJual > 0);
   const maxTotalPemasukan = Math.max(1, ...monthlyRows.map((r) => r.totalPemasukan));
   const defaultHighlightMonth = year === currentYear ? new Date().getMonth() + 1 : 12;
   const [highlightMonth, setHighlightMonth] = useState(defaultHighlightMonth);
@@ -106,6 +111,14 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
     );
   }, [perAlatBookings, activeItems, periodStart, periodEnd]);
 
+  // Barang Jual (habis pakai), v1 -- ringkasan terpisah (jumlah terjual +
+  // pendapatan), TANPA konsep keterpakaian/okupansi (tidak relevan untuk
+  // barang habis pakai, beda dari alat sewa di atas).
+  const barangJualRows = useMemo(
+    () => buildBarangJualReport(perAlatBookings.filter((b) => b.status !== 'dibatalkan'), periodStart, periodEnd),
+    [perAlatBookings, periodStart, periodEnd],
+  );
+
   const sortedRows = useMemo(() => {
     const rows = [...perAlatResult.rows];
     if (sortBy === 'pendapatan') rows.sort((a, b) => b.pendapatan - a.pendapatan);
@@ -123,7 +136,7 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
   async function handleExport() {
     setExporting(true);
     try {
-      await downloadLaporanExcel({ year, monthlyRows, periodStart, periodEnd, perAlatResult });
+      await downloadLaporanExcel({ year, monthlyRows, periodStart, periodEnd, perAlatResult, barangJualRows });
     } finally {
       setExporting(false);
     }
@@ -223,6 +236,12 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
                     <p className="text-[10px] text-[#6E6853] font-semibold uppercase">Pendapatan Sewa</p>
                     <p className="text-sm font-bold text-[#26302B]">{formatIDR(highlightRow.pendapatanSewa)}</p>
                   </div>
+                  {hasBarangJualDataMonthly && (
+                    <div className="bg-[#FBFAF4] p-3 rounded-xl border border-[#DBD5C1]">
+                      <p className="text-[10px] text-[#6E6853] font-semibold uppercase">Penjualan Barang</p>
+                      <p className="text-sm font-bold text-[#26302B]">{formatIDR(highlightRow.pendapatanBarangJual)}</p>
+                    </div>
+                  )}
                   <div className="bg-[#FBFAF4] p-3 rounded-xl border border-[#DBD5C1]">
                     <p className="text-[10px] text-[#6E6853] font-semibold uppercase">Denda Telat + Rusak/Hilang</p>
                     <p className="text-sm font-bold text-[#26302B]">{formatIDR(highlightRow.dendaTelat + highlightRow.dendaKerusakan)}</p>
@@ -245,6 +264,7 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
                     <tr className="border-b border-[#DBD5C1] text-left text-[#6E6853]">
                       <th className="p-2.5 font-semibold">Bulan</th>
                       <th className="p-2.5 font-semibold text-right">Pendapatan Sewa</th>
+                      {hasBarangJualDataMonthly && <th className="p-2.5 font-semibold text-right">Penjualan Barang</th>}
                       <th className="p-2.5 font-semibold text-right">Denda Telat</th>
                       <th className="p-2.5 font-semibold text-right">Denda Rusak/Hilang</th>
                       <th className="p-2.5 font-semibold text-right">Total Pemasukan</th>
@@ -259,6 +279,7 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
                       <tr key={row.month} className={`border-b border-[#E6E1D2] last:border-0 ${row.month === highlightMonth ? 'bg-[#E8EFEA]' : ''}`}>
                         <td className="p-2.5 font-bold text-[#26302B]">{MONTH_NAMES[row.month - 1]}</td>
                         <td className="p-2.5 text-right">{formatIDR(row.pendapatanSewa)}</td>
+                        {hasBarangJualDataMonthly && <td className="p-2.5 text-right">{formatIDR(row.pendapatanBarangJual)}</td>}
                         <td className="p-2.5 text-right">{formatIDR(row.dendaTelat)}</td>
                         <td className="p-2.5 text-right">{formatIDR(row.dendaKerusakan)}</td>
                         <td className="p-2.5 text-right font-bold text-[#26302B]">{formatIDR(row.totalPemasukan)}</td>
@@ -432,6 +453,27 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
                         <span className="font-semibold text-[#26302B]">Paket {b.bundleName}</span>
                         <span className="text-[#6E6853]">
                           {b.jumlahKaliDipilih}x dipilih — <strong className="text-[#26302B]">{formatIDR(b.pendapatan)}</strong>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Barang Jual (habis pakai), v1 (brief 16 Nov 2026) --
+                  ringkasan sederhana, TANPA keterpakaian (tidak ada
+                  konsep okupansi untuk barang habis pakai). Cuma tampil
+                  kalau ada penjualan di periode ini -- regresi aman
+                  untuk rental tanpa barang jual sama sekali. */}
+              {barangJualRows.length > 0 && (
+                <div className="bg-[#FBFAF4] p-4 rounded-2xl border border-[#DBD5C1]">
+                  <h3 className="text-sm font-bold text-[#26302B] mb-2">Penjualan Barang</h3>
+                  <div className="space-y-1.5">
+                    {barangJualRows.map((r) => (
+                      <div key={r.saleItemId} className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-[#26302B]">{r.name}</span>
+                        <span className="text-[#6E6853]">
+                          {r.jumlahTerjual}x terjual — <strong className="text-[#26302B]">{formatIDR(r.pendapatan)}</strong>
                         </span>
                       </div>
                     ))}
