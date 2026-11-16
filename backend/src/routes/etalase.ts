@@ -930,8 +930,24 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
   // storefront+checkout Bilbo yang eksplisit BUKAN yang dibangun di sini).
   // Filter murni show/hide sisi klien, tidak fetch ulang — semua item
   // sudah ada di HTML ini sejak awal.
+  const hasBundles = (page.bundles ?? []).length > 0;
+
+  // Paket Alat Tahap 2 rework (17 Nov 2026) — paket sekarang jadi
+  // kategori virtual di chip filter yang sama (bukan bagian terpisah
+  // di atas, lihat bundlesHtml di bawah). Kalau vendor kebetulan punya
+  // kategori ALAT literal bernama "Paket" (case-insensitive), itu
+  // DILEBUR ke chip "Paket" yang sama (sentinel data-cat __paket__)
+  // supaya tidak ada 2 chip berlabel sama — bukan dua chip terpisah.
+  const PAKET_SENTINEL = '__paket__';
+  const hasLiteralPaketCategoryCollision =
+    hasBundles && page.items.some((item) => (item.category ?? '').trim().toLowerCase() === 'paket');
   const categories = Array.from(
-    new Set(page.items.map((item) => item.category).filter((c): c is string => Boolean(c))),
+    new Set(
+      page.items
+        .map((item) => item.category)
+        .filter((c): c is string => Boolean(c))
+        .filter((c) => !(hasLiteralPaketCategoryCollision && c.trim().toLowerCase() === 'paket')),
+    ),
   ).sort((a, b) => a.localeCompare(b, 'id'));
 
   // Panah geser kiri/kanan meniru ScrollableRow.tsx (frontend/src/
@@ -940,11 +956,12 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
   // navbar in-app. Di sini plain button + scrollBy() vanilla JS, bukan
   // komponen React, tapi UX-nya sama persis.
   const categoryFilterHtml =
-    categories.length > 1
+    categories.length > 1 || hasBundles
       ? `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
     <button type="button" id="cat-scroll-left" aria-label="Geser ke kiri" style="flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid #DBD5C1;background:#FBFAF4;color:#26302B;font-weight:700;cursor:pointer;">&lsaquo;</button>
     <div id="cat-filter" class="cat-filter" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;">
       <button type="button" class="cat-pill active" data-cat="">Semua</button>
+      ${hasBundles ? `<button type="button" class="cat-pill" data-cat="${PAKET_SENTINEL}">📦 Paket</button>` : ''}
       ${categories
         .map((cat) => `<button type="button" class="cat-pill" data-cat="${escapeHtml(cat)}">${escapeHtml(cat)}</button>`)
         .join('\n      ')}
@@ -968,9 +985,7 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
   // persis sama seperti kartu alat (catatan koordinator poin 4).
   const bundles = page.bundles ?? [];
   const bundlesHtml = bundles.length
-    ? `<h2 style="font-size:1rem;margin:0 0 4px;color:#26302B;">Paket</h2>
-    <div class="items" style="margin-bottom:20px;">
-      ${bundles
+    ? bundles
         .map((bundle) => {
           const components: BundleComponent[] = bundle.components.map((c) => ({
             item_id: c.item_id,
@@ -1001,16 +1016,16 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
           const bundleImage = bundle.image_url ?? bundle.components[0]?.image_url ?? null;
           const componentsForClient = bundle.components.map((c) => ({ item_id: c.item_id, quantity: c.quantity }));
 
-          return `<div class="item-card bundle-card" style="background:#FBFAF4;border:1px solid #DBD5C1;border-radius:16px;overflow:hidden;">
+          return `<div class="item-card bundle-card" data-cat="${PAKET_SENTINEL}" style="background:#FBFAF4;border:1px solid #DBD5C1;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;">
   ${
     bundleImage
       ? `<img src="${escapeHtml(bundleImage)}" alt="${escapeHtml(bundle.name)}" class="zoomable" style="width:100%;height:160px;object-fit:cover;display:block;" loading="lazy" onclick="openZoom(this)" />`
       : NO_PHOTO_ICON
   }
-  <div style="padding:12px;">
+  <div style="padding:12px;display:flex;flex-direction:column;flex:1;">
     <p style="margin:0;font-weight:700;color:#26302B;">📦 ${escapeHtml(bundle.name)}</p>
-    ${bundle.description ? `<p style="margin:3px 0 0;font-size:0.8rem;color:#6E6853;">${escapeHtml(bundle.description)}</p>` : ''}
-    <p style="margin:6px 0 0;font-size:0.75rem;color:#6E6853;">Isi: ${escapeHtml(isiPaket)}</p>
+    ${bundle.description ? `<p style="margin:3px 0 0;font-size:0.8rem;color:#6E6853;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">${escapeHtml(bundle.description)}</p>` : ''}
+    <p style="margin:6px 0 0;font-size:0.75rem;color:#6E6853;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">Isi: ${escapeHtml(isiPaket)}</p>
     <p style="margin:8px 0 0;">
       ${
         hematRp > 0
@@ -1032,7 +1047,7 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
     }
     <p data-total="bundle-${escapeHtml(bundle.id)}" style="display:none;margin:4px 0 0;font-size:0.8rem;font-weight:700;color:#26302B;"></p>
     <span data-avail="bundle-${escapeHtml(bundle.id)}" style="display:none;margin-top:6px;padding:2px 8px;border-radius:999px;font-size:0.7rem;font-weight:700;"></span>
-    <div data-bundle-action="${escapeHtml(bundle.id)}" style="display:none;margin-top:8px;">
+    <div data-bundle-action="${escapeHtml(bundle.id)}" style="display:none;margin-top:auto;padding-top:8px;">
       <button type="button" class="pesan-btn-bundle" data-bundle-id="${escapeHtml(bundle.id)}" data-bundle-name="${escapeHtml(bundle.name)}"
         data-components="${escapeHtml(JSON.stringify(componentsForClient))}"
         data-price-per-day="${effectiveRates.price_per_day}" data-day2-rate="${effectiveRates.day2_rate}" data-day3-rate="${effectiveRates.day3_rate}"
@@ -1048,21 +1063,23 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
   </div>
 </div>`;
         })
-        .join('\n')}
-    </div>`
+        .join('\n')
     : '';
 
   const itemsHtml = page.items.length
     ? page.items
         .map((item) => {
           const details = [item.variant, item.size, item.color].filter(Boolean).join(' · ');
-          return `<div class="item-card" data-cat="${escapeHtml(item.category ?? '')}" style="background:#FBFAF4;border:1px solid #DBD5C1;border-radius:16px;overflow:hidden;">
+          const itemCat = hasLiteralPaketCategoryCollision && (item.category ?? '').trim().toLowerCase() === 'paket'
+            ? PAKET_SENTINEL
+            : item.category ?? '';
+          return `<div class="item-card" data-cat="${escapeHtml(itemCat)}" style="background:#FBFAF4;border:1px solid #DBD5C1;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;">
   ${
     item.image_url
       ? `<img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name)}" class="zoomable" style="width:100%;height:160px;object-fit:cover;display:block;" loading="lazy" onclick="openZoom(this)" />`
       : NO_PHOTO_ICON
   }
-  <div style="padding:12px;">
+  <div style="padding:12px;display:flex;flex-direction:column;flex:1;">
     <p style="margin:0;font-weight:700;color:#26302B;">${escapeHtml(item.name)}</p>
     ${item.category ? `<p style="margin:2px 0 0;font-size:0.8rem;color:#6E6853;">${escapeHtml(item.category)}</p>` : ''}
     ${details ? `<p style="margin:3px 0 0;font-size:0.75rem;color:#6E6853;font-weight:600;">${escapeHtml(details)}</p>` : ''}
@@ -1074,7 +1091,7 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
     }
     <p data-total="${escapeHtml(item.id)}" style="display:none;margin:4px 0 0;font-size:0.8rem;font-weight:700;color:#26302B;"></p>
     <span data-avail="${escapeHtml(item.id)}" style="display:none;margin-top:6px;padding:2px 8px;border-radius:999px;font-size:0.7rem;font-weight:700;"></span>
-    <div data-action="${escapeHtml(item.id)}" style="display:none;margin-top:8px;">
+    <div data-action="${escapeHtml(item.id)}" style="display:none;margin-top:auto;padding-top:8px;">
       <button type="button" class="pesan-btn" data-item-id="${escapeHtml(item.id)}" data-item-name="${escapeHtml(item.name)}"
         data-item-detail="${escapeHtml(details)}"
         data-price-per-day="${item.price_per_day}" data-day2-rate="${item.day2_rate}" data-day3-rate="${item.day3_rate}"
@@ -1091,7 +1108,16 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
 </div>`;
         })
         .join('\n')
-    : `<p style="color:#6E6853;">Katalog alat belum ditambahkan.</p>`;
+    : '';
+
+  // Paket (bundlesHtml) digabung ke grid yang sama, SELALU di depan alat
+  // satuan (urutan "Semua": paket dulu, lalu alat — brief 17 Nov 2026).
+  // Pesan "belum ada katalog" cuma relevan kalau BENAR-BENAR tidak ada
+  // alat maupun paket sama sekali.
+  const catalogGridHtml =
+    bundlesHtml || itemsHtml
+      ? `${bundlesHtml}\n${itemsHtml}`
+      : `<p style="color:#6E6853;">Katalog alat belum ditambahkan.</p>`;
 
   return `<!doctype html>
 <html lang="id">
@@ -1296,8 +1322,7 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
   </header>
 
   <section>
-    ${bundlesHtml}
-    <h2 style="font-size:1rem;margin:0 0 4px;color:#26302B;">Katalog Alat</h2>
+    <h2 style="font-size:1rem;margin:0 0 4px;color:#26302B;">Katalog</h2>
     ${
       page.writable
         ? `<p style="margin:0 0 10px;font-size:0.8rem;color:#6E6853;">Pilih tanggal ambil &amp; kembali untuk melihat sisa unit dan harga total — atau langsung hubungi kami lewat WhatsApp.</p>
@@ -1326,7 +1351,7 @@ function renderPage(page: PublicPageData, slug: string, req: import('express').R
     }
     ${categoryFilterHtml}
     <div class="items">
-      ${itemsHtml}
+      ${catalogGridHtml}
     </div>
   </section>
 

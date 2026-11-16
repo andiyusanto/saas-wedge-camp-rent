@@ -197,7 +197,8 @@ function BundleFormModal({
               </label>
             </div>
             <p className="text-[11px] text-[#6E6853] mt-1">
-              Kosongkan kalau tidak ada — Etalase otomatis memakai foto komponen pertama paket ini.
+              Kosongkan kalau tidak ada — Etalase otomatis memakai foto komponen pertama paket ini. Tips: foto semua
+              isi paket dalam satu frame (ditata di lantai/alas) supaya pelanggan langsung tahu isinya.
             </p>
           </div>
 

@@ -568,6 +568,10 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           peringatan di kartu paket (di layar ini) dan di Catat Transaksi, sampai alat itu diaktifkan lagi atau
           dikeluarkan dari resep paket (lewat <Ui>Ubah</Ui>).
         </Note>
+        <p>
+          Tips: foto semua isi paket dalam satu frame (ditata di lantai/alas) supaya pelanggan langsung tahu
+          isinya. Kalau foto paket dikosongkan, Etalase otomatis memakai foto alat pertama dalam paket.
+        </p>
         <h4 className="text-sm font-bold text-[#26302B] pt-2">Barang Jual (habis pakai)</h4>
         <p>
           Untuk barang yang dijual-belikan ke pelanggan (bukan disewakan), mis. baterai, jas hujan plastik, hand
@@ -898,12 +902,14 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           bukan cuma hari pertama.
         </p>
         <Note>
-          Paket yang kamu buat di <Ui>Katalog &amp; Stok Alat</Ui> (<SectionLink id="g-katalog">bagian 5</SectionLink>) otomatis tampil sebagai bagian "Paket"
-          di ATAS daftar alat — cuma kalau paketnya aktif DAN semua alat di dalamnya juga aktif. Kartu paket
-          menampilkan foto (foto paket kalau diisi, atau otomatis foto alat pertama di dalamnya kalau tidak), isi
-          paket, dan harga — termasuk harga coret + "Hemat Rp..." kalau paketnya pakai potongan. Sisa paket yang
-          bisa dipesan dihitung dari sisa alat komponennya sendiri (bukan stok terpisah) — kalau salah satu alat di
-          dalam paket habis, paketnya ikut tampil habis.
+          Paket yang kamu buat di <Ui>Katalog &amp; Stok Alat</Ui> (<SectionLink id="g-katalog">bagian 5</SectionLink>) otomatis tampil di katalog sebagai
+          kategori <Ui>📦 Paket</Ui> tersendiri di pill filter (langsung setelah <Ui>Semua</Ui>) — cuma kalau paketnya
+          aktif DAN semua alat di dalamnya juga aktif. Di filter <Ui>Semua</Ui>, kartu paket tampil lebih dulu
+          sebelum alat satuan. Kartu paket menampilkan foto (foto paket kalau diisi, atau otomatis foto alat
+          pertama di dalamnya kalau tidak), isi paket, dan harga — termasuk harga coret + "Hemat Rp..." kalau
+          paketnya pakai potongan. Sisa paket yang bisa dipesan dihitung dari sisa alat komponennya sendiri (bukan
+          stok terpisah) — kalau salah satu alat di dalam paket habis, paketnya ikut tampil habis. Tips: foto semua
+          isi paket dalam satu frame (ditata di lantai/alas) supaya pelanggan langsung tahu isinya.
         </Note>
         <Note>
           <strong>Ini bukan toko online/checkout</strong> — tidak ada pembayaran online sungguhan di halaman
