@@ -295,6 +295,10 @@ export function NewBookingModal({
   // supaya tidak menambah friksi di kasus umum (sudah pilih jaminan).
   const [noDepositConfirmed, setNoDepositConfirmed] = useState(false);
   const [dpPaid, setDpPaid] = useState('0');
+  // Cara bayar DP (brief Pelunasan 17 Nov 2026) -- opsional, kolom &
+  // trigger log_initial_dp_payment() sudah siap (migration 067). '' =
+  // tidak dicatat, pola sama baris lama sebelum fitur ini ada.
+  const [dpMethod, setDpMethod] = useState('');
   const [autoOpenWA, setAutoOpenWA] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -390,6 +394,7 @@ export function NewBookingModal({
     setDepositNote('');
     setDepositAmount('');
     setDpPaid('0');
+    setDpMethod('');
     setError(null);
     // bundles sengaja masuk dependency -- useBundles() mulai dari array
     // kosong sebelum fetch-nya selesai; tanpa ini, prefill paket yang
@@ -633,6 +638,7 @@ export function NewBookingModal({
           deposit: depositType ? { type: depositType, amount: depositAmount, note: depositNote || null } : null,
           total_price: totalPrice,
           dp_paid: Number(dpPaid) || 0,
+          dp_method: dpMethod || null,
         }),
       });
     } catch (err) {
@@ -1347,6 +1353,21 @@ export function NewBookingModal({
                   className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] font-bold focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
                 />
               </div>
+              {Number(dpPaid) > 0 && (
+                <div>
+                  <label className="block font-semibold text-[#6E6853] mb-1">Cara Bayar DP (opsional)</label>
+                  <select
+                    value={dpMethod}
+                    onChange={(e) => setDpMethod(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+                  >
+                    <option value="">Tidak dicatat</option>
+                    <option value="tunai">Tunai</option>
+                    <option value="transfer">Transfer</option>
+                    <option value="qris">QRIS</option>
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="block font-semibold text-[#6E6853] mb-1">Sisa Bayar Saat Ambil</label>
                 <div className="px-3 py-2 rounded-lg bg-[#FAF0EE] border border-[#A8412E]/30 text-[#A8412E] font-extrabold text-sm">

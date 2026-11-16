@@ -196,6 +196,62 @@ export async function fetchHistoryBookings(
   return { rows: rows.map(mapBooking), error: null };
 }
 
+// "Uang Diterima" per bulan paid_at (brief Pelunasan 17 Nov 2026, revisi
+// koordinator 17 Nov 2026) -- SEBELUMNYA dihitung dari payments yang
+// menumpang di `bookings` yang sudah difilter per TAHUN lewat `start_date`
+// (fetchHistoryBookings), jadi DP yang dibayar di tahun N untuk booking
+// yang start_date-nya tahun N+1 (kasus UMUM di akhir tahun, bukan langka)
+// ikut HILANG. Diperbaiki dengan fetch TERPISAH langsung ke
+// `booking_payments`, difilter `business_id` + `paid_at` dalam TAHUN yang
+// dipilih sendiri (bukan ikut rentang start_date booking manapun) --
+// paginasi `.range()` paralel + `order()` deterministik (aturan CLAUDE.md
+// bagian 7: PostgREST max_rows=1000, query tanpa urutan deterministik
+// bisa dobel/terlompati antar halaman). Baris refund/koreksi (amount
+// negatif) ikut terhitung APA ADANYA tanpa filter status booking apa pun
+// -- itu sudah benar secara aritmatika (refund pada booking yang
+// dibatalkan menetralkan payment aslinya di bulan yang sama), tidak perlu
+// join ke `bookings.status` untuk itu.
+export async function fetchPaymentsInYear(
+  businessId: string,
+  year: number,
+): Promise<{ rows: { amount: number; paid_at: string }[]; error: string | null }> {
+  if (!supabase) return { rows: [], error: null };
+
+  const PAGE_SIZE = 1000;
+  const from = `${year}-01-01T00:00:00`;
+  const to = `${year}-12-31T23:59:59.999`;
+
+  const { count, error: countError } = await supabase
+    .from('booking_payments')
+    .select('id', { count: 'exact', head: true })
+    .eq('business_id', businessId)
+    .gte('paid_at', from)
+    .lte('paid_at', to);
+  if (countError) return { rows: [], error: countError.message };
+
+  const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
+  const pageResults = await Promise.all(
+    Array.from({ length: totalPages }, (_, pageIndex) => {
+      const offset = pageIndex * PAGE_SIZE;
+      return supabase!
+        .from('booking_payments')
+        .select('amount, paid_at, id')
+        .eq('business_id', businessId)
+        .gte('paid_at', from)
+        .lte('paid_at', to)
+        .order('paid_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(offset, offset + PAGE_SIZE - 1);
+    }),
+  );
+
+  const firstError = pageResults.find((r) => r.error)?.error;
+  if (firstError) return { rows: [], error: firstError.message };
+
+  const rows = pageResults.flatMap((r) => (r.data ?? []) as { amount: number; paid_at: string }[]);
+  return { rows, error: null };
+}
+
 // Riwayat cuma butuh data tersimpan (transaksi yang range tanggalnya sudah
 // lewat/ditutup) — tidak perlu perhitungan live is_overdue/suggested_late_fee
 // seperti useTrackings, jadi query langsung ke Supabase (pola sama seperti

@@ -3,7 +3,7 @@
 // diuji murni (tanpa Supabase/React) -- fixture HistoryBooking minimal.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMonthlyReport, buildPerAlatReport, buildBarangJualReport, clipOccupiedDaysToPeriod } from '../reportAggregation.js';
+import { buildMonthlyReport, buildCashReceivedByMonth, buildPerAlatReport, buildBarangJualReport, clipOccupiedDaysToPeriod } from '../reportAggregation.js';
 import type { HistoryBooking, HistoryBookingItem, HistorySaleItem } from '../../hooks/useHistory.js';
 
 function item(overrides: Partial<HistoryBookingItem>): HistoryBookingItem {
@@ -58,10 +58,10 @@ test('buildMonthlyReport: status batal TIDAK dihitung (caller harus filter sebel
   // membuktikan: kalau caller lupa filter, booking batal IKUT
   // terhitung (bukti fungsi murni ikut apa adanya) -- jadi caller WAJIB
   // filter, seperti yang akan dilakukan LaporanScreen.tsx.
-  const withoutFilter = buildMonthlyReport(bookings);
+  const withoutFilter = buildMonthlyReport(bookings, new Map());
   assert.equal(withoutFilter[2].pendapatanSewa, 100_000 + 999_999); // bulan 3 (index 2) -- bukti TANPA filter ikut salah
 
-  const filtered = buildMonthlyReport(bookings.filter((b) => b.status !== 'dibatalkan'));
+  const filtered = buildMonthlyReport(bookings.filter((b) => b.status !== 'dibatalkan'), new Map());
   assert.equal(filtered[2].pendapatanSewa, 100_000); // dengan filter -- benar
   assert.equal(filtered[2].jumlahTransaksi, 1);
 });
@@ -78,7 +78,7 @@ test('buildMonthlyReport: denda telat dan kerusakan/hilang dipisah, totalPemasuk
       ],
     }),
   ];
-  const [row] = [buildMonthlyReport(bookings)[4]];
+  const [row] = [buildMonthlyReport(bookings, new Map())[4]];
   assert.equal(row.dendaTelat, 20_000);
   assert.equal(row.dendaKerusakan, 20_000); // kerusakan + kehilangan
   assert.equal(row.totalPemasukan, 50_000 + 20_000 + 20_000);
@@ -89,13 +89,13 @@ test('buildMonthlyReport: Januari tidak ada pembanding (null), bulan lain dihitu
     booking({ id: 'jan', start_date: '2026-01-05', total_price: 100_000 }),
     booking({ id: 'feb', start_date: '2026-02-05', total_price: 150_000 }),
   ];
-  const rows = buildMonthlyReport(bookings);
+  const rows = buildMonthlyReport(bookings, new Map());
   assert.equal(rows[0].perubahanPersenVsBulanLalu, null); // Januari
   assert.equal(rows[1].perubahanPersenVsBulanLalu, 50); // (150000-100000)/100000*100
 });
 
 test('buildMonthlyReport: rataRata null kalau jumlahTransaksi 0, bukan NaN/Infinity', () => {
-  const rows = buildMonthlyReport([]);
+  const rows = buildMonthlyReport([], new Map());
   for (const row of rows) {
     assert.equal(row.jumlahTransaksi, 0);
     assert.equal(row.rataRata, null);
@@ -199,7 +199,7 @@ test('buildMonthlyReport: pendapatanBarangJual dipisah, pendapatanSewa dibalik d
     total_price: 30_000, // sewa 10.000 (item default) + barang jual 20.000
     saleItems: [saleItem({ subtotal: 20_000 })],
   });
-  const rows = buildMonthlyReport([b]);
+  const rows = buildMonthlyReport([b], new Map());
   const march = rows.find((r) => r.month === 3)!;
   assert.equal(march.pendapatanBarangJual, 20_000);
   assert.equal(march.pendapatanSewa, 10_000); // 30.000 - 20.000
@@ -208,7 +208,7 @@ test('buildMonthlyReport: pendapatanBarangJual dipisah, pendapatanSewa dibalik d
 
 test('buildMonthlyReport: tanpa barang jual, pendapatanSewa = total_price PERSIS seperti sebelum fitur ini (regresi)', () => {
   const b = booking({ start_date: '2026-04-05', end_date: '2026-04-06', total_price: 50_000, saleItems: [] });
-  const rows = buildMonthlyReport([b]);
+  const rows = buildMonthlyReport([b], new Map());
   const april = rows.find((r) => r.month === 4)!;
   assert.equal(april.pendapatanSewa, 50_000);
   assert.equal(april.pendapatanBarangJual, 0);
@@ -237,4 +237,35 @@ test('buildBarangJualReport: tanpa barang jual sama sekali -> array kosong', () 
   const b = booking({ saleItems: [] });
   const rows = buildBarangJualReport([b], '2026-01-01', '2026-01-31');
   assert.deepEqual(rows, []);
+});
+
+test('buildCashReceivedByMonth: dikelompokkan per bulan paid_at, bukan start_date booking manapun', () => {
+  const byMonth = buildCashReceivedByMonth([
+    { amount: 50_000, paid_at: '2026-11-20T10:00:00Z' },
+    { amount: 25_000, paid_at: '2026-11-25T10:00:00Z' },
+    { amount: 100_000, paid_at: '2026-12-02T10:00:00Z' },
+  ]);
+  assert.equal(byMonth.get(11), 75_000);
+  assert.equal(byMonth.get(12), 100_000);
+  assert.equal(byMonth.get(1), undefined);
+});
+
+test('buildCashReceivedByMonth: refund/koreksi (amount negatif) menetralkan di bulan yang sama', () => {
+  const byMonth = buildCashReceivedByMonth([
+    { amount: 50_000, paid_at: '2026-11-20T10:00:00Z' },
+    { amount: -50_000, paid_at: '2026-11-21T10:00:00Z' },
+  ]);
+  assert.equal(byMonth.get(11), 0);
+});
+
+test('buildMonthlyReport: uangDiterima dari payments terpisah -- DP Desember untuk booking Januari tahun DEPAN tetap terhitung di Desember (lintas tahun)', () => {
+  // Booking yang start_date-nya TAHUN DEPAN tidak ada di dataset `bookings`
+  // tahun ini sama sekali (difilter caller di LaporanScreen.tsx) -- tapi
+  // DP-nya yang dibayar BULAN INI (Desember tahun ini) tetap harus masuk
+  // "Uang Diterima" Desember, karena paymentsInYear di-fetch TERPISAH
+  // berdasarkan paid_at, bukan ikut filter start_date booking.
+  const cashByMonth = buildCashReceivedByMonth([{ amount: 75_000, paid_at: '2026-12-15T10:00:00Z' }]);
+  const rows = buildMonthlyReport([], cashByMonth);
+  assert.equal(rows[11].uangDiterima, 75_000);
+  assert.equal(rows[11].jumlahTransaksi, 0); // booking-nya sendiri tidak ada di tahun ini
 });

@@ -42,31 +42,41 @@ export type MonthlyReportRow = {
   perubahanPersenVsBulanLalu: number | null;
 };
 
+// "Uang Diterima" per bulan `paid_at` (brief Pelunasan 17 Nov 2026, revisi
+// koordinator 17 Nov 2026) -- `payments` HARUS datang dari fetch
+// TERPISAH (`fetchPaymentsInYear()`, useHistory.ts), difilter `paid_at`
+// dalam TAHUN yang dipilih secara LANGSUNG -- BUKAN diturunkan dari
+// `HistoryBooking.payments` pada booking yang sudah difilter per tahun
+// lewat `start_date` (pendekatan SEBELUMNYA, salah: DP yang dibayar di
+// tahun N untuk booking yang start_date-nya tahun N+1 -- kasus UMUM di
+// akhir tahun, bukan langka -- akan hilang karena bookingnya sendiri
+// tidak masuk hitungan tahun N). Baris refund/koreksi (amount negatif)
+// ikut dijumlah apa adanya, tanpa filter status booking apa pun -- sudah
+// benar secara aritmatika (refund pada booking dibatalkan menetralkan
+// payment aslinya di bulan yang sama).
+export function buildCashReceivedByMonth(paymentsInYear: { amount: number; paid_at: string }[]): Map<number, number> {
+  const byMonth = new Map<number, number>();
+  for (const p of paymentsInYear) {
+    const month = Number(p.paid_at.slice(5, 7));
+    byMonth.set(month, (byMonth.get(month) ?? 0) + p.amount);
+  }
+  return byMonth;
+}
+
 // bookings SUDAH difilter oleh caller ke tahun yang dipilih (start_date
 // diawali `${year}-`) DAN dikecualikan 'dibatalkan' -- fungsi ini cuma
 // mengelompokkan per bulan dari `start_date`, konsisten Riwayat.
-export function buildMonthlyReport(bookingsInYearExcludingCancelled: HistoryBooking[]): MonthlyReportRow[] {
+// `uangDiterimaByMonth` dari `buildCashReceivedByMonth()` di atas.
+export function buildMonthlyReport(
+  bookingsInYearExcludingCancelled: HistoryBooking[],
+  uangDiterimaByMonth: Map<number, number>,
+): MonthlyReportRow[] {
   const byMonth = new Map<number, HistoryBooking[]>();
   for (const b of bookingsInYearExcludingCancelled) {
     const month = Number(b.start_date.slice(5, 7));
     const list = byMonth.get(month) ?? [];
     list.push(b);
     byMonth.set(month, list);
-  }
-
-  // "Uang Diterima" (brief 17 Nov 2026) -- dikelompokkan per bulan
-  // paid_at, BUKAN ikut pengelompokan byMonth (start_date) di atas --
-  // satu booking boleh menyumbang payment ke bulan BERBEDA dari bulan
-  // ia mulai disewa (mis. DP dibayar duluan). Caller TIDAK mengecualikan
-  // 'dibatalkan' untuk fungsi ini secara khusus -- booking yang
-  // dibatalkan tapi pembayarannya di-refund (kind='koreksi', amount
-  // negatif) otomatis menetralkan diri sendiri di bulan yang sama.
-  const uangDiterimaByMonth = new Map<number, number>();
-  for (const b of bookingsInYearExcludingCancelled) {
-    for (const p of b.payments) {
-      const month = Number(p.paid_at.slice(5, 7));
-      uangDiterimaByMonth.set(month, (uangDiterimaByMonth.get(month) ?? 0) + p.amount);
-    }
   }
 
   const rows: MonthlyReportRow[] = [];

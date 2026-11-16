@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, Download, Package, TrendingDown, TrendingUp } from 'lucide-react';
-import { fetchHistoryBookings } from '../hooks/useHistory';
+import { fetchHistoryBookings, fetchPaymentsInYear } from '../hooks/useHistory';
 import type { HistoryBooking } from '../hooks/useHistory';
 import { useItems } from '../hooks/useItems';
 import { formatIDR } from '../utils/formatters';
-import { buildMonthlyReport, buildPerAlatReport, buildBarangJualReport } from '../utils/reportAggregation';
+import { buildMonthlyReport, buildCashReceivedByMonth, buildPerAlatReport, buildBarangJualReport } from '../utils/reportAggregation';
 import type { MonthlyReportRow, PerAlatReportResult } from '../utils/reportAggregation';
 import { downloadLaporanExcel } from '../utils/historyExport';
 
@@ -30,13 +30,23 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
   const [year, setYear] = useState(currentYear);
   const [monthlyBookings, setMonthlyBookings] = useState<HistoryBooking[]>([]);
   const [monthlyLoading, setMonthlyLoading] = useState(true);
+  // "Uang Diterima" (revisi koordinator 17 Nov 2026) -- fetch TERPISAH
+  // dari monthlyBookings, difilter paid_at dalam TAHUN yang dipilih
+  // secara LANGSUNG (lihat catatan panjang di fetchPaymentsInYear/
+  // buildCashReceivedByMonth) -- supaya DP yang dibayar di tahun ini
+  // untuk booking tahun depan (kasus umum di akhir tahun) tetap terhitung.
+  const [paymentsInYear, setPaymentsInYear] = useState<{ amount: number; paid_at: string }[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     setMonthlyLoading(true);
-    fetchHistoryBookings(businessId, `${year}-01-01`, `${year}-12-31`, 'start_date').then((res) => {
+    Promise.all([
+      fetchHistoryBookings(businessId, `${year}-01-01`, `${year}-12-31`, 'start_date'),
+      fetchPaymentsInYear(businessId, year),
+    ]).then(([bookingsRes, paymentsRes]) => {
       if (cancelled) return;
-      setMonthlyBookings(res.error ? [] : res.rows);
+      setMonthlyBookings(bookingsRes.error ? [] : bookingsRes.rows);
+      setPaymentsInYear(paymentsRes.error ? [] : paymentsRes.rows);
       setMonthlyLoading(false);
     });
     return () => {
@@ -44,9 +54,11 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
     };
   }, [businessId, year]);
 
+  const cashReceivedByMonth = useMemo(() => buildCashReceivedByMonth(paymentsInYear), [paymentsInYear]);
+
   const monthlyRows = useMemo(
-    () => buildMonthlyReport(monthlyBookings.filter((b) => b.status !== 'dibatalkan')),
-    [monthlyBookings],
+    () => buildMonthlyReport(monthlyBookings.filter((b) => b.status !== 'dibatalkan'), cashReceivedByMonth),
+    [monthlyBookings, cashReceivedByMonth],
   );
   // Barang Jual (habis pakai), v1 (brief 16 Nov 2026) -- kolom/kartu baru
   // HANYA tampil kalau business ini memang pernah menjual sesuatu di
