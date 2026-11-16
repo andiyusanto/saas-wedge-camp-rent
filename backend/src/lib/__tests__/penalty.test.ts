@@ -206,3 +206,29 @@ test('regresi: mode bertahap_12jam (computeLateFee/computeTieredLateFee) TIDAK d
   };
   assert.equal(typeof computeTieredLateFee(30, 0, 4, rates), 'number');
 });
+
+// Perbaikan pembulatan (koordinator 16 Nov 2026) -- tarif ganjil (bukan
+// kelipatan ribuan, baru mungkin terjadi sejak step HTML dihapus di
+// kolom Rupiah, 16 Nov 2026) × blok setengah hari (BLOCK_RATE 0.5) bisa
+// desimal -- dibulatkan ke rupiah terdekat di titik akhir.
+test('computeLateFee: tarif ganjil Rp37.665, telat 6 jam (1 blok/setengah hari) -> dibulatkan ke rupiah terdekat', () => {
+  // Tanpa pembulatan: 1 blok x 0.5 x 37665 = 18832.5 -> round ke 18833.
+  assert.equal(computeLateFee(6, 0, 37_665), 18_833);
+  assert.equal(Number.isInteger(computeLateFee(6, 0, 37_665)), true);
+});
+
+test('computeTieredLateFee: marginal ganjil pada setengah blok -> dibulatkan ke rupiah terdekat', () => {
+  const rates: ItemDayRates = {
+    price_per_day: 37_665,
+    day2_rate: 37_665,
+    day3_rate: 37_665,
+    day4_rate: 37_665,
+    day5_rate: 37_665,
+    extra_day_rate: 37_665,
+  };
+  // telat 6 jam toleransi 0 -> 1 blok -> setengah hari -> marginal hari
+  // ke-(rentDuration+1) = 37665, fee = round(0.5 * 37665) = 18833.
+  const fee = computeTieredLateFee(6, 0, 1, rates);
+  assert.equal(fee, 18_833);
+  assert.equal(Number.isInteger(fee), true);
+});

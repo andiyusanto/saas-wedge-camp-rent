@@ -184,3 +184,60 @@ test('Perpanjang 1 hari pada paket "harga sendiri" -- tambahan proporsional harg
   );
   assert.equal(extended, 225_000);
 });
+
+// Perbaikan pembulatan (koordinator 16 Nov 2026) -- tarif ganjil +
+// potongan persen bisa desimal per tingkat; dibulatkan SEBELUM
+// dijumlah untuk N hari, supaya total tetap konsisten dengan tarif
+// per-hari yang ditampilkan, dan alokasi ke komponen tetap = total persis.
+test('paket "ikuti_alat" + potongan 10% pada tarif ganjil -- tiap tingkat bulat, total bulat, alokasi = total persis', () => {
+  const tenda37665: ItemDayRates = { price_per_day: 37_665, day2_rate: 37_665, day3_rate: 37_665, day4_rate: 37_665, day5_rate: 37_665, extra_day_rate: 37_665 };
+  const carrier9999: ItemDayRates = { price_per_day: 9_999, day2_rate: 9_999, day3_rate: 9_999, day4_rate: 9_999, day5_rate: 9_999, extra_day_rate: 9_999 };
+  const components: BundleComponent[] = [
+    { item_id: 'tenda', quantityPerBundle: 1, catalogRates: tenda37665 },
+    { item_id: 'carrier', quantityPerBundle: 1, catalogRates: carrier9999 },
+  ];
+  const combined = combinedComponentRates(components); // 47664/hari
+  const discounted = applyBundleDiscount(combined, 'percent', 10);
+  // 47664 * 0.9 = 42897.6 -> round 42898, bulat di setiap tingkat.
+  assert.equal(discounted.price_per_day, 42_898);
+  assert.equal(Number.isInteger(discounted.price_per_day), true);
+
+  const days = 3;
+  const totalPaket = computeItemRentalPrice(discounted, days);
+  assert.equal(Number.isInteger(totalPaket), true);
+  assert.equal(totalPaket, 42_898 * 3);
+
+  const allocated = allocateBundlePrice(components, totalPaket, days);
+  for (const a of allocated) assert.equal(Number.isInteger(a.subtotalPerInstance), true);
+  const sum = allocated.reduce((s, a) => s + a.subtotalPerInstance, 0);
+  assert.equal(sum, totalPaket); // alokasi = total persis
+});
+
+test('Perpanjang paket dari snapshot RASIO terskala (tarif ganjil) -- tetap bulat di hari tambahan', () => {
+  // Komponen katalog tarif ganjil Rp37.665/hari, dialokasikan porsi
+  // ganjil (bukan rasio bulat) -- snapshot *_at_booking hasil rasio
+  // HARUS bulat (dibulatkan), dan subtotal utk hari tambahan (Perpanjang)
+  // tetap bulat.
+  const tenda37665: ItemDayRates = { price_per_day: 37_665, day2_rate: 37_665, day3_rate: 37_665, day4_rate: 37_665, day5_rate: 37_665, extra_day_rate: 37_665 };
+  const days = 2;
+  const standaloneTotal = 1 * computeItemRentalPrice(tenda37665, days); // 75330
+  const subtotalAllocated = 42_017; // porsi ganjil sembarang (bukan kelipatan rapi dari standaloneTotal)
+  const snapshot = computeBundleComponentRatesSnapshot(tenda37665, 1, days, subtotalAllocated);
+  for (const key of ['price_per_day', 'day2_rate', 'day3_rate', 'day4_rate', 'day5_rate', 'extra_day_rate'] as const) {
+    assert.equal(Number.isInteger(snapshot[key]), true, `${key} harus bulat`);
+  }
+  // Perpanjang ke 3 hari (1 hari tambahan) -- subtotal baru tetap bulat.
+  const extended = computeBookingItemSubtotal(
+    {
+      quantity: 1,
+      price_at_booking: snapshot.price_per_day,
+      day2_rate_at_booking: snapshot.day2_rate,
+      day3_rate_at_booking: snapshot.day3_rate,
+      day4_rate_at_booking: snapshot.day4_rate,
+      day5_rate_at_booking: snapshot.day5_rate,
+      extra_day_rate_at_booking: snapshot.extra_day_rate,
+    },
+    3,
+  );
+  assert.equal(Number.isInteger(extended), true);
+});
