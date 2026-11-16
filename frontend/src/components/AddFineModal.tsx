@@ -28,11 +28,22 @@ export function AddFineModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Bug Andi 16 Nov 2026 (pola sama UbahAlatModal.tsx dkk): form ini
+  // sebelumnya cuma reset `itemId` saat booking.id berubah -- membuka
+  // modal lagi untuk booking YANG SAMA (mis. setelah Tambah Denda
+  // pertama berhasil, lalu mau tambah denda kedua) membiarkan
+  // type/description/amount lama tetap terisi. Direset tiap modal
+  // DIBUKA (bukan cuma saat booking berganti), supaya form selalu mulai
+  // kosong/segar.
   useEffect(() => {
-    if (booking) {
+    if (isOpen && booking) {
+      setType('kerusakan');
+      setDescription('');
+      setAmount('');
       setItemId(booking.items.length === 1 ? booking.items[0].item_id : '');
+      setError(null);
     }
-  }, [booking?.id]);
+  }, [isOpen, booking?.id]);
 
   if (!isOpen || !booking) return null;
 

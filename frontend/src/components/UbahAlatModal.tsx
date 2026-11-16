@@ -138,7 +138,23 @@ export function UbahAlatModal({
     return groups;
   }, [booking]);
 
-  if (!isOpen || !booking) return null;
+  // Bug Andi 16 Nov 2026: `initialisedFor` sebelumnya TIDAK PERNAH direset
+  // saat modal ditutup -- membuka ulang booking YANG SAMA setelah Simpan
+  // melewati inisialisasi (initialisedFor === booking.id dari sesi
+  // sebelumnya masih tersimpan), jadi `savedResult` lama (layar "sudah
+  // tersimpan") dan `quantities` basi tetap tampil, seolah Ubah Alat cuma
+  // bisa dipakai sekali per transaksi. Direset di sini (bukan di
+  // onClose/useEffect terpisah) -- render-phase state adjustment, pola
+  // sama persis komentar "Rules of Hooks" di atas -- supaya saat isOpen
+  // balik jadi true nanti, `initialisedFor !== booking.id` otomatis benar
+  // lagi dan blok inisialisasi di bawah jalan ulang dari booking TERBARU
+  // (prop ini sudah hasil refetch GET /trackings setelah Simpan, bukan
+  // objek booking lama).
+  if (!isOpen) {
+    if (initialisedFor !== null) setInitialisedFor(null);
+    return null;
+  }
+  if (!booking) return null;
 
   if (initialisedFor !== booking.id) {
     const initial: Record<string, number> = {};

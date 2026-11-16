@@ -60,7 +60,15 @@ export function RescheduleModal({
   // (vendor yang memutuskan perlu kirim WA atau cukup simpan saja).
   const [savedResult, setSavedResult] = useState<{ start_date: string; end_date: string; total_price: number } | null>(null);
 
-  if (!isOpen || !booking) return null;
+  // Bug Andi 16 Nov 2026 (pola sama UbahAlatModal.tsx): `initialisedFor`
+  // direset di sini saat modal ditutup, supaya dibuka ulang untuk booking
+  // yang sama selalu inisialisasi ulang dari data TERBARU (bukan
+  // savedResult/state basi dari sesi sebelumnya).
+  if (!isOpen) {
+    if (initialisedFor !== null) setInitialisedFor(null);
+    return null;
+  }
+  if (!booking) return null;
 
   if (initialisedFor !== `${mode}:${booking.id}`) {
     setStartDate(booking.start_date);

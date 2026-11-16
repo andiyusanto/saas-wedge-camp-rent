@@ -39,7 +39,14 @@ export function ReturnModal({
   const [error, setError] = useState<string | null>(null);
   const [initialisedFor, setInitialisedFor] = useState<string | null>(null);
 
-  if (!isOpen || !booking) return null;
+  // Bug Andi 16 Nov 2026 (pola sama UbahAlatModal.tsx): reset saat ditutup
+  // supaya dibuka ulang untuk booking yang sama (mis. batal lalu buka
+  // lagi) selalu inisialisasi ulang dari data TERBARU.
+  if (!isOpen) {
+    if (initialisedFor !== null) setInitialisedFor(null);
+    return null;
+  }
+  if (!booking) return null;
 
   if (initialisedFor !== booking.id) {
     setLateFee(String(Math.round(booking.suggested_late_fee)));
