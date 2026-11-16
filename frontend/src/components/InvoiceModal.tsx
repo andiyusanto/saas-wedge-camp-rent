@@ -152,11 +152,53 @@ export function InvoiceModal({
             </tbody>
           </table>
 
+          {/* Barang Jual (habis pakai), v1 (brief 16 Nov 2026) -- tabel
+              kedua, terpisah dari alat sewa. Rental tanpa barang jual
+              (data.saleItems kosong) tidak menampilkan tabel ini sama
+              sekali -- regresi aman. */}
+          {data.saleItems.length > 0 && (
+            <table className="w-full text-xs mb-4 border-collapse">
+              <thead>
+                <tr className="border-b border-[#26302B]">
+                  <th className="text-left py-1.5">Barang Jual</th>
+                  <th className="text-center py-1.5">Qty</th>
+                  <th className="text-right py-1.5">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.saleItems.map((s, i) => (
+                  <tr key={i} className="border-b border-[#DBD5C1]">
+                    <td className="py-1.5">{s.name}</td>
+                    <td className="py-1.5 text-center">{s.quantity}x</td>
+                    <td className="py-1.5 text-right">{formatIDR(s.subtotal)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
           <div className="text-xs space-y-1 mb-4">
-            <div className="flex justify-between">
-              <span>Total Harga Sewa</span>
-              <strong>{formatIDR(data.totalPrice)}</strong>
-            </div>
+            {data.saleItems.length > 0 ? (
+              <>
+                <div className="flex justify-between">
+                  <span>Total Harga Sewa</span>
+                  <span>{formatIDR(data.items.reduce((sum, i) => sum + (i.subtotal ?? i.price_per_day * i.quantity * days), 0))}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Total Barang Jual</span>
+                  <span>{formatIDR(data.saleItems.reduce((sum, s) => sum + s.subtotal, 0))}</span>
+                </div>
+                <div className="flex justify-between font-bold">
+                  <span>Total Tagihan</span>
+                  <strong>{formatIDR(data.totalPrice)}</strong>
+                </div>
+              </>
+            ) : (
+              <div className="flex justify-between">
+                <span>Total Harga Sewa</span>
+                <strong>{formatIDR(data.totalPrice)}</strong>
+              </div>
+            )}
             <div className="flex justify-between">
               <span>DP Terbayar</span>
               <span>{formatIDR(data.dpPaid)}</span>

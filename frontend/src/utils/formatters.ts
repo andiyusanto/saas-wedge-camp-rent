@@ -258,6 +258,17 @@ export type ReceiptFine = {
   item_name?: string | null;
 };
 
+// Barang Jual (habis pakai), v1 (brief 16 Nov 2026, migration 066) --
+// tipe TERPISAH dari ReceiptItem (bukan reuse) karena barang jual tidak
+// punya tarif per-hari bertingkat, cuma harga satuan flat -- subtotal =
+// harga × qty, tidak tergantung jumlah hari sewa sama sekali.
+export type ReceiptSaleItem = {
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+};
+
 export type ReceiptData = {
   bookingNumber: string;
   customerName: string;
@@ -265,6 +276,7 @@ export type ReceiptData = {
   startDate: string;
   endDate: string;
   items: ReceiptItem[];
+  saleItems: ReceiptSaleItem[];
   totalPrice: number;
   dpPaid: number;
   depositType: string | null;
@@ -336,6 +348,22 @@ export function generateWhatsAppReceipt(data: ReceiptData): string {
   const remaining = Math.max(0, data.totalPrice - data.dpPaid);
   const totalFines = data.fines.reduce((sum, f) => sum + f.amount, 0);
 
+  // Barang Jual (habis pakai), v1 (brief 16 Nov 2026) -- terpisah dari
+  // alat sewa, tidak tergantung jumlah hari. Rental tanpa barang jual
+  // (saleItemsText kosong) menghasilkan struk PERSIS seperti sebelum
+  // fitur ini ada (regresi aman) -- baris "Total Harga Sewa" di bawah
+  // TETAP memakai data.totalPrice langsung seperti semula untuk kasus
+  // itu; cuma saat ADA barang jual baris itu diganti rincian sewa+
+  // barang+total gabungan, supaya override manual (data.totalPrice)
+  // tetap jadi angka akhir yang ditampilkan, bukan dihitung ulang di sini.
+  const saleItemsText = data.saleItems
+    .map((s) => `• ${s.name} (${s.quantity}x) @${formatIDR(s.unitPrice)} = ${formatIDR(s.subtotal)}`)
+    .join('\n');
+  const rentalSubtotal = data.items.reduce(
+    (sum, i) => sum + (i.subtotal ?? i.price_per_day * i.quantity * days),
+    0,
+  );
+
   let finesText = '';
   if (data.fines.length > 0) {
     finesText =
@@ -364,9 +392,18 @@ Tanggal Kembali: ${formatDateIndo(data.endDate)} (${days} hari)${
 
 *DAFTAR PERALATAN:*
 ${itemsText}
+${
+  saleItemsText
+    ? `\n*BARANG YANG DIBELI:*\n${saleItemsText}`
+    : ''
+}
 
 ---------------------------------------
-Total Harga Sewa: *${formatIDR(data.totalPrice)}*
+${
+  saleItemsText
+    ? `Total Harga Sewa: *${formatIDR(rentalSubtotal)}*\nTotal Barang Jual: *${formatIDR(data.saleItems.reduce((sum, s) => sum + s.subtotal, 0))}*\nTotal Tagihan: *${formatIDR(data.totalPrice)}*`
+    : `Total Harga Sewa: *${formatIDR(data.totalPrice)}*`
+}
 DP Terbayar: ${formatIDR(data.dpPaid)}
 *Sisa Pembayaran: ${formatIDR(remaining)}*
 ${

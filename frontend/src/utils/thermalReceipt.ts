@@ -132,7 +132,26 @@ export function buildThermalReceiptDoc(data: ReceiptData, paperWidth: PaperWidth
   }
   addRule();
 
-  addPriceRow('Total Sewa', formatIDR(data.totalPrice));
+  // Barang Jual (habis pakai), v1 (brief 16 Nov 2026) -- bagian terpisah
+  // dari alat sewa, flat (tidak tergantung jumlah hari). Rental tanpa
+  // barang jual (data.saleItems kosong) menghasilkan struk PERSIS
+  // seperti sebelum fitur ini ada (regresi aman).
+  const rentalSubtotal = data.items.reduce(
+    (sum, i) => sum + (i.subtotal ?? i.price_per_day * i.quantity * days),
+    0,
+  );
+  if (data.saleItems.length > 0) {
+    addText('BARANG JUAL', { bold: true });
+    for (const s of data.saleItems) {
+      addPriceRow(`${s.name} (${s.quantity}x)`, formatIDR(s.subtotal));
+    }
+    addRule();
+    addPriceRow('Total Sewa', formatIDR(rentalSubtotal));
+    addPriceRow('Total Barang Jual', formatIDR(data.saleItems.reduce((sum, s) => sum + s.subtotal, 0)));
+    addPriceRow('Total Tagihan', formatIDR(data.totalPrice));
+  } else {
+    addPriceRow('Total Sewa', formatIDR(data.totalPrice));
+  }
   addPriceRow('DP Terbayar', formatIDR(data.dpPaid));
   addPriceRow('Sisa Bayar', formatIDR(remaining));
 

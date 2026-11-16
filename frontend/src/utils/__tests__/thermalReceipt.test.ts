@@ -25,6 +25,7 @@ function receipt(overrides: Partial<ReceiptData>): ReceiptData {
     startDate: '2026-11-20',
     endDate: '2026-11-21',
     items: [item({})],
+    saleItems: [],
     totalPrice: 20_000,
     dpPaid: 10_000,
     depositType: null,
@@ -144,6 +145,31 @@ test('karakter non-ASCII pada nama disanitasi (tidak ada byte di luar ASCII)', (
       assert.ok(ch.charCodeAt(0) <= 0x7e, `karakter non-ASCII lolos: ${ch}`);
     }
   }
+});
+
+test('Barang Jual: ditampilkan terpisah dari alat sewa, dengan rincian sewa+barang+total tagihan', () => {
+  const doc = buildThermalReceiptDoc(
+    receipt({
+      items: [item({ subtotal: 20_000 })],
+      saleItems: [{ name: 'Baterai AA', quantity: 2, unitPrice: 10_000, subtotal: 20_000 }],
+      totalPrice: 40_000,
+    }),
+    58,
+  );
+  const joined = doc.textLines.join(' ');
+  assert.match(joined, /BARANG JUAL/);
+  assert.match(joined, /Baterai AA/);
+  assert.match(joined, /Total Sewa/);
+  assert.match(joined, /Total Barang Jual/);
+  assert.match(joined, /Total Tagihan/);
+});
+
+test('Barang Jual kosong: struk thermal PERSIS seperti sebelum fitur ini ada (regresi)', () => {
+  const doc = buildThermalReceiptDoc(receipt({ saleItems: [] }), 58);
+  const joined = doc.textLines.join(' ');
+  assert.doesNotMatch(joined, /BARANG JUAL/);
+  assert.doesNotMatch(joined, /Total Tagihan/);
+  assert.match(joined, /Total Sewa/);
 });
 
 test('buildThermalTestReceipt menghasilkan struk tes ringkas', () => {
