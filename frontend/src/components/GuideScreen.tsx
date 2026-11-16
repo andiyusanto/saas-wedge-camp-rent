@@ -499,6 +499,12 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           yang dikurangi/dihapus itu, komponen lain tetap harga semula.
         </Note>
         <Note>
+          Kalau punya Barang Jual (<SectionLink id="g-katalog">bagian 5</SectionLink>), bagian lipat{' '}
+          <Ui>Tambahan: barang jual</Ui> muncul di bagian bawah form — harganya flat (tidak tergantung jumlah hari
+          sewa), langsung dijumlahkan ke Total Harga. Stok otomatis berkurang saat Simpan, dan kembali otomatis
+          kalau transaksi ini dibatalkan nanti.
+        </Note>
+        <Note>
           Cara tanggal ambil &amp; kembali dihitung jadi "berapa hari" tergantung pengaturan{' '}
           <Ui>Cara Hitung Durasi Sewa</Ui> di tab Kelola Usaha (<SectionLink id="g-kelola-usaha">bagian 7</SectionLink>) — default <strong>per malam</strong> (ambil
           Sabtu, kembali Minggu = 1 hari, tanggal ambil &amp; kembali tidak boleh sama). Kalau usahamu pakai{' '}
@@ -562,6 +568,38 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           peringatan di kartu paket (di layar ini) dan di Catat Transaksi, sampai alat itu diaktifkan lagi atau
           dikeluarkan dari resep paket (lewat <Ui>Ubah</Ui>).
         </Note>
+        <h4 className="text-sm font-bold text-[#26302B] pt-2">Barang Jual (habis pakai)</h4>
+        <p>
+          Untuk barang yang dijual-belikan ke pelanggan (bukan disewakan), mis. baterai, jas hujan plastik, hand
+          warmer — buka tab <Ui>Barang Jual</Ui> di samping tab <Ui>Alat</Ui>/<Ui>Paket</Ui>. Sewalog{' '}
+          <strong>bukan aplikasi kasir</strong> — fitur ini sengaja ringan, tanpa modal/laba, riwayat stok masuk,
+          atau barcode.
+        </p>
+        <Steps
+          items={[
+            <>Tekan <Ui>Tambah Barang</Ui>, isi nama, harga jual per buah, stok sekarang, dan batas stok menipis
+              (opsional, cuma buat badge peringatan).</>,
+            <>Simpan — barang langsung bisa ditambahkan di bagian <Ui>Tambahan: barang jual</Ui> saat{' '}
+              <Ui>Catat Transaksi</Ui> (<SectionLink id="g-catat">bagian 4</SectionLink>) atau <Ui>Ubah Alat</Ui> (<SectionLink id="g-transaksi-aktif">bagian 3</SectionLink>).</>,
+          ]}
+        />
+        <p>
+          Stok baru datang? Tekan <Ui>+ Tambah stok</Ui> di daftar (cukup isi jumlahnya) — jangan edit angka Stok di
+          form <Ui>Ubah</Ui> untuk menambah stok, karena itu MENIMPA angkanya langsung (bisa salah kalau ada
+          transaksi lain yang baru saja mengurangi stok di saat yang bersamaan). Form <Ui>Ubah</Ui> dipakai untuk
+          koreksi angka yang memang keliru, bukan penambahan rutin.
+        </p>
+        <Note>
+          Stok berkurang OTOMATIS saat transaksi disimpan, dan KEMBALI otomatis kalau transaksi itu dibatalkan —
+          tidak berubah sama sekali saat alat lain dalam transaksi yang sama ditandai Diambil/Dikembalikan/Selesai
+          (barang jual sudah lepas tangan begitu transaksinya tersimpan, beda dari alat sewa yang masih berputar).
+        </Note>
+        <Note>
+          Barang jual yang sudah dinonaktifkan tetap boleh dikurangi/dihapus dari transaksi yang sudah
+          memuatnya lewat <Ui>Ubah Alat</Ui> (supaya stoknya bisa dikembalikan), tapi tidak bisa dipilih sebagai
+          tambahan baru — sama seperti alat sewa yang dinonaktifkan.
+        </Note>
+
         <h4 className="text-sm font-bold text-[#26302B] pt-2">Impor dari Excel (banyak alat sekaligus)</h4>
         <p>
           Dipakai saat pertama kali mengisi banyak alat sekaligus, atau mengubah harga banyak alat dalam satu waktu —
@@ -672,10 +710,16 @@ export function GuideScreen({ businessName }: { businessName: string }) {
               berapa kali disewa, total unit-hari, pendapatan, dan persen keterpakaian. Bisa diurutkan berdasarkan
               Pendapatan/Keterpakaian/Jumlah Sewa. Alat aktif yang tidak pernah disewa di periode itu ditampilkan
               terpisah di bawah tabel, begitu juga ringkasan paket (berapa kali tiap paket dipilih) kalau usahamu
-              punya Paket Alat (<SectionLink id="g-katalog">bagian 5</SectionLink>).
+              punya Paket Alat (<SectionLink id="g-katalog">bagian 5</SectionLink>), dan ringkasan{' '}
+              <Ui>Penjualan Barang</Ui> (berapa kali terjual + pendapatan) kalau usahamu punya Barang Jual (<SectionLink id="g-katalog">bagian 5</SectionLink>).
             </>,
           ]}
         />
+        <Note>
+          Kolom <Ui>Penjualan Barang</Ui> di <Ui>Pemasukan per Bulan</Ui> cuma muncul kalau pernah ada penjualan
+          barang jual di tahun itu. Total Pemasukan sudah menjumlahkan sewa + barang jual + denda — tidak dihitung
+          dobel.
+        </Note>
         <Note>
           Bulan dihitung dari tanggal AMBIL (konsisten dengan tab Transaksi), dan transaksi Dibatalkan tidak dihitung
           di kedua bagian. Januari (atau bulan pertama yang ada datanya) tidak punya pembanding "naik/turun" karena

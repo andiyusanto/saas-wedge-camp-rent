@@ -572,6 +572,52 @@ export async function resetDemoData(): Promise<DemoResetResult> {
     });
   }
 
+  // --- Barang Jual contoh (v1, brief 16 Nov 2026, migration 066) --
+  // upsert by-nama (sale_items tidak punya kolom `code`), pola PERSIS
+  // bundles di atas. Stok DITETAPKAN ULANG ke nilai seed tiap reset
+  // (bukan dipertahankan) -- konsisten dengan prinsip reset demo
+  // mengembalikan semuanya ke keadaan awal yang bisa diprediksi.
+  const existingSaleItems = await rest<{ id: string; name: string }[]>(
+    `sale_items?select=id,name&business_id=eq.${businessId}`,
+    ownerToken,
+  );
+  const existingSaleItemByName = Object.fromEntries(existingSaleItems.map((s) => [s.name, s.id]));
+
+  const SALE_ITEM_DEFS: { name: string; price: number; stock: number; low_stock_threshold: number | null }[] = [
+    { name: 'Baterai AA', price: 10000, stock: 40, low_stock_threshold: 10 },
+    { name: 'Jas Hujan Plastik', price: 15000, stock: 25, low_stock_threshold: 5 },
+    { name: 'Hand Warmer', price: 12000, stock: 30, low_stock_threshold: 5 },
+  ];
+
+  for (const def of SALE_ITEM_DEFS) {
+    const existingId = existingSaleItemByName[def.name];
+    if (existingId) {
+      await rest(`sale_items?id=eq.${existingId}`, ownerToken, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ price: def.price, stock: def.stock, low_stock_threshold: def.low_stock_threshold, deactivated_at: null }),
+      });
+    } else {
+      await rest('sale_items', ownerToken, {
+        method: 'POST',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ business_id: businessId, ...def }),
+      });
+    }
+  }
+
+  // Barang jual TAMBAHAN yang dibuat pengunjung demo dinonaktifkan tiap
+  // reset -- pola sama alat/paket tambahan di atas.
+  const seedSaleItemNames = new Set(SALE_ITEM_DEFS.map((d) => d.name));
+  const extraSaleItemIds = existingSaleItems.filter((s) => !seedSaleItemNames.has(s.name)).map((s) => s.id);
+  if (extraSaleItemIds.length > 0) {
+    await rest(`sale_items?id=in.(${extraSaleItemIds.join(',')})&business_id=eq.${businessId}`, ownerToken, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ deactivated_at: new Date().toISOString() }),
+    });
+  }
+
   // Push subscriptions (migration 056) milik business demo dihapus tiap
   // reset -- pengunjung demo yang sempat menekan "Aktifkan notifikasi"
   // tidak boleh terus menerima push dari akun demo setelah reset.

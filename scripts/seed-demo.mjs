@@ -561,6 +561,46 @@ async function main() {
     console.log(`  - ${extraBundleIds.length} paket tambahan di luar seed dinonaktifkan`);
   }
 
+  // --- Barang Jual contoh (v1, brief 16 Nov 2026, migration 066) --
+  // upsert by-nama, pola PERSIS bundles di atas.
+  const existingSaleItems = await rest(`sale_items?select=id,name&business_id=eq.${businessId}`, ownerToken);
+  const existingSaleItemByName = Object.fromEntries(existingSaleItems.map((s) => [s.name, s.id]));
+
+  const saleItemDefs = [
+    { name: 'Baterai AA', price: 10000, stock: 40, low_stock_threshold: 10 },
+    { name: 'Jas Hujan Plastik', price: 15000, stock: 25, low_stock_threshold: 5 },
+    { name: 'Hand Warmer', price: 12000, stock: 30, low_stock_threshold: 5 },
+  ];
+
+  for (const def of saleItemDefs) {
+    const existingId = existingSaleItemByName[def.name];
+    if (existingId) {
+      await rest(`sale_items?id=eq.${existingId}`, ownerToken, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ price: def.price, stock: def.stock, low_stock_threshold: def.low_stock_threshold, deactivated_at: null }),
+      });
+    } else {
+      await rest('sale_items', ownerToken, {
+        method: 'POST',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ business_id: businessId, ...def }),
+      });
+    }
+    console.log(`  + Barang Jual ${def.name}`);
+  }
+
+  const seedSaleItemNames = new Set(saleItemDefs.map((d) => d.name));
+  const extraSaleItemIds = existingSaleItems.filter((s) => !seedSaleItemNames.has(s.name)).map((s) => s.id);
+  if (extraSaleItemIds.length > 0) {
+    await rest(`sale_items?id=in.(${extraSaleItemIds.join(',')})&business_id=eq.${businessId}`, ownerToken, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ deactivated_at: new Date().toISOString() }),
+    });
+    console.log(`  - ${extraSaleItemIds.length} barang jual tambahan di luar seed dinonaktifkan`);
+  }
+
   // Push subscriptions (migration 056) milik business demo — sama persis
   // demoReset.ts.
   await rest(`push_subscriptions?business_id=eq.${businessId}`, ownerToken, {
