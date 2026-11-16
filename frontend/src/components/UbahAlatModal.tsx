@@ -153,6 +153,22 @@ export function UbahAlatModal({
     return groups;
   }, [booking]);
 
+  // Barang Jual (habis pakai), v1 (brief 16 Nov 2026) -- pola PERSIS
+  // pickerItems/bundleGroups di atas: useMemo WAJIB di atas early return
+  // (Rules of Hooks, catatan di atas) -- bug nyata kedua ditemukan
+  // Playwright E2E Barang Jual (16 Nov 2026, "Rendered more hooks than
+  // during the previous render") karena hook ini sempat ditaruh SETELAH
+  // guard `if (!booking) return null`. `booking` dioptional-chain di sini
+  // dengan alasan yang sama seperti pickerItems/bundleGroups.
+  const existingSaleByItemId = useMemo(
+    () => new Map((booking?.sale_items ?? []).map((bsi) => [bsi.sale_item_id, bsi])),
+    [booking],
+  );
+  const saleItemsPicker = useMemo(() => {
+    const existingInactive = inactiveSaleItems.filter((s) => existingSaleByItemId.has(s.id));
+    return [...saleItems, ...existingInactive];
+  }, [saleItems, inactiveSaleItems, existingSaleByItemId]);
+
   // Bug Andi 16 Nov 2026: `initialisedFor` sebelumnya TIDAK PERNAH direset
   // saat modal ditutup -- membuka ulang booking YANG SAMA setelah Simpan
   // melewati inisialisasi (initialisedFor === booking.id dari sesi
@@ -217,18 +233,6 @@ export function UbahAlatModal({
     const itemId = key.split('::')[0];
     return sum + estimateSubtotalForKey(key, itemId, qty);
   }, 0);
-
-  // Barang Jual (habis pakai), v1 -- pola sama existingPlainByItemId:
-  // existing di booking INI (dipertahankan walau barangnya belakangan
-  // dinonaktifkan) + katalog aktif saat ini, digabung sebagai pilihan
-  // picker. Harga existing pakai snapshot lama (price_at_booking),
-  // barang baru pakai harga katalog SEKARANG -- cuma preview, final
-  // tetap dihitung server (mergeSaleItemsForUpdate).
-  const existingSaleByItemId = new Map(booking.sale_items.map((bsi) => [bsi.sale_item_id, bsi]));
-  const saleItemsPicker = useMemo(() => {
-    const existingInactive = inactiveSaleItems.filter((s) => existingSaleByItemId.has(s.id));
-    return [...saleItems, ...existingInactive];
-  }, [saleItems, inactiveSaleItems, existingSaleByItemId]);
 
   const selectedSaleEntries = Object.entries(saleQuantities).filter(([, qty]) => qty > 0);
   function estimateSaleSubtotal(saleItemId: string, qty: number): number {
