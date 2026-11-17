@@ -35,6 +35,12 @@ function shortDate(dateStr: string) {
   return formatDateIndo(dateStr, true);
 }
 
+// Chip kategori "📦 Paket" (17 Nov 2026) -- pola SAMA PERSIS dengan Etalase
+// Online (routes/etalase.ts, PAKET_SENTINEL): kalau vendor kebetulan punya
+// kategori ALAT literal bernama "Paket" (case-insensitive), dilebur ke chip
+// sentinel yang sama, bukan dua chip terpisah berlabel sama.
+const PAKET_SENTINEL = '__paket__';
+
 export function CalendarScreen({
   session,
   businessId,
@@ -85,12 +91,27 @@ export function CalendarScreen({
     });
   }
 
+  const hasBundles = bundleAvailabilities.length > 0;
+  // Kategori alat literal "Paket" (case-insensitive) dilebur ke chip sentinel
+  // yang sama -- lihat PAKET_SENTINEL di atas, pola persis Etalase.
+  const hasLiteralPaketCategoryCollision =
+    hasBundles && (data?.items ?? []).some((i) => (i.category ?? '').trim().toLowerCase() === 'paket');
+  function categoryOf(item: { category: string | null }): string {
+    if (hasLiteralPaketCategoryCollision && (item.category ?? '').trim().toLowerCase() === 'paket') return PAKET_SENTINEL;
+    return item.category ?? '';
+  }
+
   // Diturunkan live dari katalog sendiri (sama seperti ItemsScreen.tsx) —
   // tiap vendor punya kategori sendiri, bukan daftar tetap satu untuk semua.
   const categories = useMemo(() => {
-    const values = new Set((data?.items ?? []).map((i) => i.category).filter((v): v is string => !!v));
-    return ['Semua', ...[...values].sort((a, b) => a.localeCompare(b))];
-  }, [data?.items]);
+    const values = new Set(
+      (data?.items ?? [])
+        .map((i) => i.category)
+        .filter((v): v is string => !!v)
+        .filter((c) => !(hasLiteralPaketCategoryCollision && c.trim().toLowerCase() === 'paket')),
+    );
+    return [...values].sort((a, b) => a.localeCompare(b));
+  }, [data?.items, hasLiteralPaketCategoryCollision]);
 
   function shiftDates(days: number) {
     const d = new Date(`${baseDate}T00:00:00`);
@@ -101,12 +122,26 @@ export function CalendarScreen({
     setBaseDate(`${y}-${m}-${day}`);
   }
 
-  const filteredItems = (data?.items ?? []).filter((item) => {
-    const matchesCategory = selectedCategory === 'Semua' || item.category === selectedCategory;
-    const q = searchQuery.toLowerCase();
-    const matchesSearch = item.name.toLowerCase().includes(q) || (item.code ?? '').toLowerCase().includes(q);
-    return matchesCategory && matchesSearch;
-  });
+  const isPaketFilterActive = selectedCategory === PAKET_SENTINEL;
+  // Grup "Paket" tampil di "Semua" (ikut status lipat tersimpan) DAN di chip
+  // "📦 Paket" sendiri (dipaksa terbuka, TANPA mengubah status lipat
+  // tersimpan) -- disembunyikan total di chip kategori alat lain.
+  const showPaketGroup = hasBundles && (selectedCategory === 'Semua' || isPaketFilterActive);
+  const paketGroupForcedOpen = isPaketFilterActive;
+
+  const filteredItems = isPaketFilterActive
+    ? []
+    : (data?.items ?? []).filter((item) => {
+        const matchesCategory = selectedCategory === 'Semua' || categoryOf(item) === selectedCategory;
+        const q = searchQuery.toLowerCase();
+        const matchesSearch = item.name.toLowerCase().includes(q) || (item.code ?? '').toLowerCase().includes(q);
+        return matchesCategory && matchesSearch;
+      });
+
+  // Kotak "Cari alat" juga mencari nama paket (brief 17 Nov 2026).
+  const filteredBundleAvailabilities = showPaketGroup
+    ? bundleAvailabilities.filter(({ bundle }) => bundle.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : [];
 
   return (
     <div className="space-y-6">
@@ -164,7 +199,7 @@ export function CalendarScreen({
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#6E6853]" />
             <input
               type="text"
-              placeholder="Cari alat (contoh: Tenda, 60L)..."
+              placeholder={hasBundles ? 'Cari alat atau paket...' : 'Cari alat (contoh: Tenda, 60L)...'}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2 text-xs rounded-xl bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:border-[#2B4739] focus:ring-1 focus:ring-[#2B4739]"
@@ -188,7 +223,7 @@ export function CalendarScreen({
 
         <div className="pt-1">
           <ScrollableRow>
-            {categories.map((cat) => (
+            {['Semua', ...(hasBundles ? [PAKET_SENTINEL] : []), ...categories].map((cat) => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
@@ -198,7 +233,7 @@ export function CalendarScreen({
                     : 'bg-[#F1EEE2] text-[#26302B] hover:bg-[#E6E1D2] border border-[#DBD5C1]'
                 }`}
               >
-                {cat}
+                {cat === PAKET_SENTINEL ? '📦 Paket' : cat}
               </button>
             ))}
           </ScrollableRow>
@@ -220,21 +255,23 @@ export function CalendarScreen({
         </div>
       </div>
 
-      {!loading && !error && bundleAvailabilities.length > 0 && (
+      {!loading && !error && showPaketGroup && filteredBundleAvailabilities.length > 0 && (
         <div className="bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] shadow-xs">
           <button
             type="button"
             onClick={togglePaketCollapsed}
-            className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left"
+            disabled={paketGroupForcedOpen}
+            className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left disabled:cursor-default"
           >
             <span className="font-bold text-sm text-[#26302B] flex items-center gap-2">
               <Package className="w-4 h-4" /> Paket
             </span>
-            {paketCollapsed ? <ChevronDown className="w-4 h-4 text-[#6E6853]" /> : <ChevronUp className="w-4 h-4 text-[#6E6853]" />}
+            {!paketGroupForcedOpen &&
+              (paketCollapsed ? <ChevronDown className="w-4 h-4 text-[#6E6853]" /> : <ChevronUp className="w-4 h-4 text-[#6E6853]" />)}
           </button>
-          {!paketCollapsed && (
+          {(paketGroupForcedOpen || !paketCollapsed) && (
             <div className="px-4 pb-4 space-y-3">
-              {bundleAvailabilities.map(({ bundle, availability }) => {
+              {filteredBundleAvailabilities.map(({ bundle, availability }) => {
                 const isExpanded = expandedBundleId === bundle.id;
                 // Indeks hari yang cocok dengan baseDate -- data.days[0]
                 // selalu = baseDate (param start_date useAvailability),
@@ -351,11 +388,17 @@ export function CalendarScreen({
         </div>
       )}
 
+      {!loading && !error && isPaketFilterActive && filteredBundleAvailabilities.length === 0 && (
+        <div className="bg-[#FBFAF4] rounded-2xl p-8 border border-[#DBD5C1] text-center text-[#6E6853] text-sm">
+          Paket tidak ditemukan dengan kata kunci tersebut.
+        </div>
+      )}
+
       {loading ? (
         <p className="text-sm text-[#6E6853]">Memuat kalender...</p>
       ) : error ? (
         <p className="text-sm text-[#A8412E]">Gagal memuat kalender: {error}</p>
-      ) : filteredItems.length === 0 ? (
+      ) : isPaketFilterActive ? null : filteredItems.length === 0 ? (
         <div className="bg-[#FBFAF4] rounded-2xl p-8 border border-[#DBD5C1] text-center text-[#6E6853] text-sm">
           {data?.items.length === 0
             ? 'Belum ada alat. Tambahkan dulu di tab "Katalog & Stok Alat".'

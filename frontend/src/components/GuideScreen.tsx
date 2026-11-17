@@ -291,7 +291,9 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           Kalau hari tertentu sisa sedikit/habis, muncul keterangan kecil "Terbatas: [nama alat]" — alat itu yang
           jumlahnya paling mepet, jadi penyebab paketnya tidak bisa dipesan lebih banyak. Grup ini bisa dilipat, dan
           status lipatnya diingat di perangkat itu saja. Paket yang salah satu alatnya dinonaktifkan tidak ditampilkan
-          sama sekali, sama seperti di Catat Transaksi/Etalase.
+          sama sekali, sama seperti di Catat Transaksi/Etalase. Ada juga chip filter <Ui>📦 Paket</Ui> (sesudah{' '}
+          <Ui>Semua</Ui>) kalau mau lihat daftar paket saja — kotak <Ui>Cari alat atau paket</Ui> ikut mencari nama
+          paket juga.
         </Note>
       </Section>
 
