@@ -393,19 +393,19 @@ function EtalaseMock() {
 function HeroPreview() {
   return (
     <div className="relative w-full max-w-[300px] h-[300px] lg:max-w-[340px] lg:h-[340px]" aria-hidden="true">
-      <div className="absolute inset-0 bg-[#FBFAF4] border border-[#DBD5C1] rounded-2xl shadow-xl p-3.5 overflow-hidden rotate-[6deg] translate-x-[10px] translate-y-[6px] opacity-70 z-10">
+      <div className="absolute inset-0 bg-[#FBFAF4] border border-[#DBD5C1] rounded-2xl shadow-xl p-3.5 overflow-hidden rotate-[6deg] translate-x-[10px] translate-y-[6px] opacity-70 z-0">
         <span className="block text-[11px] font-bold uppercase tracking-wide text-[#6E6853] mb-2.5">
           Jaminan &amp; denda
         </span>
         <TrackingMock />
       </div>
-      <div className="absolute inset-0 bg-[#FBFAF4] border border-[#DBD5C1] rounded-2xl shadow-xl p-3.5 overflow-hidden -rotate-[4deg] -translate-x-[8px] translate-y-[10px] opacity-90 z-20">
+      <div className="absolute inset-0 bg-[#FBFAF4] border border-[#DBD5C1] rounded-2xl shadow-xl p-3.5 overflow-hidden -rotate-[4deg] -translate-x-[8px] translate-y-[10px] opacity-90 z-10">
         <span className="block text-[11px] font-bold uppercase tracking-wide text-[#6E6853] mb-2.5">
           Catat transaksi
         </span>
         <TransactionMock />
       </div>
-      <div className="absolute inset-0 bg-[#FBFAF4] border border-[#DBD5C1] rounded-2xl shadow-xl p-3.5 overflow-hidden rotate-[1deg] z-30">
+      <div className="absolute inset-0 bg-[#FBFAF4] border border-[#DBD5C1] rounded-2xl shadow-xl p-3.5 overflow-hidden rotate-[1deg] z-20">
         <span className="block text-[11px] font-bold uppercase tracking-wide text-[#6E6853] mb-2.5">
           Kalender ketersediaan
         </span>
@@ -592,7 +592,7 @@ export function LandingPage() {
 
   return (
     <div className="min-h-screen bg-[#F1EEE2] text-[#26302B] flex flex-col">
-      <header className="sticky top-0 z-20 bg-[#2B4739] text-white shadow-md border-b border-[#1E3429]">
+      <header className="sticky top-0 z-50 bg-[#2B4739] text-white shadow-md border-b border-[#1E3429]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4 sm:gap-6">
             <a href="/" className="flex items-center gap-2.5">
