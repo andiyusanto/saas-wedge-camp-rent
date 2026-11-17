@@ -479,22 +479,26 @@ export async function resetDemoData(): Promise<DemoResetResult> {
   // TAMBAHAN yang dibuat pengunjung demo (code di luar 6 kode seed, atau
   // tanpa kode sama sekali) tetap aktif selamanya sebelum ini -- tampil
   // di Katalog & Etalase publik demo untuk pengunjung berikutnya.
-  // DINONAKTIFKAN (deactivated_at, kolom sama dengan tombol Nonaktifkan
-  // di ItemsScreen.tsx), BUKAN dihapus -- konsisten dengan prinsip
-  // "alat tidak dipakai lagi dinonaktifkan, tidak dihapus" (CLAUDE.md
-  // bagian 3) dan supaya riwayat transaksi contoh yang memakainya (kalau
-  // ada) tetap utuh. Filter id eksplisit dari existingItems (sudah
-  // di-scope business_id demo di query select atas) + business_id lagi
-  // di PATCH sebagai jaring pengaman defense-in-depth.
+  //
+  // Revisi koordinator 17 Nov 2026: DIHAPUS PERMANEN (bukan dinonaktifkan
+  // seperti sebelumnya) -- khusus untuk business DEMO ini, prinsip "alat
+  // tidak dipakai lagi dinonaktifkan, tidak dihapus" (CLAUDE.md bagian 3)
+  // berlaku untuk VENDOR ASLI yang riwayat transaksinya harus tetap
+  // tertelusuri; demo sebaliknya HARUS kembali ke keadaan bersih tiap
+  // reset, dan "Alat Nonaktif" yang menumpuk (reset berkali-kali sehari)
+  // tampil ke setiap pengunjung publik berikutnya -- kesan berantakan,
+  // bukan integritas data yang perlu dijaga. Penghapusan SUNGGUHAN aman
+  // di sini karena baris apa pun yang tadinya mereferensikan item ini
+  // (booking_items/booking_request_items/penalties) sudah ikut terhapus
+  // lewat reset_demo_bookings() di atas -- satu-satunya referensi yang
+  // tersisa adalah bundle_items (TANPA ON DELETE CASCADE ke items, lihat
+  // migration 064), makanya baris ekstra ini BARU dihapus SETELAH blok
+  // paket di bawah menghapus semua bundle ekstra (cascade membersihkan
+  // bundle_items-nya duluan) -- lihat `extraItemIds.length > 0` di ujung
+  // blok Paket. ID dikumpulkan dulu di sini (bukan langsung dihapus)
+  // supaya urutannya benar.
   const seedCodes = new Set(ITEM_DEFS.map((d) => d.code));
   const extraItemIds = existingItems.filter((i) => !seedCodes.has(i.code)).map((i) => i.id);
-  if (extraItemIds.length > 0) {
-    await rest(`items?id=in.(${extraItemIds.join(',')})&business_id=eq.${businessId}`, ownerToken, {
-      method: 'PATCH',
-      headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify({ deactivated_at: new Date().toISOString() }),
-    });
-  }
 
   // --- Paket Alat contoh (Tahap 1, migration 064) -- upsert by-nama
   // (bundles tidak punya kolom `code` seperti items), supaya reset
@@ -561,14 +565,30 @@ export async function resetDemoData(): Promise<DemoResetResult> {
   }
 
   // Paket TAMBAHAN yang dibuat pengunjung demo (nama di luar 2 nama seed
-  // di atas) dinonaktifkan tiap reset -- pola sama alat tambahan di atas.
+  // di atas) DIHAPUS PERMANEN tiap reset (revisi koordinator 17 Nov 2026,
+  // sama alasan dengan alat tambahan di atas -- khusus demo, bukan
+  // vendor asli). bundle_items.bundle_id sudah ON DELETE CASCADE
+  // (migration 064), jadi resepnya ikut terhapus otomatis -- tidak perlu
+  // DELETE terpisah ke bundle_items di sini.
   const seedBundleNames = new Set(BUNDLE_DEFS.map((d) => d.name));
   const extraBundleIds = existingBundles.filter((b) => !seedBundleNames.has(b.name)).map((b) => b.id);
   if (extraBundleIds.length > 0) {
     await rest(`bundles?id=in.(${extraBundleIds.join(',')})&business_id=eq.${businessId}`, ownerToken, {
-      method: 'PATCH',
+      method: 'DELETE',
       headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify({ deactivated_at: new Date().toISOString() }),
+    });
+  }
+
+  // Alat tambahan (extraItemIds, dikumpulkan di blok Alat di atas) BARU
+  // dihapus DI SINI, SETELAH paket ekstra di atas sudah dihapus --
+  // bundle_items.item_id TIDAK punya cascade ke items (migration 064),
+  // jadi kalau alat ekstra ini kebetulan jadi komponen paket ekstra yang
+  // belum dibuang, DELETE di bawah akan gagal kena FK. Paket SEED (Tektok/
+  // Camping 2 Orang) cuma mereferensikan alat SEED, jadi urutan ini aman.
+  if (extraItemIds.length > 0) {
+    await rest(`items?id=in.(${extraItemIds.join(',')})&business_id=eq.${businessId}`, ownerToken, {
+      method: 'DELETE',
+      headers: { Prefer: 'return=minimal' },
     });
   }
 
@@ -606,15 +626,19 @@ export async function resetDemoData(): Promise<DemoResetResult> {
     }
   }
 
-  // Barang jual TAMBAHAN yang dibuat pengunjung demo dinonaktifkan tiap
-  // reset -- pola sama alat/paket tambahan di atas.
+  // Barang jual TAMBAHAN yang dibuat pengunjung demo DIHAPUS PERMANEN
+  // tiap reset (revisi koordinator 17 Nov 2026, sama alasan alat/paket
+  // tambahan di atas) -- booking_sale_items.booking_id sudah ON DELETE
+  // CASCADE (migration 066), dan semua booking demo sudah dihapus lewat
+  // reset_demo_bookings() di awal fungsi ini, jadi tidak ada baris
+  // booking_sale_items tersisa yang mereferensikan sale_items apa pun
+  // milik business ini -- aman dihapus tanpa urutan khusus.
   const seedSaleItemNames = new Set(SALE_ITEM_DEFS.map((d) => d.name));
   const extraSaleItemIds = existingSaleItems.filter((s) => !seedSaleItemNames.has(s.name)).map((s) => s.id);
   if (extraSaleItemIds.length > 0) {
     await rest(`sale_items?id=in.(${extraSaleItemIds.join(',')})&business_id=eq.${businessId}`, ownerToken, {
-      method: 'PATCH',
+      method: 'DELETE',
       headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify({ deactivated_at: new Date().toISOString() }),
     });
   }
 

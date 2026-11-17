@@ -478,18 +478,11 @@ async function main() {
     }
   }
 
-  // Alat TAMBAHAN di luar 6 kode seed (atau tanpa kode) dinonaktifkan,
-  // BUKAN dihapus — lihat komentar sama di demoReset.ts.
+  // Alat TAMBAHAN di luar 6 kode seed (atau tanpa kode) DIHAPUS PERMANEN
+  // (revisi koordinator 17 Nov 2026) — ID dikumpulkan dulu, dihapus
+  // SETELAH paket ekstra di bawah (lihat komentar sama di demoReset.ts).
   const seedCodes = new Set(itemDefs.map((d) => d.code));
   const extraItemIds = existingItems.filter((i) => !seedCodes.has(i.code)).map((i) => i.id);
-  if (extraItemIds.length > 0) {
-    await rest(`items?id=in.(${extraItemIds.join(',')})&business_id=eq.${businessId}`, ownerToken, {
-      method: 'PATCH',
-      headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify({ deactivated_at: new Date().toISOString() }),
-    });
-    console.log(`  - ${extraItemIds.length} alat tambahan di luar seed dinonaktifkan`);
-  }
 
   // Paket Alat contoh (Tahap 1, migration 064) — sama persis demoReset.ts
   // (upsert by-nama, bundles tidak punya kolom `code`).
@@ -550,15 +543,26 @@ async function main() {
     console.log(`  + Paket ${def.name}`);
   }
 
+  // DIHAPUS PERMANEN (revisi koordinator 17 Nov 2026) — bundle_items.bundle_id
+  // ON DELETE CASCADE (migration 064) membersihkan resepnya otomatis.
   const seedBundleNames = new Set(bundleDefs.map((d) => d.name));
   const extraBundleIds = existingBundles.filter((b) => !seedBundleNames.has(b.name)).map((b) => b.id);
   if (extraBundleIds.length > 0) {
     await rest(`bundles?id=in.(${extraBundleIds.join(',')})&business_id=eq.${businessId}`, ownerToken, {
-      method: 'PATCH',
+      method: 'DELETE',
       headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify({ deactivated_at: new Date().toISOString() }),
     });
-    console.log(`  - ${extraBundleIds.length} paket tambahan di luar seed dinonaktifkan`);
+    console.log(`  - ${extraBundleIds.length} paket tambahan di luar seed dihapus`);
+  }
+
+  // Alat ekstra BARU dihapus di sini, SETELAH paket ekstra di atas --
+  // lihat alasan urutan di demoReset.ts.
+  if (extraItemIds.length > 0) {
+    await rest(`items?id=in.(${extraItemIds.join(',')})&business_id=eq.${businessId}`, ownerToken, {
+      method: 'DELETE',
+      headers: { Prefer: 'return=minimal' },
+    });
+    console.log(`  - ${extraItemIds.length} alat tambahan di luar seed dihapus`);
   }
 
   // --- Barang Jual contoh (v1, brief 16 Nov 2026, migration 066) --
@@ -591,14 +595,14 @@ async function main() {
   }
 
   const seedSaleItemNames = new Set(saleItemDefs.map((d) => d.name));
+  // DIHAPUS PERMANEN (revisi koordinator 17 Nov 2026).
   const extraSaleItemIds = existingSaleItems.filter((s) => !seedSaleItemNames.has(s.name)).map((s) => s.id);
   if (extraSaleItemIds.length > 0) {
     await rest(`sale_items?id=in.(${extraSaleItemIds.join(',')})&business_id=eq.${businessId}`, ownerToken, {
-      method: 'PATCH',
+      method: 'DELETE',
       headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify({ deactivated_at: new Date().toISOString() }),
     });
-    console.log(`  - ${extraSaleItemIds.length} barang jual tambahan di luar seed dinonaktifkan`);
+    console.log(`  - ${extraSaleItemIds.length} barang jual tambahan di luar seed dihapus`);
   }
 
   // Push subscriptions (migration 056) milik business demo — sama persis
