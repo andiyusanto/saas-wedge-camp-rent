@@ -654,9 +654,15 @@ export async function resetDemoData(): Promise<DemoResetResult> {
     confirmation_message: 'Terima kasih sudah pesan!',
     confirmation_deadline_hours: 24,
     pay_transfer_enabled: true,
-    bank_name: 'Bank Contoh',
-    bank_account_number: '000-111-222',
-    bank_account_holder: 'Demo Sewalog',
+    // Lebih dari satu rekening bank (brief 17 Nov 2026, migration 069) --
+    // 2 rekening contoh supaya demo langsung bisa dipakai menunjukkan
+    // fitur ini tanpa perlu diisi manual dulu. Kolom lama (bank_name/
+    // dst) TIDAK dikirim lagi -- trigger DB mensinkronkannya otomatis
+    // dari elemen pertama.
+    bank_accounts: [
+      { bank_name: 'Bank Contoh', account_number: '000-111-222', account_holder: 'Demo Sewalog' },
+      { bank_name: 'Bank Kedua Contoh', account_number: '333-444-555', account_holder: 'Demo Sewalog Kedua' },
+    ],
     pay_qris_enabled: false,
     qris_image_url: null,
     pay_cash_enabled: true,

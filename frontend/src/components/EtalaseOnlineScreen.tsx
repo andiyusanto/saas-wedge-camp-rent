@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { Store, CheckCircle2, ExternalLink, Copy, Check, Sparkles, Loader2, XCircle, CreditCard, AlertTriangle } from 'lucide-react';
 import { usePublicPage } from '../hooks/usePublicPage';
-import type { PublicPageInput, DpMode, PaymentChangeLog } from '../hooks/usePublicPage';
+import type { PublicPageInput, DpMode, PaymentChangeLog, BankAccount } from '../hooks/usePublicPage';
 import { useRegencies } from '../hooks/useRegencies';
 import { RegencySelect } from './RegencySelect';
 import { slugify, formatDateTimeIndo } from '../utils/formatters';
@@ -12,6 +12,9 @@ import { apiFetch } from '../lib/api';
 import { resizeImageToDataUrl } from '../utils/imageResize';
 
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+// Nomor rekening (brief 17 Nov 2026, Lebih dari satu rekening bank) --
+// cuma angka/spasi/strip, pola ramah seperti nomor WA di atas.
+const BANK_ACCOUNT_NUMBER_RE = /^[0-9\s-]+$/;
 
 // Pola sama seperti PHONE_RE/normalizePhone() di backend/src/routes/
 // bookingRequests.ts — disalin, bukan diimpor (frontend vs backend,
@@ -56,9 +59,11 @@ export function EtalaseOnlineScreen({
   const [acceptOnlineOrders, setAcceptOnlineOrders] = useState(false);
   const [confirmationMessage, setConfirmationMessage] = useState('');
   const [payTransferEnabled, setPayTransferEnabled] = useState(false);
-  const [bankName, setBankName] = useState('');
-  const [bankAccountNumber, setBankAccountNumber] = useState('');
-  const [bankAccountHolder, setBankAccountHolder] = useState('');
+  // Lebih dari satu rekening bank (brief 17 Nov 2026, migration 069) --
+  // elemen pertama = rekening Utama. Maks 5 (ditegakkan di handleSave
+  // DAN disembunyikan tombol Tambah di UI begitu mencapai 5).
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const MAX_BANK_ACCOUNTS = 5;
   const [payQrisEnabled, setPayQrisEnabled] = useState(false);
   const [qrisImageUrl, setQrisImageUrl] = useState('');
   const [uploadingQris, setUploadingQris] = useState(false);
@@ -121,9 +126,7 @@ export function EtalaseOnlineScreen({
       setAcceptOnlineOrders(page.accept_online_orders);
       setConfirmationMessage(page.confirmation_message ?? '');
       setPayTransferEnabled(page.pay_transfer_enabled);
-      setBankName(page.bank_name ?? '');
-      setBankAccountNumber(page.bank_account_number ?? '');
-      setBankAccountHolder(page.bank_account_holder ?? '');
+      setBankAccounts(page.bank_accounts ?? []);
       setPayQrisEnabled(page.pay_qris_enabled);
       setQrisImageUrl(page.qris_image_url ?? '');
       setPayCashEnabled(page.pay_cash_enabled);
@@ -309,9 +312,25 @@ export function EtalaseOnlineScreen({
       setError('Pilih minimal satu cara bayar sebelum menyalakan Pesanan Online.');
       return;
     }
-    if (payTransferEnabled && !bankAccountHolder.trim()) {
-      setError('Nama pemilik rekening wajib diisi kalau Transfer Bank diaktifkan.');
-      return;
+    // Lebih dari satu rekening bank (brief 17 Nov 2026) -- transfer
+    // aktif wajib minimal 1 rekening, DAN tiap rekening yang ada wajib
+    // nama+nomor+pemilik lengkap (DB cuma menjaga bentuk array/panjang
+    // ≤5, bukan isi tiap field -- lihat migration 069).
+    if (payTransferEnabled) {
+      if (bankAccounts.length === 0) {
+        setError('Tambahkan minimal 1 rekening kalau Transfer Bank diaktifkan.');
+        return;
+      }
+      for (const acc of bankAccounts) {
+        if (!acc.bank_name.trim() || !acc.account_holder.trim()) {
+          setError('Nama bank dan nama pemilik rekening wajib diisi untuk semua rekening.');
+          return;
+        }
+        if (!BANK_ACCOUNT_NUMBER_RE.test(acc.account_number.trim())) {
+          setError('Nomor rekening cuma boleh angka, spasi, dan tanda hubung.');
+          return;
+        }
+      }
     }
     const dpError = dpValidationError();
     if (dpError) {
@@ -359,9 +378,9 @@ export function EtalaseOnlineScreen({
       accept_online_orders: acceptOnlineOrders,
       confirmation_message: confirmationMessage.trim() || null,
       pay_transfer_enabled: payTransferEnabled,
-      bank_name: payTransferEnabled ? bankName.trim() || null : null,
-      bank_account_number: payTransferEnabled ? bankAccountNumber.trim() || null : null,
-      bank_account_holder: payTransferEnabled ? bankAccountHolder.trim() || null : null,
+      bank_accounts: payTransferEnabled
+        ? bankAccounts.map((a) => ({ bank_name: a.bank_name.trim(), account_number: a.account_number.trim(), account_holder: a.account_holder.trim() }))
+        : [],
       pay_qris_enabled: payQrisEnabled,
       qris_image_url: payQrisEnabled ? qrisImageUrl || null : null,
       pay_cash_enabled: payCashEnabled,
@@ -678,28 +697,96 @@ export function EtalaseOnlineScreen({
                 Transfer Bank
               </label>
               {payTransferEnabled && (
-                <div className="pl-6 space-y-2">
-                  <input
-                    type="text"
-                    value={bankName}
-                    onChange={(e) => setBankName(e.target.value)}
-                    placeholder="Nama bank"
-                    className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] text-sm focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
-                  />
-                  <input
-                    type="text"
-                    value={bankAccountNumber}
-                    onChange={(e) => setBankAccountNumber(e.target.value)}
-                    placeholder="Nomor rekening"
-                    className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] text-sm focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
-                  />
-                  <input
-                    type="text"
-                    value={bankAccountHolder}
-                    onChange={(e) => setBankAccountHolder(e.target.value)}
-                    placeholder="Nama pemilik rekening (wajib)"
-                    className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] text-sm focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
-                  />
+                <div className="pl-6 space-y-3">
+                  {bankAccounts.map((acc, i) => (
+                    <div key={i} className="p-2.5 rounded-lg border border-[#DBD5C1] bg-white space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-[#6E6853]">
+                          {i === 0 ? 'Rekening Utama' : `Rekening ${i + 1}`}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            disabled={i === 0}
+                            onClick={() =>
+                              setBankAccounts((prev) => {
+                                const next = [...prev];
+                                [next[i - 1], next[i]] = [next[i], next[i - 1]];
+                                return next;
+                              })
+                            }
+                            className="px-1.5 py-0.5 text-xs rounded border border-[#DBD5C1] disabled:opacity-30"
+                            aria-label="Naikkan urutan"
+                          >
+                            &uarr;
+                          </button>
+                          <button
+                            type="button"
+                            disabled={i === bankAccounts.length - 1}
+                            onClick={() =>
+                              setBankAccounts((prev) => {
+                                const next = [...prev];
+                                [next[i], next[i + 1]] = [next[i + 1], next[i]];
+                                return next;
+                              })
+                            }
+                            className="px-1.5 py-0.5 text-xs rounded border border-[#DBD5C1] disabled:opacity-30"
+                            aria-label="Turunkan urutan"
+                          >
+                            &darr;
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!window.confirm('Hapus rekening ini?')) return;
+                              setBankAccounts((prev) => prev.filter((_, idx) => idx !== i));
+                            }}
+                            className="px-1.5 py-0.5 text-xs rounded border border-[#A8412E]/40 text-[#A8412E]"
+                          >
+                            Hapus
+                          </button>
+                        </div>
+                      </div>
+                      <input
+                        type="text"
+                        value={acc.bank_name}
+                        onChange={(e) =>
+                          setBankAccounts((prev) => prev.map((a, idx) => (idx === i ? { ...a, bank_name: e.target.value } : a)))
+                        }
+                        placeholder="Nama bank"
+                        className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] text-sm focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+                      />
+                      <input
+                        type="text"
+                        value={acc.account_number}
+                        onChange={(e) =>
+                          setBankAccounts((prev) => prev.map((a, idx) => (idx === i ? { ...a, account_number: e.target.value } : a)))
+                        }
+                        placeholder="Nomor rekening"
+                        className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] text-sm focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+                      />
+                      <input
+                        type="text"
+                        value={acc.account_holder}
+                        onChange={(e) =>
+                          setBankAccounts((prev) => prev.map((a, idx) => (idx === i ? { ...a, account_holder: e.target.value } : a)))
+                        }
+                        placeholder="Nama pemilik rekening (wajib)"
+                        className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] text-sm focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+                      />
+                    </div>
+                  ))}
+                  {bankAccounts.length < MAX_BANK_ACCOUNTS && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setBankAccounts((prev) => [...prev, { bank_name: '', account_number: '', account_holder: '' }])
+                      }
+                      className="w-full py-2 rounded-lg border border-dashed border-[#2B4739] text-[#2B4739] text-xs font-bold"
+                    >
+                      + Tambah rekening
+                    </button>
+                  )}
                 </div>
               )}
 

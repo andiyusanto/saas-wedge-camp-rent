@@ -349,6 +349,14 @@ type BookingRequestStatus = {
     dp_mode: 'none' | 'percent' | 'fixed';
     dp_amount_computed: number;
     total_final: number;
+    // Lebih dari satu rekening bank (brief 17 Nov 2026, migration 069) --
+    // snapshot BARU (dikonfirmasi setelah 069) selalu punya bank_accounts
+    // (array) DAN bank_name/bank_account_number/bank_account_holder
+    // (elemen pertama, duplikat sengaja -- jaga-jaga jeda deploy, lihat
+    // migration 069 bagian 4). Snapshot LAMA (dikonfirmasi SEBELUM 069)
+    // cuma punya 3 field flat, bank_accounts tidak ada sama sekali --
+    // field itu dibekukan selamanya, tidak pernah ditulis ulang.
+    bank_accounts?: { bank_name: string; account_number: string; account_holder: string }[];
     bank_name?: string;
     bank_account_number?: string;
     bank_account_holder?: string;
@@ -672,14 +680,33 @@ function renderStatusPage(data: BookingRequestStatus, req: import('express').Req
     const bayarLabel = snap.dp_mode === 'none' ? 'Total yang harus dibayar' : 'DP yang harus dibayar sekarang';
     const sisaSaatAmbil = snap.dp_mode === 'none' ? 0 : snap.total_final - snap.dp_amount_computed;
 
-    const transferHtml = snap.bank_name
-      ? `<div style="margin-top:12px;padding:12px;background:#F1EEE2;border-radius:12px;">
+    // Lebih dari satu rekening bank (brief 17 Nov 2026) -- snapshot BARU
+    // punya bank_accounts (array, diprioritaskan); snapshot LAMA (dari
+    // sebelum migration 069) cuma punya 3 field flat -- fallback ke
+    // array 1-elemen dari situ supaya pesanan lama tetap tampil benar
+    // (dibekukan, tidak pernah ditulis ulang, lihat migration 069).
+    const bankAccountsForDisplay =
+      snap.bank_accounts && snap.bank_accounts.length > 0
+        ? snap.bank_accounts
+        : snap.bank_name
+          ? [{ bank_name: snap.bank_name, account_number: snap.bank_account_number ?? '', account_holder: snap.bank_account_holder ?? '' }]
+          : [];
+
+    const transferHtml =
+      bankAccountsForDisplay.length > 0
+        ? `<div style="margin-top:12px;padding:12px;background:#F1EEE2;border-radius:12px;">
       <p style="margin:0;font-size:0.75rem;color:#6E6853;font-weight:700;">Transfer Bank</p>
-      <p style="margin:4px 0 0;font-weight:700;">${escapeHtml(snap.bank_name)} — ${escapeHtml(snap.bank_account_number ?? '')}</p>
-      <p style="margin:2px 0 0;color:#6E6853;font-size:0.85rem;">a.n. ${escapeHtml(snap.bank_account_holder ?? '')}</p>
-      <button type="button" class="copy-btn" data-copy="${escapeHtml(snap.bank_account_number ?? '')}" style="margin-top:8px;min-height:36px;padding:6px 12px;border-radius:8px;border:1px solid #DBD5C1;background:#FBFAF4;font-size:0.75rem;font-weight:700;cursor:pointer;">Salin nomor rekening</button>
+      ${bankAccountsForDisplay
+        .map(
+          (acc, i) => `<div style="${i > 0 ? 'margin-top:10px;padding-top:10px;border-top:1px solid #DBD5C1;' : 'margin-top:4px;'}">
+        <p style="margin:0;font-weight:700;">${escapeHtml(acc.bank_name)} — ${escapeHtml(acc.account_number)}</p>
+        <p style="margin:2px 0 0;color:#6E6853;font-size:0.85rem;">a.n. ${escapeHtml(acc.account_holder)}</p>
+        <button type="button" class="copy-btn" data-copy="${escapeHtml(acc.account_number)}" style="margin-top:8px;min-height:36px;padding:6px 12px;border-radius:8px;border:1px solid #DBD5C1;background:#FBFAF4;font-size:0.75rem;font-weight:700;cursor:pointer;">Salin nomor rekening</button>
+      </div>`,
+        )
+        .join('\n')}
     </div>`
-      : '';
+        : '';
 
     const qrisHtml = snap.qris_image_url
       ? `<div style="margin-top:12px;text-align:center;">
@@ -689,7 +716,7 @@ function renderStatusPage(data: BookingRequestStatus, req: import('express').Req
     </div>`
       : '';
 
-    const cashHtml = snap.pay_cash_enabled && !snap.bank_name && !snap.qris_image_url
+    const cashHtml = snap.pay_cash_enabled && bankAccountsForDisplay.length === 0 && !snap.qris_image_url
       ? `<p style="margin-top:12px;color:#6E6853;">Bayar saat ambil alat.</p>`
       : '';
 

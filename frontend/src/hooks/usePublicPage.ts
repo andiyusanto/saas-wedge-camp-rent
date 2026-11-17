@@ -7,6 +7,13 @@ import { supabase } from '../lib/supabaseClient';
 // sama, tidak perlu policy terpisah).
 export type DpMode = 'none' | 'percent' | 'fixed';
 
+// Lebih dari satu rekening bank (brief 17 Nov 2026, migration 069) --
+// elemen pertama = rekening utama. Kolom lama (bank_name/
+// bank_account_number/bank_account_holder) TIDAK dibaca/ditulis lagi
+// dari sini -- disinkronkan dua arah oleh trigger DB
+// (sync_bank_accounts_legacy_columns), bukan tanggung jawab frontend.
+export type BankAccount = { bank_name: string; account_number: string; account_holder: string };
+
 export type PublicPage = {
   business_id: string;
   published: boolean;
@@ -20,9 +27,7 @@ export type PublicPage = {
   accept_online_orders: boolean;
   confirmation_message: string | null;
   pay_transfer_enabled: boolean;
-  bank_name: string | null;
-  bank_account_number: string | null;
-  bank_account_holder: string | null;
+  bank_accounts: BankAccount[] | null;
   pay_qris_enabled: boolean;
   qris_image_url: string | null;
   pay_cash_enabled: boolean;
@@ -56,9 +61,7 @@ export type PublicPageInput = {
   accept_online_orders: boolean;
   confirmation_message: string | null;
   pay_transfer_enabled: boolean;
-  bank_name: string | null;
-  bank_account_number: string | null;
-  bank_account_holder: string | null;
+  bank_accounts: BankAccount[] | null;
   pay_qris_enabled: boolean;
   qris_image_url: string | null;
   pay_cash_enabled: boolean;
@@ -103,7 +106,7 @@ export function usePublicPage(businessId: string | null) {
     const { data } = await supabase
       .from('public_pages')
       .select(
-        'business_id, published, slug, description, address, regency_id, district_id, operating_hours, public_phone, accept_online_orders, confirmation_message, pay_transfer_enabled, bank_name, bank_account_number, bank_account_holder, pay_qris_enabled, qris_image_url, pay_cash_enabled, dp_mode, dp_value, confirmation_deadline_hours, current_terms_version_id, order_admin_phone_1, order_admin_phone_2, order_admin_phone_3',
+        'business_id, published, slug, description, address, regency_id, district_id, operating_hours, public_phone, accept_online_orders, confirmation_message, pay_transfer_enabled, bank_accounts, pay_qris_enabled, qris_image_url, pay_cash_enabled, dp_mode, dp_value, confirmation_deadline_hours, current_terms_version_id, order_admin_phone_1, order_admin_phone_2, order_admin_phone_3',
       )
       .eq('business_id', businessId)
       .maybeSingle();

@@ -990,7 +990,10 @@ export function GuideScreen({ businessName }: { businessName: string }) {
             <>
               Pilih minimal satu <strong>cara bayar</strong> (Transfer Bank/QRIS/Tunai saat ambil) dan isi detailnya
               (nomor rekening, gambar QRIS, dsb) — tombol <Ui>Terima pesanan online</Ui> cuma bisa dinyalakan kalau
-              sudah ada minimal satu cara bayar aktif.
+              sudah ada minimal satu cara bayar aktif. Kalau usahamu punya lebih dari satu rekening, tekan{' '}
+              <Ui>+ Tambah rekening</Ui> di bawah Transfer Bank (sampai 5) — rekening pertama otomatis jadi{' '}
+              <Ui>Rekening Utama</Ui>, urutannya bisa diatur lewat tombol panah naik/turun, dan semua rekening aktif
+              akan ditampilkan ke pelanggan di halaman status pesanannya setelah kamu Konfirmasi.
             </>,
             <>
               Isi <strong>Nomor WA admin untuk pesanan online</strong> — sampai 3 nomor (label tetap <Ui>Admin
