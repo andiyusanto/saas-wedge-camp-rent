@@ -420,6 +420,10 @@ function App() {
             onSelectBookBundle={openNewBookingBundle}
             pendingRequestCount={pendingRequestCount}
             onViewPendingRequests={() => setTab('tracking')}
+            onNavigateToGuide={(sectionId) => {
+              requestGuideScroll(sectionId);
+              setTab('panduan');
+            }}
             writable={subscription?.writable ?? true}
           />
         )}

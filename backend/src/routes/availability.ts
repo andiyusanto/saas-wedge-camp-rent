@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { createRequestClient } from '../lib/supabaseClient.js';
-import { fetchActiveBookingItems, usedUnitsOn, computeAvailabilityStatus, marginDaysFromReadinessHours } from '../lib/availability.js';
+import { fetchActiveBookingItems, usedUnitsOn, computeAvailabilityStatus, marginDaysFromReadinessHours, isBookingOverdue } from '../lib/availability.js';
 import { todayInTz, addDays } from '../lib/dates.js';
 
 const router = Router();
@@ -57,6 +57,32 @@ router.get('/availability', async (req, res) => {
     return;
   }
 
+  // Opsi B Tahap 2 (brief 17 Nov 2026) — tanda "telat, terkunci" per alat di
+  // Kalender. Query TERPISAH yang ringan (bukan memperluas
+  // fetchActiveBookingItems() yang juga dipakai validasi stok POST /bookings
+  // — join customers di sana cuma akan membengkakkan payload yang tidak
+  // perlu untuk pemanggil lain) — biasanya cuma sedikit baris aktif-telat
+  // sekaligus, aman tanpa paginasi khusus. TIDAK pernah dipakai di jalur
+  // publik (get_public_availability/Etalase TIDAK disentuh sama sekali).
+  const today = todayInTz(timezone);
+  const { data: overdueBookings } = await supabase
+    .from('bookings')
+    .select('id, booking_number, end_date, customers(name), booking_items(item_id)')
+    .eq('business_id', business.id)
+    .eq('status', 'aktif')
+    .lt('end_date', today);
+
+  const overdueByItemId = new Map<string, { booking_number: string | null; customer_name: string | null; end_date: string }[]>();
+  for (const b of overdueBookings ?? []) {
+    if (!isBookingOverdue(b.end_date, today)) continue; // jaring pengaman defensif, konsisten dgn usedUnitsOn()
+    const customerName = (b.customers as unknown as { name: string } | null)?.name ?? null;
+    for (const bi of (b.booking_items as unknown as { item_id: string }[]) ?? []) {
+      const list = overdueByItemId.get(bi.item_id) ?? [];
+      list.push({ booking_number: b.booking_number, customer_name: customerName, end_date: b.end_date });
+      overdueByItemId.set(bi.item_id, list);
+    }
+  }
+
   const result = (items ?? []).map((item) => {
     const remaining = dateList.map(
       (dateStr) => item.total_units - usedUnitsOn(bookingItems, item.id, dateStr, item.readiness_hours, timezone),
@@ -72,6 +98,7 @@ router.get('/availability', async (req, res) => {
       price_per_day: item.price_per_day,
       remaining,
       status: remaining.map((r) => computeAvailabilityStatus(r, item.total_units)),
+      overdue_bookings: overdueByItemId.get(item.id) ?? [],
     };
   });
 

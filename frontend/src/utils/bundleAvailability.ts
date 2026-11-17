@@ -24,6 +24,12 @@ export type BundleAvailabilityDay = {
   // kalau tidak ada komponen limitatif unik (semua sisa sama, atau tanpa
   // komponen sama sekali).
   limitingComponentName: string | null;
+  // Opsi B Tahap 2 (brief 17 Nov 2026) -- true kalau komponen pembatas
+  // SEDANG terkunci oleh transaksi aktif yang sudah telat (item.overdue_bookings
+  // tidak kosong). Karena telat memblokir TANPA BATAS WAKTU, status ini
+  // berlaku sama untuk semua hari yang ditampilkan, bukan dihitung ulang
+  // per tanggal secara terpisah.
+  limitingComponentOverdue: boolean;
 };
 
 export type BundleAvailability = {
@@ -57,6 +63,7 @@ export function computeBundleAvailability(bundle: Bundle, availabilityItems: Ava
   for (let i = 0; i < dayCount; i++) {
     let min = Infinity;
     let limitingComponentName: string | null = null;
+    let limitingComponentOverdue = false;
     let tie = false;
     for (const c of components) {
       const item = itemsById.get(c.item_id)!;
@@ -64,6 +71,7 @@ export function computeBundleAvailability(bundle: Bundle, availabilityItems: Ava
       if (remainingForComponent < min) {
         min = remainingForComponent;
         limitingComponentName = item.name;
+        limitingComponentOverdue = (item.overdue_bookings?.length ?? 0) > 0;
         tie = false;
       } else if (remainingForComponent === min) {
         tie = true;
@@ -74,6 +82,7 @@ export function computeBundleAvailability(bundle: Bundle, availabilityItems: Ava
       remaining,
       status: computeBundleStatus(remaining, totalUnitsPerBundle),
       limitingComponentName: tie ? null : limitingComponentName,
+      limitingComponentOverdue: tie ? false : limitingComponentOverdue,
     });
   }
 

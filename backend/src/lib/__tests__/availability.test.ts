@@ -6,7 +6,7 @@
 // Bilbo). `today` dihitung di zona rental (todayInTz), berbasis TANGGAL.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { usedUnitsOn } from '../availability.js';
+import { usedUnitsOn, isBookingOverdue } from '../availability.js';
 import { addDays, todayInTz, toDateStrInTz } from '../dates.js';
 import type { BookingItemRow } from '../availability.js';
 
@@ -105,6 +105,19 @@ test('aktif: regresi margin mundur tetap diterapkan sebelum start_date (readines
   const bi = [aktifItem(today, addDays(today, 5))]; // belum telat
   assert.equal(usedUnitsOn(bi, 'item-1', addDays(today, -1), 24, WIB), 1); // start-1, dalam margin 1 hari
   assert.equal(usedUnitsOn(bi, 'item-1', addDays(today, -2), 24, WIB), 0); // start-2, luar margin
+});
+
+test('isBookingOverdue: penentuan telat berbasis tanggal, dipakai tanda "terkunci" di Kalender (Opsi B Tahap 2)', () => {
+  assert.equal(isBookingOverdue('2026-11-17', '2026-11-16'), false); // today sebelum end_date
+  assert.equal(isBookingOverdue('2026-11-17', '2026-11-17'), false); // today == end_date -> belum telat
+  assert.equal(isBookingOverdue('2026-11-17', '2026-11-18'), true); // today setelah end_date -> telat
+  // Zona rental: instant yang sama bisa beda "today" antar zona (sama
+  // pembuktian offset seperti tes WIB/WITA di atas).
+  const instant = '2026-11-17T16:30:00Z';
+  const todayWib = toDateStrInTz(instant, WIB);
+  const todayWita = toDateStrInTz(instant, WITA);
+  assert.equal(isBookingOverdue('2026-11-17', todayWib), false); // WIB: masih 17, belum telat
+  assert.equal(isBookingOverdue('2026-11-17', todayWita), true); // WITA: sudah 18, telat
 });
 
 test('regresi: dipesan/telat-selesai/dibatalkan TIDAK berubah oleh Opsi B', () => {

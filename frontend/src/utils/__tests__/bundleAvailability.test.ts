@@ -46,6 +46,7 @@ function availItem(overrides: Partial<AvailabilityItem>): AvailabilityItem {
     price_per_day: 20_000,
     remaining: [10, 10],
     status: ['tersedia', 'tersedia'],
+    overdue_bookings: [],
     ...overrides,
   };
 }
@@ -91,6 +92,26 @@ test('computeBundleAvailability: komponen habis -> paket penuh', () => {
   const result = computeBundleAvailability(b, items);
   assert.equal(result.days[0].remaining, 0);
   assert.equal(result.days[0].status, 'penuh');
+});
+
+test('computeBundleAvailability: komponen pembatas sedang telat -> limitingComponentOverdue true (Opsi B Tahap 2)', () => {
+  const b = bundle({
+    bundle_items: [component({ item_id: 'item-1', quantity: 1 }), component({ id: 'c2', item_id: 'item-2', quantity: 1 })],
+  });
+  const items = [
+    availItem({ id: 'item-1', name: 'Tenda Dome', remaining: [3, 3], overdue_bookings: [{ booking_number: 'SWL-1', customer_name: 'Budi', end_date: '2026-11-10' }] }),
+    availItem({ id: 'item-2', name: 'Headlamp LED', remaining: [10, 10], overdue_bookings: [] }),
+  ];
+  const result = computeBundleAvailability(b, items);
+  assert.equal(result.days[0].limitingComponentName, 'Tenda Dome');
+  assert.equal(result.days[0].limitingComponentOverdue, true);
+});
+
+test('computeBundleAvailability: komponen pembatas TIDAK telat -> limitingComponentOverdue false', () => {
+  const b = bundle({ bundle_items: [component({ item_id: 'item-1', quantity: 1 })] });
+  const items = [availItem({ id: 'item-1', remaining: [3, 3], overdue_bookings: [] })];
+  const result = computeBundleAvailability(b, items);
+  assert.equal(result.days[0].limitingComponentOverdue, false);
 });
 
 test('computeBundleDayOnePrice: mode ikuti_alat, jumlah tarif hari-1 komponen tanpa potongan', () => {

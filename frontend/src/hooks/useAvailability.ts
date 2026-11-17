@@ -4,6 +4,15 @@ import { useApiResource } from './useApiResource';
 
 export type AvailabilityStatus = 'tersedia' | 'sisa_sedikit' | 'penuh';
 
+// Opsi B Tahap 2 (brief 17 Nov 2026) -- transaksi aktif yang SUDAH TELAT
+// (today zona rental > end_date, belum dikembalikan) yang mengunci alat
+// ini. TIDAK PERNAH dikirim lewat jalur publik (Etalase/get_public_availability).
+export type OverdueBooking = {
+  booking_number: string | null;
+  customer_name: string | null;
+  end_date: string;
+};
+
 export type AvailabilityItem = {
   id: string;
   code: string | null;
@@ -14,6 +23,7 @@ export type AvailabilityItem = {
   price_per_day: number;
   remaining: number[];
   status: AvailabilityStatus[];
+  overdue_bookings: OverdueBooking[];
 };
 
 export type AvailabilityResponse = {

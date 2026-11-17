@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { Search, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Package, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Package, ChevronDown, ChevronUp, X, Clock } from 'lucide-react';
 import { useAvailability } from '../hooks/useAvailability';
 import { useBundles } from '../hooks/useBundles';
 import { computeBundleAvailability, computeBundleDayOnePrice, resolveBundleImageUrl } from '../utils/bundleAvailability';
@@ -28,6 +28,28 @@ function writePaketCollapsed(collapsed: boolean) {
   }
 }
 
+// Pemberitahuan sekali tampil Opsi B (brief 17 Nov 2026) -- ditutup sekali,
+// tidak muncul lagi di perangkat itu (localStorage, key BERVERSI supaya
+// bisa ditampilkan ulang lagi nanti kalau isinya berubah signifikan).
+const STOK_AKTIF_NOTICE_KEY = 'sewalog_notice_stok_aktif_v1';
+
+function readStokAktifNoticeDismissed(): boolean {
+  try {
+    return localStorage.getItem(STOK_AKTIF_NOTICE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function dismissStokAktifNotice() {
+  try {
+    localStorage.setItem(STOK_AKTIF_NOTICE_KEY, '1');
+  } catch {
+    // localStorage bisa gagal -- aman diabaikan, cuma berarti notice ini
+    // muncul lagi di reload berikutnya di perangkat itu.
+  }
+}
+
 // Format tanggal diseragamkan dd-mm-yyyy (keputusan Andi 10 Nov 2026) —
 // pakai formatDateIndo() terpusat (rakit manual, bukan Intl/
 // toLocaleDateString), bukan lagi "Sel, 10/11" ad-hoc di sini.
@@ -48,6 +70,7 @@ export function CalendarScreen({
   onSelectBookBundle,
   pendingRequestCount = 0,
   onViewPendingRequests,
+  onNavigateToGuide,
   writable = true,
 }: {
   session: Session;
@@ -64,6 +87,10 @@ export function CalendarScreen({
   // membawa ke bagian "Pesanan masuk" (tab Transaksi Aktif).
   pendingRequestCount?: number;
   onViewPendingRequests?: () => void;
+  // Opsi B Tahap 2 (brief 17 Nov 2026) -- link "Pelajari" di notice + label
+  // "Telat" membawa ke Panduan bagian Kalender (pola sama TrackingScreen.tsx
+  // -> onNavigateToGuide).
+  onNavigateToGuide?: (sectionId: string) => void;
 }) {
   const [baseDate, setBaseDate] = useState(todayStr());
   const [numDays, setNumDays] = useState(7);
@@ -72,6 +99,7 @@ export function CalendarScreen({
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [paketCollapsed, setPaketCollapsed] = useState(readPaketCollapsed);
   const [expandedBundleId, setExpandedBundleId] = useState<string | null>(null);
+  const [stokAktifNoticeDismissed, setStokAktifNoticeDismissed] = useState(readStokAktifNoticeDismissed);
 
   const { data, loading, error } = useAvailability(session, numDays, baseDate);
   const { bundles } = useBundles(businessId);
@@ -255,6 +283,34 @@ export function CalendarScreen({
         </div>
       </div>
 
+      {!stokAktifNoticeDismissed && (
+        <div className="flex items-start gap-2.5 bg-[#FBFAF4] border border-[#DBD5C1] rounded-2xl p-3">
+          <Clock className="w-4 h-4 text-[#6E6853] shrink-0 mt-0.5" />
+          <p className="flex-1 text-xs text-[#26302B] leading-relaxed">
+            <strong>Baru:</strong> alat yang sedang disewa kini bisa dibooking untuk tanggal setelah jadwal
+            kembalinya. Kalau telat dikembalikan, alat terkunci sampai Proses Pengembalian.{' '}
+            <button
+              type="button"
+              onClick={() => onNavigateToGuide?.('g-kalender')}
+              className="font-bold underline hover:text-[#1E3429]"
+            >
+              Pelajari
+            </button>
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              dismissStokAktifNotice();
+              setStokAktifNoticeDismissed(true);
+            }}
+            aria-label="Tutup"
+            className="shrink-0 p-0.5 rounded hover:bg-[#F1EEE2] text-[#6E6853]"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {!loading && !error && showPaketGroup && filteredBundleAvailabilities.length > 0 && (
         <div className="bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] shadow-xs">
           <button
@@ -331,14 +387,21 @@ export function CalendarScreen({
                             return (
                               <div
                                 key={dateStr}
-                                title={day?.limitingComponentName ? `Terbatas: ${day.limitingComponentName}` : undefined}
+                                title={
+                                  day?.limitingComponentName
+                                    ? `Terbatas: ${day.limitingComponentName}${day.limitingComponentOverdue ? ' (telat)' : ''}`
+                                    : undefined
+                                }
                                 className={`flex flex-col items-center p-2 rounded-xl border min-w-[72px] text-center ${styles}`}
                               >
                                 <span className="text-[10px] font-medium opacity-80">{shortDate(dateStr)}</span>
                                 <div className={`mt-1 w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs ${countBg}`}>{remaining}</div>
                                 <span className="text-[9px] mt-1 font-semibold opacity-90">{status === 'penuh' ? 'HABIS' : `Sisa ${remaining}`}</span>
                                 {day?.limitingComponentName && status !== 'tersedia' && (
-                                  <span className="text-[8px] mt-0.5 opacity-80 leading-tight">Terbatas: {day.limitingComponentName}</span>
+                                  <span className="text-[8px] mt-0.5 opacity-80 leading-tight">
+                                    Terbatas: {day.limitingComponentName}
+                                    {day.limitingComponentOverdue ? ' (telat)' : ''}
+                                  </span>
                                 )}
                               </div>
                             );
@@ -441,6 +504,28 @@ export function CalendarScreen({
                         Stok: <strong className="text-[#26302B]">{item.total_units}</strong> unit
                       </span>
                     </div>
+                    {/* Opsi B Tahap 2 (brief 17 Nov 2026) -- tanda alat
+                        terkunci oleh transaksi aktif yang SUDAH TELAT.
+                        Ditekan -> Transaksi Aktif (sama tujuan dengan
+                        banner "Pesanan masuk" di atas). */}
+                    {item.overdue_bookings.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => onViewPendingRequests?.()}
+                        className="mt-1.5 flex items-center gap-1 text-[10px] font-bold text-[#A8412E] bg-[#FAF0EE] border border-[#A8412E]/30 rounded-lg px-2 py-1 hover:bg-[#A8412E]/10 transition"
+                        title={item.overdue_bookings
+                          .map((b) => `${b.customer_name ?? 'Tanpa nama'}${b.booking_number ? ` (${b.booking_number})` : ''}`)
+                          .join(', ')}
+                      >
+                        <Clock className="w-3 h-3" />
+                        <span>
+                          Telat — terkunci sampai dikembalikan
+                          {item.overdue_bookings[0] &&
+                            (item.overdue_bookings[0].customer_name || item.overdue_bookings[0].booking_number) &&
+                            ` · ${item.overdue_bookings[0].customer_name ?? item.overdue_bookings[0].booking_number}`}
+                        </span>
+                      </button>
+                    )}
                   </div>
                 </div>
 

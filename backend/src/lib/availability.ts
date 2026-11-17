@@ -185,6 +185,15 @@ export async function fetchActiveBookingItems(
   }));
 }
 
+// Opsi B Tahap 2 (brief 17 Nov 2026) -- penentuan "telat" per item TETAP
+// berbasis TANGGAL di zona rental, SAMA PERSIS dengan cabang 'aktif' di
+// usedUnitsOn() di bawah (bukan toleransi jam/Batas Jam Kembali). Diekstrak
+// jadi fungsi murni kecil supaya testable langsung tanpa fixture booking
+// penuh.
+export function isBookingOverdue(endDate: string, today: string): boolean {
+  return today > endDate;
+}
+
 // readinessHours = jeda persiapan per-alat (items.readiness_hours, migration
 // 028 — sebelumnya readiness_days, diganti ke jam per permintaan eksplisit
 // setelah bookings.picked_up_at/actual_return_at jadi instant asli, lihat
@@ -254,7 +263,7 @@ export function usedUnitsOn(
       if (booking.status === 'aktif') {
         const effectiveStart = readinessDays > 0 ? addDays(booking.start_date, -readinessDays) : booking.start_date;
         if (effectiveStart > dateStr) return false;
-        const isTelat = today > booking.end_date;
+        const isTelat = isBookingOverdue(booking.end_date, today);
         if (isTelat) return true;
         const effectiveEnd = readinessDays > 0 ? addDays(booking.end_date, readinessDays) : booking.end_date;
         return dateStr <= effectiveEnd;
