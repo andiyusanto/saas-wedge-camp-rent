@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { createRequestClient } from '../lib/supabaseClient.js';
 import { fetchActiveBookingItems, usedUnitsOn, marginDaysFromReadinessHours } from '../lib/availability.js';
-import { dateRange, todayInTz, tzOffsetIso, rentalDuration } from '../lib/dates.js';
+import { dateRange, todayInTz, rentalDuration } from '../lib/dates.js';
 import { logBookingStatus, resolveActorName } from '../lib/audit.js';
 import { isBusinessWritable, SUBSCRIPTION_LOCKED_MESSAGE } from '../lib/subscription.js';
 import { getCustomerPhotoSignedUrl } from '../lib/r2.js';
@@ -37,26 +37,11 @@ type BookingItemInput = {
   bundle_quantity?: number | null;
 };
 
-async function generateBookingNumber(
-  supabase: ReturnType<typeof createRequestClient>,
-  businessId: string,
-  timezone: string | null,
-): Promise<string> {
-  // Hari ini & batas harinya di zona rental (migration 053), bukan selalu WIB.
-  const todayWib = todayInTz(timezone);
-  const dayStart = `${todayWib}T00:00:00${tzOffsetIso(timezone)}`;
-  const dayEnd = `${todayWib}T23:59:59${tzOffsetIso(timezone)}`;
-
-  const { count } = await supabase
-    .from('bookings')
-    .select('id', { count: 'exact', head: true })
-    .eq('business_id', businessId)
-    .gte('created_at', dayStart)
-    .lte('created_at', dayEnd);
-
-  const seq = String((count ?? 0) + 1).padStart(2, '0');
-  return `SWL-${todayWib.replaceAll('-', '')}-${seq}`;
-}
+// Nomor booking (SWL-YYYYMMDD-NN) dibuat DI DALAM create_booking_atomic
+// (migration 070, generate_booking_number_sql) sejak Simpan Transaksi
+// Atomik Tahap 1 -- Express TIDAK LAGI menghasilkannya sendiri untuk
+// jalur Catat Transaksi baru (fungsi generateBookingNumber() lama
+// dihapus dari sini).
 
 router.post('/bookings', async (req, res) => {
   if (!req.headers.authorization) {
@@ -250,59 +235,21 @@ router.post('/bookings', async (req, res) => {
     }
   }
 
-  let customerId: string;
-  let createdNewCustomer = false;
-
-  if (customer_id) {
-    const { data: existingCustomer, error: lookupError } = await supabase
-      .from('customers')
-      .select('id')
-      .eq('id', customer_id)
-      .eq('business_id', businessId)
-      .single();
-
-    if (lookupError || !existingCustomer) {
-      res.status(400).json({ error: 'Data pelanggan tidak ditemukan' });
-      return;
-    }
-    customerId = existingCustomer.id;
-  } else {
-    const { data: customerRow, error: customerError } = await supabase
-      .from('customers')
-      .insert({
-        business_id: businessId,
-        name: customer.name,
-        phone: customer.phone ?? null,
-        address: customer.address ?? null,
-      })
-      .select('id')
-      .single();
-
-    if (customerError || !customerRow) {
-      res.status(400).json({ error: customerError?.message ?? 'Gagal menyimpan penyewa' });
-      return;
-    }
-    customerId = customerRow.id;
-    createdNewCustomer = true;
-  }
-
   // Jalan diambil hari ini -> langsung 'aktif' (alur walk-in biasa).
-  // Tanggal ambil di masa depan -> 'dipesan' (reservasi, belum diambil fisik).
+  // Tanggal ambil di masa depan -> 'dipesan' (reservasi, belum diambil
+  // fisik). status DIHITUNG di Express (butuh todayInTz/timezone bisnis)
+  // tapi picked_up_at-nya sendiri SEKARANG dihitung DI DALAM
+  // create_booking_atomic() (migration 070, revisi koordinator 17 Nov
+  // 2026) -- jam dicatat persis saat RPC itu COMMIT, bukan saat Express
+  // menyusun payload (beberapa ratus ms sebelumnya), dan tidak bisa
+  // dimanipulasi lewat pemanggilan RPC langsung.
   const status = start_date <= todayInTz(bizRow.timezone) ? 'aktif' : 'dipesan';
-  // 'aktif' di sini berarti diambil LANGSUNG saat dicatat (walk-in, staff
-  // ngetik sambil pelanggan menunggu) — created_at praktis = jam ambil
-  // sungguhan, tapi disimpan eksplisit di kolom sendiri (bukan cuma
-  // diasumsikan dari created_at) supaya computeDueAt() (lib/penalty.ts,
-  // migration 027) punya satu sumber jam ambil yang konsisten untuk kedua
-  // jalur (langsung di sini, atau belakangan lewat POST .../pickup).
-  const pickedUpAt = status === 'aktif' ? new Date().toISOString() : null;
 
-  // Audit privasi 2 Nov 2026 — validasi pola key SEBELUM insert, jangan
-  // cuma percaya migration 050's check constraint sebagai satu-satunya
-  // penjaga (defense in depth, sama instruksi review -c1 untuk endpoint
-  // presign di bawah). Key yang tidak cocok pola diam-diam dibuang jadi
-  // null, bukan membuat seluruh transaksi gagal — foto penyewa cuma
-  // opsional.
+  // Audit privasi 2 Nov 2026 — validasi pola key SEBELUM dikirim ke RPC,
+  // jangan cuma percaya migration 050's check constraint sebagai
+  // satu-satunya penjaga. Key yang tidak cocok pola diam-diam dibuang
+  // jadi null, bukan membuat seluruh transaksi gagal — foto penyewa
+  // cuma opsional.
   const customerPhotoKeyPrefix = `customers/${businessId}/`;
   const safeCustomerPhotoKey =
     typeof customer_photo_key === 'string' &&
@@ -311,75 +258,23 @@ router.post('/bookings', async (req, res) => {
       ? customer_photo_key
       : null;
 
-  // generateBookingNumber() pakai count+1 (bukan sequence Postgres) -- dua
-  // request hampir bersamaan bisa menghitung nomor yang SAMA sebelum
-  // keduanya sempat insert, lalu bentrok di unique index
-  // bookings_business_booking_number_key (migration 006). Daripada gagal
-  // total ke klien (brief skala data 2026-11-11, P4 ringan), nomor
-  // di-generate ULANG dan insert dicoba lagi beberapa kali kalau errornya
-  // SPESIFIK unique-violation (kode Postgres 23505) pada kolom ini --
-  // error lain (mis. kolom wajib kosong) tetap langsung gagal seperti
-  // biasa, tidak ikut di-retry.
-  const MAX_BOOKING_NUMBER_ATTEMPTS = 5;
-  let bookingRow: { id: string; booking_number: string | null; status: string } | null = null;
-  let bookingError: { code?: string; message: string } | null = null;
-
-  for (let attempt = 0; attempt < MAX_BOOKING_NUMBER_ATTEMPTS; attempt++) {
-    const bookingNumber = await generateBookingNumber(supabase, businessId, bizRow.timezone);
-    const result = await supabase
-      .from('bookings')
-      .insert({
-        business_id: businessId,
-        customer_id: customerId,
-        customer_photo_key: safeCustomerPhotoKey,
-        booking_number: bookingNumber,
-        start_date,
-        end_date,
-        status,
-        picked_up_at: pickedUpAt,
-        total_price: totalPriceNum,
-        dp_paid: dpPaidNum,
-        // Dibaca trigger log_initial_dp_payment() (migration 067) untuk
-        // mencatat baris booking_payments kind='dp' pertama secara atomik
-        // dalam transaksi insert ini -- Express TIDAK memanggil RPC apa
-        // pun di sini, supaya dp_paid tidak pernah ditulis dua kali.
-        dp_method: ['tunai', 'transfer', 'qris'].includes(dp_method) ? dp_method : null,
-        rental_day_mode: bizRow.rental_day_mode,
-        min_rental_days: bizRow.min_rental_days,
-        max_rental_days: bizRow.max_rental_days,
-        // Snapshot batas jam kembali (migration 062) — null = ikuti jam
-        // ambil, perilaku sebelum fitur ini ada. Pesanan Online yang
-        // dikonfirmasi lewat form Catat Transaksi ini juga otomatis
-        // ter-snapshot, tidak perlu jalur terpisah.
-        return_deadline_time: bizRow.return_deadline_time,
-        return_deadline_next_day: bizRow.return_deadline_next_day,
-        // Snapshot cara hitung denda telat (migration 063) — null =
-        // bertahap_12jam, perilaku sebelum fitur ini ada.
-        late_fee_mode: bizRow.late_fee_mode,
-        late_fee_per_hour: bizRow.late_fee_per_hour,
-        late_fee_per_hour_cap_enabled: bizRow.late_fee_per_hour_cap_enabled,
-      })
-      .select('id, booking_number, status')
-      .single();
-
-    if (!result.error) {
-      bookingRow = result.data;
-      bookingError = null;
-      break;
-    }
-
-    bookingError = result.error;
-    const isBookingNumberConflict = result.error.code === '23505' && result.error.message.includes('booking_number');
-    if (!isBookingNumberConflict) break;
-    // lanjut ke iterasi berikutnya -- generate nomor baru dan coba lagi
-  }
-
-  if (bookingError || !bookingRow) {
-    if (createdNewCustomer) await supabase.from('customers').delete().eq('id', customerId);
-    res.status(400).json({ error: bookingError?.message ?? 'Gagal menyimpan transaksi' });
-    return;
-  }
-
+  // Simpan Transaksi Atomik Tahap 1 (brief 17 Nov 2026, migration 070) --
+  // SELURUH penulisan (customer/booking/booking_items/deposit/barang
+  // jual/riwayat status) SEKARANG satu panggilan RPC SECURITY DEFINER
+  // yang mengunci business (pg_advisory_xact_lock), mengecek ULANG stok
+  // DI DALAM kunci itu (sumber kebenaran -- pre-check Express di atas
+  // cuma fast-path pesan ramah lebih awal, bisa saja sudah basi kalau
+  // ada request lain menyelip di antaranya), lalu insert semuanya dalam
+  // SATU transaksi -- TIDAK ADA LAGI compensating delete manual di sini
+  // sama sekali (4 blok lama dihapus): kalau RPC gagal di langkah mana
+  // pun, Postgres sendiri yang rollback seluruh transaksi, termasuk
+  // trigger log_initial_dp_payment() (067) yang sebelumnya bisa
+  // meninggalkan baris booking_payments yatim kalau unwind manual gagal.
+  //
+  // Harga/tarif bertingkat/alokasi paket TETAP dihitung di sini
+  // (TypeScript, lib/pricing.ts) -- RPC cuma menerima p_items yang SUDAH
+  // berisi price_at_booking/subtotal/dst siap pakai, TIDAK menghitung
+  // ulang apa pun (jangan duplikasi rumus harga ke SQL, brief eksplisit).
   const bookingItemsPayload = requestedItems.map((i) => {
     const itemRow = itemRows!.find((r) => r.id === i.item_id)!;
     const catalogRates = {
@@ -402,7 +297,6 @@ router.post('/bookings', async (req, res) => {
         ? computeBundleComponentRatesSnapshot(catalogRates, i.quantity, rentDuration, subtotal)
         : catalogRates;
     return {
-      booking_id: bookingRow.id,
       item_id: i.item_id,
       quantity: i.quantity,
       price_at_booking: rates.price_per_day,
@@ -423,64 +317,57 @@ router.post('/bookings', async (req, res) => {
     };
   });
 
-  const { error: biError } = await supabase.from('booking_items').insert(bookingItemsPayload);
+  const requestedSaleItems = sale_items as { sale_item_id: string; quantity: number }[] | undefined;
+  const mergedSaleItems =
+    Array.isArray(requestedSaleItems) && requestedSaleItems.length > 0
+      ? mergeDuplicateSaleItemRequests(requestedSaleItems)
+      : null;
 
-  if (biError) {
-    await supabase.from('bookings').delete().eq('id', bookingRow.id);
-    if (createdNewCustomer) await supabase.from('customers').delete().eq('id', customerId);
-    res.status(400).json({ error: biError.message });
+  const { data: actorData } = await supabase.auth.getUser();
+
+  // Revisi koordinator (ronde 2): p_actor_user_id DIHAPUS -- RPC pakai
+  // auth.uid() sendiri untuk booking_status_history.changed_by (member
+  // bisa memalsukan id lewat payload kalau dipercaya dari sini).
+  // rental_day_mode/min-max_rental_days/return_deadline_*/late_fee_*
+  // JUGA DIHAPUS dari payload -- RPC membaca businesses LANGSUNG di
+  // dalam kunci yang sama (bizRow di atas tetap dipakai Express buat
+  // validasi awal per_malam/min hari, bukan buat payload RPC lagi).
+  const { data: rpcRows, error: rpcError } = await supabase.rpc('create_booking_atomic', {
+    p_business_id: businessId,
+    p_customer_id: customer_id ?? null,
+    p_customer_name: customer_id ? null : customer.name,
+    p_customer_phone: customer_id ? null : (customer.phone ?? null),
+    p_customer_address: customer_id ? null : (customer.address ?? null),
+    p_customer_photo_key: safeCustomerPhotoKey,
+    p_start_date: start_date,
+    p_end_date: end_date,
+    p_status: status,
+    p_total_price: totalPriceNum,
+    p_dp_paid: dpPaidNum,
+    p_dp_method: ['tunai', 'transfer', 'qris'].includes(dp_method) ? dp_method : null,
+    p_items: bookingItemsPayload,
+    p_deposit: deposit?.type
+      ? { type: deposit.type, amount: deposit.type === 'uang' ? Number(deposit.amount) || 0 : null, note: deposit.note ?? null }
+      : null,
+    p_sale_items: mergedSaleItems,
+    p_actor_name: actorData.user?.email ?? actorData.user?.id ?? 'tidak diketahui',
+  });
+
+  if (rpcError) {
+    // Error stok (SQLSTATE custom 'P0409', lihat migration 070) -> 409,
+    // pesan sudah ramah (nama alat + tanggal + sisa/diminta) apa adanya
+    // dari RPC. Selain itu -> 400 (validasi/kepemilikan/dsb).
+    res.status(rpcError.code === 'P0409' ? 409 : 400).json({ error: rpcError.message });
     return;
   }
 
-  if (deposit?.type) {
-    const { error: depositError } = await supabase.from('deposits').insert({
-      booking_id: bookingRow.id,
-      type: deposit.type,
-      amount: deposit.type === 'uang' ? Number(deposit.amount) || 0 : null,
-      note: deposit.note ?? null,
-      status: 'ditahan',
-    });
-
-    if (depositError) {
-      await supabase.from('booking_items').delete().eq('booking_id', bookingRow.id);
-      await supabase.from('bookings').delete().eq('id', bookingRow.id);
-      if (createdNewCustomer) await supabase.from('customers').delete().eq('id', customerId);
-      res.status(400).json({ error: depositError.message });
-      return;
-    }
+  const bookingRow = rpcRows?.[0];
+  if (!bookingRow) {
+    res.status(400).json({ error: 'Gagal menyimpan transaksi' });
+    return;
   }
 
-  // Barang Jual (habis pakai), v1 (brief 16 Nov 2026, migration 066) --
-  // opsional, cuma kalau transaksi ini memang punya barang jual. Potong
-  // stok + tulis booking_sale_items ATOMIK lewat SATU RPC
-  // (apply_new_booking_sale_items) sebagai LANGKAH TERAKHIR -- kalau
-  // gagal (mis. stok kurang), unwind manual yang sama seperti kegagalan
-  // booking_items/deposits di atas (pola yang SUDAH ADA di endpoint ini,
-  // bukan ditulis ulang).
-  const requestedSaleItems = sale_items as { sale_item_id: string; quantity: number }[] | undefined;
-  if (Array.isArray(requestedSaleItems) && requestedSaleItems.length > 0) {
-    const merged = mergeDuplicateSaleItemRequests(requestedSaleItems);
-    const { error: saleRpcError } = await supabase.rpc('apply_new_booking_sale_items', {
-      p_booking_id: bookingRow.id,
-      p_items: merged,
-    });
-
-    if (saleRpcError) {
-      await supabase.from('deposits').delete().eq('booking_id', bookingRow.id);
-      await supabase.from('booking_items').delete().eq('booking_id', bookingRow.id);
-      await supabase.from('bookings').delete().eq('id', bookingRow.id);
-      if (createdNewCustomer) await supabase.from('customers').delete().eq('id', customerId);
-      res.status(409).json({ error: saleRpcError.message });
-      return;
-    }
-  }
-
-  const { data: actorData } = await supabase.auth.getUser();
-  if (actorData.user) {
-    await logBookingStatus(supabase, bookingRow.id, bookingRow.status, actorData.user.id, actorData.user.email ?? actorData.user.id);
-  }
-
-  res.status(201).json({ id: bookingRow.id, booking_number: bookingRow.booking_number, status: bookingRow.status });
+  res.status(201).json({ id: bookingRow.booking_id, booking_number: bookingRow.booking_number, status: bookingRow.status });
 });
 
 // Audit privasi 2 Nov 2026 — satu-satunya jalur baca foto penyewa.
