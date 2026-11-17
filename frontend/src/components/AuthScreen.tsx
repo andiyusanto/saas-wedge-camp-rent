@@ -1,10 +1,27 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Building2 } from 'lucide-react';
+import { Building2, X } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { API_BASE_URL } from '../lib/api';
+import { getWhatsAppShareUrl } from '../utils/formatters';
 
-export function AuthScreen({ inviteCode }: { inviteCode: string | null }) {
+// Nomor dari VITE_SUPPORT_WHATSAPP_NUMBER (lihat frontend/.env.example) --
+// pola sama GuideScreen.tsx/OnlineStoreScreen.tsx, BUKAN nomor baru.
+const SEWALOG_SUPPORT_WHATSAPP = import.meta.env.VITE_SUPPORT_WHATSAPP_NUMBER ?? '62xxxxxxxxxx';
+
+export function AuthScreen({
+  inviteCode,
+  forceDaftar = false,
+  signupSource = null,
+}: {
+  inviteCode: string | null;
+  // Prasyarat tombol "Daftar Gratis" landing (brief 17 Nov 2026) --
+  // `?daftar=1` dibaca sekali di App.tsx, diteruskan ke sini sebagai hint
+  // mode awal. `inviteCode` tetap menang kalau dua-duanya ada (lihat
+  // AuthForm di bawah).
+  forceDaftar?: boolean;
+  signupSource?: string | null;
+}) {
   if (!isSupabaseConfigured) {
     return (
       <main className="min-h-screen flex items-center justify-center p-4 bg-[#F1EEE2]">
@@ -19,7 +36,7 @@ export function AuthScreen({ inviteCode }: { inviteCode: string | null }) {
     );
   }
 
-  return <AuthForm inviteCode={inviteCode} />;
+  return <AuthForm inviteCode={inviteCode} forceDaftar={forceDaftar} signupSource={signupSource} />;
 }
 
 function Brand() {
@@ -70,19 +87,33 @@ function InviteBanner({ inviteCode }: { inviteCode: string }) {
   );
 }
 
-function AuthForm({ inviteCode }: { inviteCode: string | null }) {
+function AuthForm({
+  inviteCode,
+  forceDaftar = false,
+  signupSource = null,
+}: {
+  inviteCode: string | null;
+  forceDaftar?: boolean;
+  signupSource?: string | null;
+}) {
   // Temuan Andi (2 Nov 2026): penerima undangan hampir selalu BELUM
   // punya akun — default ke mode Daftar begitu ada ?invite= di URL,
   // bukan Masuk (default lama). Tanpa ?invite=, perilaku tidak berubah
   // (tetap default Masuk). Link "Sudah punya akun? Masuk" tetap ada buat
-  // yang kebetulan sudah pernah daftar.
-  const [mode, setMode] = useState<'masuk' | 'daftar' | 'lupa'>(inviteCode ? 'daftar' : 'masuk');
+  // yang kebetulan sudah pernah daftar. `forceDaftar` (?daftar=1 dari
+  // landing, brief 17 Nov 2026) sama perlakuannya dengan inviteCode di
+  // sini -- inviteCode tetap diperiksa duluan jadi "menang" kalau dua-duanya
+  // ada, meski hasilnya sama (keduanya -> 'daftar').
+  const [mode, setMode] = useState<'masuk' | 'daftar' | 'lupa'>(inviteCode || forceDaftar ? 'daftar' : 'masuk');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [resettingDemo, setResettingDemo] = useState(false);
+  // Ajakan WA setelah daftar berhasil (brief 17 Nov 2026) -- dismissible,
+  // state lokal saja, bukan persistensi apa pun.
+  const [showWaNudge, setShowWaNudge] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -106,11 +137,23 @@ function AuthForm({ inviteCode }: { inviteCode: string | null }) {
       // diblokir di private browsing), yang satu lagi tetap menutupi.
       const redirectBase = `${window.location.origin}${window.location.pathname}`;
       const emailRedirectTo = inviteCode ? `${redirectBase}?invite=${encodeURIComponent(inviteCode)}` : redirectBase;
-      const { error: signUpError } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo } });
+      const { error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo,
+          // Metrik sumber pendaftaran (brief 17 Nov 2026) -- sudah
+          // divalidasi whitelist+panjang di readSignupSource() (App.tsx)
+          // sebelum sampai sini, bukan data pribadi, cuma label sumber
+          // (mis. "landing-hero"). Null kalau tidak ada ?src= yang valid.
+          data: signupSource ? { signup_source: signupSource } : undefined,
+        },
+      });
       if (signUpError) {
         setError(signUpError.message);
       } else {
         setMessage('Akun dibuat. Kalau perlu konfirmasi email, cek inbox dulu sebelum masuk.');
+        setShowWaNudge(true);
       }
     }
 
@@ -261,6 +304,31 @@ function AuthForm({ inviteCode }: { inviteCode: string | null }) {
 
           {error && <p className="text-sm text-[#A8412E]">{error}</p>}
           {message && <p className="text-sm text-[#2B4739]">{message}</p>}
+
+          {showWaNudge && (
+            <div className="flex items-start gap-2 rounded-xl bg-[#E8EFEA] border border-[#2B4739]/20 p-3">
+              <p className="flex-1 text-xs text-[#26302B]">
+                Butuh bantuan setup?{' '}
+                <a
+                  href={getWhatsAppShareUrl(SEWALOG_SUPPORT_WHATSAPP, 'Halo, saya baru daftar Sewalog dan butuh bantuan setup.')}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-bold underline hover:text-[#1E3429]"
+                >
+                  Chat kami di WhatsApp
+                </a>
+                .
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowWaNudge(false)}
+                aria-label="Tutup"
+                className="shrink-0 p-0.5 rounded hover:bg-[#2B4739]/10 text-[#6E6853]"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
 
           <button
             type="submit"

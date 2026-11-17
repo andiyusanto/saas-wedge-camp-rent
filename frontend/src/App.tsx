@@ -78,6 +78,28 @@ function readInviteCode(): string | null {
   }
 }
 
+// Prasyarat tombol "Daftar Gratis" di landing (brief 17 Nov 2026) --
+// `?daftar=1` membuka AuthScreen langsung dalam mode 'daftar', dibaca
+// SEKALI saat mount (pola sama readInviteCode(), tanpa persist localStorage
+// karena ini cuma hint mode awal, bukan kredensial yang perlu bertahan
+// lintas reload/email-redirect). `?invite=` tetap menang kalau dua-duanya
+// ada (dicek di AuthScreen.tsx: inviteCode || forceDaftar -> 'daftar').
+function readForceDaftar(): boolean {
+  return new URLSearchParams(window.location.search).get('daftar') === '1';
+}
+
+// Parameter sumber pendaftaran (mis. "landing-hero") -- disimpan ke metadata
+// signup Supabase (options.data.signup_source) buat metrik, BUKAN data
+// pribadi. Whitelist pendek: huruf/angka/strip/underscore saja, maks 40
+// karakter -- nilai yang tidak lolos diabaikan (null), tidak pernah
+// dikirim mentah tanpa validasi.
+const SIGNUP_SOURCE_PATTERN = /^[a-zA-Z0-9_-]{1,40}$/;
+function readSignupSource(): string | null {
+  const value = new URLSearchParams(window.location.search).get('src');
+  if (value && SIGNUP_SOURCE_PATTERN.test(value)) return value;
+  return null;
+}
+
 function clearInviteCode() {
   const url = new URL(window.location.href);
   url.searchParams.delete('invite');
@@ -241,6 +263,8 @@ function App() {
   const [preselectedStartDate, setPreselectedStartDate] = useState<string | null>(null);
 
   const [inviteCode, setInviteCode] = useState<string | null>(readInviteCode);
+  const [forceDaftar] = useState<boolean>(readForceDaftar);
+  const [signupSource] = useState<string | null>(readSignupSource);
   // Ditampilkan/tidak ditampilkan lagi untuk SESI INI setelah pengguna
   // menjawab konfirmasi ("Gabung"/"Bukan saya") — beda dari inviteCode
   // yang disimpan lintas-reload, flag ini sengaja TIDAK persisten.
@@ -254,7 +278,7 @@ function App() {
   // dengan sesi recovery tanpa sempat ganti password.
   if (isPasswordRecovery) return <ResetPasswordScreen onDone={clearPasswordRecovery} />;
 
-  if (!session) return <AuthScreen inviteCode={inviteCode} />;
+  if (!session) return <AuthScreen inviteCode={inviteCode} forceDaftar={forceDaftar} signupSource={signupSource} />;
 
   // Review -c1: konfirmasi undangan WAJIB tampil begini pun akun ini
   // SUDAH punya business sendiri — device bisa dipakai gantian (lihat
