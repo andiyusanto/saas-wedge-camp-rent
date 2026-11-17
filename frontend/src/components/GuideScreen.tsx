@@ -290,10 +290,11 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           dan belum ditandai <Ui>Kembalikan</Ui>, alat itu terkunci untuk booking baru TANPA BATAS WAKTU sampai kamu
           memproses pengembaliannya lewat <Ui>Proses Pengembalian</Ui> (<SectionLink id="g-transaksi-aktif">bagian 3</SectionLink>) — jadi kalau Kalender menunjukkan alat
           "Habis" padahal menurutmu sudah waktunya kembali, cek dulu Transaksi Aktif, mungkin ada transaksi yang
-          belum ditutup. Alat yang sedang dalam kondisi ini ditandai label <Ui>Telat — terkunci sampai
-          dikembalikan</Ui> di kartunya — tekan labelnya untuk langsung membuka Transaksi Aktif. Segera tekan{' '}
-          <Ui>Proses Pengembalian</Ui> begitu alatnya benar-benar kembali supaya stoknya cepat terbuka lagi untuk
-          pelanggan lain.
+          belum ditutup. Alat yang sedang dalam kondisi ini ditandai label <Ui>Telat, N unit terkunci sampai
+          dikembalikan</Ui> di kartunya (N = total unit yang terkunci, nama penyewa menyusul setelah tanda "·") —
+          tekan labelnya untuk langsung membuka Transaksi Aktif dengan filter <Ui>Terlambat</Ui> sudah aktif. Segera
+          tekan <Ui>Proses Pengembalian</Ui> begitu alatnya benar-benar kembali supaya stoknya cepat terbuka lagi
+          untuk pelanggan lain.
         </Note>
         <Note>
           Kalau sudah punya <Ui>Paket</Ui> aktif di Katalog, muncul grup <Ui>Paket</Ui> di atas daftar alat — sisa per

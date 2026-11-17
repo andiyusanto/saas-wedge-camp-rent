@@ -511,3 +511,28 @@ export function getWhatsAppShareUrl(phone: string, text: string): string {
   }
   return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
 }
+
+// Opsi B Tahap 2, tweak label (brief 17 Nov 2026, koordinator) -- label
+// "Telat, N unit terkunci ..." di kartu alat Kalender. N = TOTAL UNIT
+// (jumlah quantity booking_items item ini), BUKAN jumlah transaksi -- satu
+// transaksi bisa menyewa lebih dari 1 unit alat yang sama. Nama penyewa
+// unik (fallback ke kode booking kalau nama kosong), diurutkan end_date
+// PALING LAMA dulu, dipotong jadi "A, B +K lainnya" kalau lebih dari 2 nama
+// supaya tidak memanjang di HP.
+export function formatOverdueLabel(bookings: { booking_number: string | null; customer_name: string | null; end_date: string; quantity: number }[]): string {
+  const totalQuantity = bookings.reduce((sum, b) => sum + b.quantity, 0);
+  const sorted = [...bookings].sort((a, b) => a.end_date.localeCompare(b.end_date));
+
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const b of sorted) {
+    const name = b.customer_name?.trim() || b.booking_number || 'Tanpa nama';
+    if (seen.has(name)) continue;
+    seen.add(name);
+    names.push(name);
+  }
+
+  const namesText = names.length <= 2 ? names.join(', ') : `${names.slice(0, 2).join(', ')} +${names.length - 2} lainnya`;
+
+  return `Telat, ${totalQuantity} unit terkunci sampai dikembalikan · ${namesText}`;
+}

@@ -11,6 +11,7 @@ export type OverdueBooking = {
   booking_number: string | null;
   customer_name: string | null;
   end_date: string;
+  quantity: number;
 };
 
 export type AvailabilityItem = {

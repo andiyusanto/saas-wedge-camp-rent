@@ -4,7 +4,7 @@ import { Search, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Pack
 import { useAvailability } from '../hooks/useAvailability';
 import { useBundles } from '../hooks/useBundles';
 import { computeBundleAvailability, computeBundleDayOnePrice, resolveBundleImageUrl } from '../utils/bundleAvailability';
-import { formatIDR, formatDateIndo, todayStr } from '../utils/formatters';
+import { formatIDR, formatDateIndo, todayStr, formatOverdueLabel } from '../utils/formatters';
 import { ScrollableRow } from './ScrollableRow';
 import { ImagePreviewModal } from './ImagePreviewModal';
 
@@ -70,6 +70,7 @@ export function CalendarScreen({
   onSelectBookBundle,
   pendingRequestCount = 0,
   onViewPendingRequests,
+  onViewOverdue,
   onNavigateToGuide,
   writable = true,
 }: {
@@ -87,6 +88,10 @@ export function CalendarScreen({
   // membawa ke bagian "Pesanan masuk" (tab Transaksi Aktif).
   pendingRequestCount?: number;
   onViewPendingRequests?: () => void;
+  // Label "Telat, N unit terkunci..." (koordinator 17 Nov 2026) -- JALUR
+  // TERPISAH dari onViewPendingRequests: membuka Transaksi Aktif dengan
+  // filter Terlambat SUDAH aktif, bukan cuma membuka tab-nya apa adanya.
+  onViewOverdue?: () => void;
   // Opsi B Tahap 2 (brief 17 Nov 2026) -- link "Pelajari" di notice + label
   // "Telat" membawa ke Panduan bagian Kalender (pola sama TrackingScreen.tsx
   // -> onNavigateToGuide).
@@ -515,19 +520,14 @@ export function CalendarScreen({
                     {item.overdue_bookings.length > 0 && (
                       <button
                         type="button"
-                        onClick={() => onViewPendingRequests?.()}
-                        className="mt-1.5 flex items-center gap-1 text-[10px] font-bold text-[#A8412E] bg-[#FAF0EE] border border-[#A8412E]/30 rounded-lg px-2 py-1 hover:bg-[#A8412E]/10 transition"
+                        onClick={() => onViewOverdue?.()}
+                        className="mt-1.5 flex items-center gap-1 text-[10px] font-bold text-[#A8412E] bg-[#FAF0EE] border border-[#A8412E]/30 rounded-lg px-2 py-1 hover:bg-[#A8412E]/10 transition text-left"
                         title={item.overdue_bookings
-                          .map((b) => `${b.customer_name ?? 'Tanpa nama'}${b.booking_number ? ` (${b.booking_number})` : ''}`)
+                          .map((b) => `${b.customer_name?.trim() || b.booking_number || 'Tanpa nama'} (${b.quantity} unit)`)
                           .join(', ')}
                       >
-                        <Clock className="w-3 h-3" />
-                        <span>
-                          Telat — terkunci sampai dikembalikan
-                          {item.overdue_bookings[0] &&
-                            (item.overdue_bookings[0].customer_name || item.overdue_bookings[0].booking_number) &&
-                            ` · ${item.overdue_bookings[0].customer_name ?? item.overdue_bookings[0].booking_number}`}
-                        </span>
+                        <Clock className="w-3 h-3 shrink-0" />
+                        <span>{formatOverdueLabel(item.overdue_bookings)}</span>
                       </button>
                     )}
                   </div>

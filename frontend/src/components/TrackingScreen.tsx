@@ -58,7 +58,7 @@ import {
   groupReceiptItemsByBundle,
 } from '../utils/formatters';
 
-type StatusFilter = 'all' | 'overdue' | 'active' | 'pending_pickup';
+export type StatusFilter = 'all' | 'overdue' | 'active' | 'pending_pickup';
 
 export function TrackingScreen({
   session,
@@ -68,6 +68,7 @@ export function TrackingScreen({
   businessLogoUrl,
   writable = true,
   onNavigateToGuide,
+  initialFilter,
 }: {
   session: Session;
   business: Business;
@@ -79,6 +80,12 @@ export function TrackingScreen({
   // (tetap terbuka, lihat migration 044 bagian 6).
   writable?: boolean;
   onNavigateToGuide: (sectionId: string) => void;
+  // Label "Telat, N unit terkunci..." di Kalender (brief 17 Nov 2026) --
+  // membuka tab ini dengan filter Terlambat SUDAH aktif, bukan default
+  // "Semua". Cuma dibaca SEKALI saat mount (komponen ini unmount tiap
+  // tab berpindah, lihat App.tsx), jadi menekan tab menu Transaksi Aktif
+  // secara manual nanti (initialFilter kosong) tetap kembali ke default.
+  initialFilter?: StatusFilter;
 }) {
   const {
     bookings,
@@ -106,7 +113,7 @@ export function TrackingScreen({
     fetchHistoricalRequests,
   } = useBookingRequests(business.id);
   const push = usePushNotifications(session, business.id);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialFilter ?? 'all');
   const [searchQuery, setSearchQuery] = useState('');
   const [returnTarget, setReturnTarget] = useState<TrackingBooking | null>(null);
   const [fineTarget, setFineTarget] = useState<TrackingBooking | null>(null);

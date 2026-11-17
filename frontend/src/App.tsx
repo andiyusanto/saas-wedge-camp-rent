@@ -20,6 +20,7 @@ import { ItemsScreen } from './components/ItemsScreen';
 import { CalendarScreen } from './components/CalendarScreen';
 import { NewBookingModal } from './components/NewBookingModal';
 import { TrackingScreen } from './components/TrackingScreen';
+import type { StatusFilter } from './components/TrackingScreen';
 import { TeamScreen } from './components/TeamScreen';
 import { HistoryScreen } from './components/HistoryScreen';
 import { GuideScreen } from './components/GuideScreen';
@@ -183,6 +184,15 @@ function App() {
   // sengaja tidak mewarisi ini (sessionStorage per-tab + dihapus saat logout,
   // lihat useAuth.ts), jatuh balik ke 'kalender'.
   const [tab, setTab] = useState<Tab>(() => loadActiveTab() ?? 'kalender');
+  // Label "Telat, N unit terkunci..." di Kalender (koordinator 17 Nov
+  // 2026) -- dibaca SEKALI saat TrackingScreen mount (lihat initialFilter
+  // di sana), lalu dibersihkan begitu pengguna MENINGGALKAN tab Transaksi
+  // Aktif (efek di bawah), supaya menekan tab menu itu secara manual
+  // nanti tetap kembali ke filter default "Semua".
+  const [trackingInitialFilter, setTrackingInitialFilter] = useState<StatusFilter | null>(null);
+  useEffect(() => {
+    if (tab !== 'tracking') setTrackingInitialFilter(null);
+  }, [tab]);
   const [refreshSignal, setRefreshSignal] = useState(0);
   // Badge tab + banner Kalender (rencana 2.4 bagian B+C) — instance
   // terpisah dari yang dipakai TrackingScreen sendiri (poll ringan
@@ -420,6 +430,10 @@ function App() {
             onSelectBookBundle={openNewBookingBundle}
             pendingRequestCount={pendingRequestCount}
             onViewPendingRequests={() => setTab('tracking')}
+            onViewOverdue={() => {
+              setTrackingInitialFilter('overdue');
+              setTab('tracking');
+            }}
             onNavigateToGuide={(sectionId) => {
               requestGuideScroll(sectionId);
               setTab('panduan');
@@ -436,6 +450,7 @@ function App() {
             businessAddress={business.address}
             businessLogoUrl={business.logo_url}
             writable={subscription?.writable ?? true}
+            initialFilter={trackingInitialFilter ?? undefined}
             onNavigateToGuide={(sectionId) => {
               requestGuideScroll(sectionId);
               setTab('panduan');

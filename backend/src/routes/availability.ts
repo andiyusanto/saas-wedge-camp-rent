@@ -67,18 +67,18 @@ router.get('/availability', async (req, res) => {
   const today = todayInTz(timezone);
   const { data: overdueBookings } = await supabase
     .from('bookings')
-    .select('id, booking_number, end_date, customers(name), booking_items(item_id)')
+    .select('id, booking_number, end_date, customers(name), booking_items(item_id, quantity)')
     .eq('business_id', business.id)
     .eq('status', 'aktif')
     .lt('end_date', today);
 
-  const overdueByItemId = new Map<string, { booking_number: string | null; customer_name: string | null; end_date: string }[]>();
+  const overdueByItemId = new Map<string, { booking_number: string | null; customer_name: string | null; end_date: string; quantity: number }[]>();
   for (const b of overdueBookings ?? []) {
     if (!isBookingOverdue(b.end_date, today)) continue; // jaring pengaman defensif, konsisten dgn usedUnitsOn()
     const customerName = (b.customers as unknown as { name: string } | null)?.name ?? null;
-    for (const bi of (b.booking_items as unknown as { item_id: string }[]) ?? []) {
+    for (const bi of (b.booking_items as unknown as { item_id: string; quantity: number }[]) ?? []) {
       const list = overdueByItemId.get(bi.item_id) ?? [];
-      list.push({ booking_number: b.booking_number, customer_name: customerName, end_date: b.end_date });
+      list.push({ booking_number: b.booking_number, customer_name: customerName, end_date: b.end_date, quantity: bi.quantity });
       overdueByItemId.set(bi.item_id, list);
     }
   }
