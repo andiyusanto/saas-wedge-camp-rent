@@ -1,6 +1,6 @@
 # Sewalog
 
-> Tools operasional untuk UKM rental alat kamping & outdoor di seluruh Indonesia — kalender ketersediaan, catat transaksi, dan tracking jaminan & denda. Fase saat ini adalah SaaS-wedge: tools gratis/uji coba untuk vendor, belum jadi marketplace publik.
+> Tools operasional untuk UKM rental alat kamping & outdoor di seluruh Indonesia — kalender ketersediaan, catat transaksi, paket alat, barang jual, DP & pelunasan, dan tracking jaminan & denda. Fase saat ini adalah SaaS-wedge: tools gratis/uji coba untuk vendor, belum jadi marketplace publik.
 
 ## Tentang
 
