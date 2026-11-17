@@ -333,6 +333,7 @@ export async function downloadHistoryExcel(allFiltered: HistoryBooking[], filter
     { header: 'Alat', key: 'items', width: 32 },
     { header: 'Barang Jual', key: 'sale_items', width: 24 },
     { header: 'Total Harga (Rp)', key: 'total_price', width: 16 },
+    { header: 'Total Tagihan (Rp)', key: 'total_tagihan', width: 16 },
     { header: 'Sudah Dibayar (Rp)', key: 'dp_paid', width: 16 },
     { header: 'Sisa Tagihan (Rp)', key: 'remaining', width: 16 },
     { header: 'Denda Telat (Rp)', key: 'denda_telat', width: 16 },
@@ -351,6 +352,10 @@ export async function downloadHistoryExcel(allFiltered: HistoryBooking[], filter
       items: b.items.map((i) => `${i.name} (${i.quantity}x)`).join('; '),
       sale_items: b.saleItems.map((s) => `${s.name} (${s.quantity}x)`).join('; '),
       total_price: b.total_price,
+      // "Total Tagihan" = Total Harga + semua denda -- sumber sama dengan
+      // computeRemainingBalance()/Nota, kolom baru DI SAMPING kolom lama
+      // (koordinator 17 Nov 2026), bukan menggantikannya.
+      total_tagihan: b.total_price + b.penalties.reduce((sum, p) => sum + p.amount, 0),
       dp_paid: b.dp_paid,
       // Pelunasan (brief 17 Nov 2026) -- sisa tagihan termasuk denda.
       remaining: Math.max(
@@ -366,7 +371,7 @@ export async function downloadHistoryExcel(allFiltered: HistoryBooking[], filter
     // difilter), cuma numFmt-nya yang berubah dari dd/mm/yyyy.
     row.getCell('start_date').numFmt = 'dd-mm-yyyy';
     row.getCell('end_date').numFmt = 'dd-mm-yyyy';
-    for (const key of ['total_price', 'dp_paid', 'remaining', 'denda_telat', 'denda_kerusakan']) {
+    for (const key of ['total_price', 'total_tagihan', 'dp_paid', 'remaining', 'denda_telat', 'denda_kerusakan']) {
       row.getCell(key).numFmt = '#,##0';
     }
   }

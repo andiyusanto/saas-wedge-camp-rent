@@ -733,14 +733,15 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         <Note>
           Tombol <Ui>Nota</Ui> di tiap baris membuka nota yang sama seperti di Transaksi Aktif, ditandai{' '}
           <Ui>SALINAN — dicetak ulang {'{tanggal}'}</Ui> karena ini cetak ulang, bukan transaksi baru — cocok kalau
-          pelanggan minta bukti transaksi lama. Tombol <Ui>Bayar</Ui> (muncul kalau sisa belum 0) dan{' '}
-          <Ui>Batalkan</Ui> juga ada di sini — lihat <SectionLink id="g-transaksi-aktif">bagian 3</SectionLink>
-          untuk penjelasan Pelunasan &amp; Batalkan/Void.
+          pelanggan minta bukti transaksi lama. Tombol <Ui>Bayar</Ui> (muncul kalau sisa belum 0, di status apa pun
+          kecuali Dibatalkan) ada di sini juga — lihat <SectionLink id="g-transaksi-aktif">bagian 3</SectionLink>
+          untuk penjelasan Pelunasan. <Ui>Batalkan transaksi…</Ui> ada di menu titik tiga (⋯) di ujung kanan tiap
+          baris, bukan tombol merah lepas — supaya tidak gampang kepencet tidak sengaja.
         </Note>
         <p>
           Filter tanggal (default: awal bulan berjalan sampai hari ini), status, dan pencarian nama/kode booking
-          bisa dipakai bersamaan. Tombol <Ui>Unduh Excel</Ui> mengunduh file .xlsx berisi daftar yang sedang tampil
-          (ikut filter tanggal ambil, status, dan pencarian).
+          bisa dipakai bersamaan. Tombol <Ui>Unduh Excel</Ui> ada di bawah baris filter — isinya mengikuti filter
+          yang sedang dipakai, sama persis dengan angka kecil di sebelahnya ("N transaksi sesuai filter").
         </p>
         <p>Isinya 3 sheet:</p>
         <ul className="list-disc pl-5 space-y-1 text-xs text-[#26302B]">
@@ -774,7 +775,8 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           Sub-tab <Ui>Laporan</Ui> di samping <Ui>Transaksi</Ui> — murni dari data yang sudah tersimpan, <strong>BUKAN</strong>{' '}
           laporan keuangan/neraca lengkap (tidak ada input pengeluaran). Ada dua bagian: <Ui>Pemasukan per Bulan</Ui>{' '}
           dan <Ui>Laporan per Alat</Ui>, masing-masing punya tombol <Ui>Unduh Excel</Ui> sendiri (terpisah dari
-          tombol Unduh Excel tab Transaksi) yang berisi kedua sheet laporan sekaligus.
+          tombol Unduh Excel tab Transaksi, letaknya di dekat pemilih tahun/periode masing-masing bagian) yang
+          berisi kedua sheet laporan sekaligus.
         </p>
         <Steps
           items={[

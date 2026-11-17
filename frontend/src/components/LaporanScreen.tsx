@@ -156,29 +156,18 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex gap-2">
-          {(['bulanan', 'per-alat'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setReportTab(tab)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                reportTab === tab ? 'bg-[#2B4739] text-[#FBFAF4] shadow-xs' : 'bg-[#F1EEE2] text-[#26302B] border border-[#DBD5C1] hover:bg-[#E6E1D2]'
-              }`}
-            >
-              {tab === 'bulanan' ? 'Pemasukan per Bulan' : 'Laporan per Alat'}
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={handleExport}
-          disabled={exporting || monthlyLoading || perAlatLoading}
-          className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs shadow-sm transition disabled:opacity-50 shrink-0"
-        >
-          <Download className="w-4 h-4" />
-          <span>{exporting ? 'Menyiapkan...' : 'Unduh Excel'}</span>
-        </button>
+      <div className="flex gap-2">
+        {(['bulanan', 'per-alat'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setReportTab(tab)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+              reportTab === tab ? 'bg-[#2B4739] text-[#FBFAF4] shadow-xs' : 'bg-[#F1EEE2] text-[#26302B] border border-[#DBD5C1] hover:bg-[#E6E1D2]'
+            }`}
+          >
+            {tab === 'bulanan' ? 'Pemasukan per Bulan' : 'Laporan per Alat'}
+          </button>
+        ))}
       </div>
 
       {reportTab === 'bulanan' ? (
@@ -193,6 +182,18 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
                 className="w-28 px-3 py-1.5 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] text-xs font-bold"
               />
             </label>
+            {/* Dipindah dari header halaman (koordinator 17 Nov 2026) -- gaya
+                sekunder (outline), posisi dekat pemilih periode/tahun, pola
+                konsisten dengan tombol Unduh Excel di tab Transaksi Riwayat. */}
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={exporting || monthlyLoading || perAlatLoading}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white text-[#2B4739] border border-[#2B4739] hover:bg-[#E8EFEA] font-bold text-xs transition disabled:opacity-50 shrink-0 ml-auto"
+            >
+              <Download className="w-4 h-4" />
+              <span>{exporting ? 'Menyiapkan...' : 'Unduh Excel'}</span>
+            </button>
           </div>
 
           {monthlyLoading ? (
@@ -405,6 +406,15 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
                 <option value="jumlahSewa">Jumlah Sewa</option>
               </select>
             </label>
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={exporting || monthlyLoading || perAlatLoading}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white text-[#2B4739] border border-[#2B4739] hover:bg-[#E8EFEA] font-bold text-xs transition disabled:opacity-50 shrink-0 ml-auto"
+            >
+              <Download className="w-4 h-4" />
+              <span>{exporting ? 'Menyiapkan...' : 'Unduh Excel'}</span>
+            </button>
           </div>
 
           <p className="text-[10px] text-[#6E6853] italic">

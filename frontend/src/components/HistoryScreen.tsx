@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { History, Receipt, Wallet, AlertCircle, CalendarClock, Download, Search, Package, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { History, Receipt, Wallet, AlertCircle, CalendarClock, Download, Search, Package, ChevronDown, ChevronUp, X, MoreVertical } from 'lucide-react';
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import { useHistory } from '../hooks/useHistory';
 import { StatCard } from './StatCard';
@@ -90,6 +90,10 @@ export function HistoryScreen({
   const [showCancelled, setShowCancelled] = useState(false);
   const [paymentTarget, setPaymentTarget] = useState<HistoryBooking | null>(null);
   const [voidTarget, setVoidTarget] = useState<HistoryBooking | null>(null);
+  // "Batalkan" dipindah ke menu "⋯" per baris (koordinator 17 Nov 2026) --
+  // tombol merah di tiap baris rawan tertekan, termasuk pada transaksi
+  // Selesai. Cuma satu baris bisa buka menunya sekaligus.
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [invoiceData, setInvoiceData] = useState<ReceiptData | null>(null);
   const [notaLoadingId, setNotaLoadingId] = useState<string | null>(null);
 
@@ -235,21 +239,6 @@ export function HistoryScreen({
             </h2>
             <p className="text-xs text-[#6E6853]">Rekap semua transaksi, termasuk yang sudah selesai atau dibatalkan.</p>
           </div>
-          {screenTab === 'transaksi' && (
-            <button
-              type="button"
-              onClick={handleExport}
-              disabled={filtered.length === 0 || exporting}
-              className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm transition shrink-0 ${
-                filtered.length === 0 || exporting
-                  ? 'bg-[#F1EEE2] text-[#6E6853] cursor-not-allowed'
-                  : 'bg-[#2B4739] hover:bg-[#1E3429] text-white'
-              }`}
-            >
-              <Download className="w-4 h-4" />
-              <span>{exporting ? 'Menyiapkan...' : 'Unduh Excel'}</span>
-            </button>
-          )}
         </div>
 
         <div className="flex gap-2 pt-2 border-t border-[#E6E1D2]">
@@ -321,6 +310,22 @@ export function HistoryScreen({
                 />
               </div>
             </label>
+          </div>
+          <div className="flex flex-col sm:items-end gap-1 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={filtered.length === 0 || exporting}
+              className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs border transition shrink-0 w-full sm:w-auto ${
+                filtered.length === 0 || exporting
+                  ? 'bg-[#F1EEE2] text-[#6E6853] border-[#DBD5C1] cursor-not-allowed'
+                  : 'bg-white text-[#2B4739] border-[#2B4739] hover:bg-[#E8EFEA]'
+              }`}
+            >
+              <Download className="w-4 h-4" />
+              <span>{exporting ? 'Menyiapkan...' : 'Unduh Excel'}</span>
+            </button>
+            <span className="text-[10px] text-[#6E6853]">{filtered.length} transaksi sesuai filter</span>
           </div>
         </div>
         )}
@@ -410,7 +415,7 @@ export function HistoryScreen({
                 <th className="p-3 font-semibold">Penyewa</th>
                 <th className="p-3 font-semibold">Tanggal</th>
                 <th className="p-3 font-semibold">Alat</th>
-                <th className="p-3 font-semibold text-right">Total</th>
+                <th className="p-3 font-semibold text-right">Total Tagihan</th>
                 <th className="p-3 font-semibold text-right">Sisa Tagihan</th>
                 <th className="p-3 font-semibold">Status</th>
                 <th className="p-3 font-semibold">Aksi</th>
@@ -420,6 +425,12 @@ export function HistoryScreen({
               {filtered.map((b) => {
                 const totalFines = b.penalties.reduce((sum, p) => sum + p.amount, 0);
                 const remaining = computeRemainingBalance(b.total_price, totalFines, b.dp_paid);
+                // "Total Tagihan" (koordinator 17 Nov 2026) = Total Harga + semua
+                // denda -- sumber SAMA dengan computeRemainingBalance()/Nota
+                // (bukan rumus baru), supaya tidak membingungkan saat ada denda
+                // (sebelumnya kolom "Total" cuma total_price, beda jauh dari
+                // Sisa Tagihan yang sudah termasuk denda).
+                const totalTagihan = b.total_price + totalFines;
                 return (
                   <tr key={b.id} className="border-b border-[#E6E1D2] last:border-0 align-top">
                     <td className="p-3 font-mono font-bold text-[#2B4739]">{b.booking_number ?? '-'}</td>
@@ -431,7 +442,10 @@ export function HistoryScreen({
                       {formatDateIndo(b.start_date, false)} – {formatDateIndo(b.end_date, false)}
                     </td>
                     <td className="p-3 text-[#6E6853]">{b.items.map((i) => `${i.name} (${i.quantity}x)`).join(', ')}</td>
-                    <td className="p-3 text-right font-bold text-[#26302B] whitespace-nowrap">{formatIDR(b.total_price)}</td>
+                    <td className="p-3 text-right font-bold text-[#26302B] whitespace-nowrap">
+                      {formatIDR(totalTagihan)}
+                      {totalFines > 0 && <p className="text-[10px] font-normal text-[#6E6853]">termasuk denda {formatIDR(totalFines)}</p>}
+                    </td>
                     <td
                       className={`p-3 text-right font-bold whitespace-nowrap ${
                         remaining > 0 ? 'text-[#A8412E]' : remaining < 0 ? 'text-[#A65C2A]' : 'text-[#2B4739]'
@@ -444,47 +458,80 @@ export function HistoryScreen({
                         {bookingStatusLabel(b.status)}
                       </span>
                     </td>
-                    <td className="p-3 whitespace-nowrap space-x-2">
-                      <button
-                        type="button"
-                        onClick={() => openNota(b)}
-                        disabled={notaLoadingId === b.id}
-                        className="text-[11px] font-bold text-[#2B4739] underline disabled:opacity-50"
-                      >
-                        {notaLoadingId === b.id ? '...' : 'Nota'}
-                      </button>
-                      {/* Perbaikan koordinator 17 Nov 2026: "Bayar" cuma
-                          relevan kalau masih ada sisa (remaining>0) --
-                          Lebih Bayar (remaining<0) ditawari "Pengembalian"
-                          (koreksi/refund), bukan "Bayar", karena tidak ada
-                          yang perlu dibayar lagi. */}
-                      {remaining > 0 && b.status !== 'dibatalkan' && (
+                    <td className="p-3 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => setPaymentTarget(b)}
-                          className="text-[11px] font-bold text-[#2B4739] underline"
+                          onClick={() => openNota(b)}
+                          disabled={notaLoadingId === b.id}
+                          className="text-[11px] font-bold text-[#2B4739] underline disabled:opacity-50"
                         >
-                          Bayar
+                          {notaLoadingId === b.id ? '...' : 'Nota'}
                         </button>
-                      )}
-                      {remaining < 0 && b.status !== 'dibatalkan' && (
-                        <button
-                          type="button"
-                          onClick={() => setPaymentTarget(b)}
-                          className="text-[11px] font-bold text-[#A65C2A] underline"
-                        >
-                          Pengembalian
-                        </button>
-                      )}
-                      {b.status !== 'dibatalkan' && (
-                        <button
-                          type="button"
-                          onClick={() => setVoidTarget(b)}
-                          className="text-[11px] font-bold text-[#A8412E] underline"
-                        >
-                          Batalkan
-                        </button>
-                      )}
+                        {/* Perbaikan koordinator 17 Nov 2026: "Bayar" cuma
+                            relevan kalau masih ada sisa (remaining>0) --
+                            Lebih Bayar (remaining<0) ditawari "Pengembalian"
+                            (koreksi/refund), bukan "Bayar", karena tidak ada
+                            yang perlu dibayar lagi. */}
+                        {remaining > 0 && b.status !== 'dibatalkan' && (
+                          <button
+                            type="button"
+                            onClick={() => setPaymentTarget(b)}
+                            className="text-[11px] font-bold text-[#2B4739] underline"
+                          >
+                            Bayar
+                          </button>
+                        )}
+                        {remaining < 0 && b.status !== 'dibatalkan' && (
+                          <button
+                            type="button"
+                            onClick={() => setPaymentTarget(b)}
+                            className="text-[11px] font-bold text-[#A65C2A] underline"
+                          >
+                            Pengembalian
+                          </button>
+                        )}
+                        {/* "Batalkan" dipindah ke menu "⋯" (koordinator 17 Nov
+                            2026) -- tombol merah di tiap baris rawan tertekan,
+                            termasuk pada transaksi Selesai. Menu cuma muncul
+                            untuk yang berhak membatalkan (status belum
+                            dibatalkan -- RLS/Express tetap penegak aturan
+                            owner-untuk-status-tertutup yang sebenarnya). */}
+                        {b.status !== 'dibatalkan' && (
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => setOpenMenuId(openMenuId === b.id ? null : b.id)}
+                              aria-label="Menu lainnya"
+                              className="w-10 h-10 -m-1 flex items-center justify-center rounded-lg text-[#6E6853] hover:bg-[#F1EEE2] transition"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
+                            {openMenuId === b.id && (
+                              <>
+                                <button
+                                  type="button"
+                                  aria-label="Tutup menu"
+                                  onClick={() => setOpenMenuId(null)}
+                                  className="fixed inset-0 z-10 cursor-default"
+                                />
+                                <div className="absolute right-0 top-full mt-1 z-20 w-48 bg-white rounded-xl border border-[#DBD5C1] shadow-lg py-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenMenuId(null);
+                                      setVoidTarget(b);
+                                    }}
+                                    className="w-full text-left px-3 py-2.5 text-xs font-bold text-[#A8412E] hover:bg-[#FAF0EE]"
+                                  >
+                                    Batalkan transaksi…
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
