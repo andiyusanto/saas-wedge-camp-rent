@@ -15,6 +15,7 @@ import { getShareCard, shareCardHash, type ShareCardInput } from '../lib/shareCa
 import { TOKO_PUBLIC_HOST, resolveTokoPageUrl, resolveStatusPageUrl } from '../lib/publicUrls.js';
 import { computeItemRentalPrice, combinedComponentRates, applyBundleDiscount } from '../lib/pricing.js';
 import type { ItemDayRates, BundleComponent } from '../lib/pricing.js';
+import { resolveBankAccountsForDisplay } from '../lib/paymentSnapshot.js';
 
 const router = Router();
 
@@ -685,12 +686,7 @@ function renderStatusPage(data: BookingRequestStatus, req: import('express').Req
     // sebelum migration 069) cuma punya 3 field flat -- fallback ke
     // array 1-elemen dari situ supaya pesanan lama tetap tampil benar
     // (dibekukan, tidak pernah ditulis ulang, lihat migration 069).
-    const bankAccountsForDisplay =
-      snap.bank_accounts && snap.bank_accounts.length > 0
-        ? snap.bank_accounts
-        : snap.bank_name
-          ? [{ bank_name: snap.bank_name, account_number: snap.bank_account_number ?? '', account_holder: snap.bank_account_holder ?? '' }]
-          : [];
+    const bankAccountsForDisplay = resolveBankAccountsForDisplay(snap);
 
     const transferHtml =
       bankAccountsForDisplay.length > 0

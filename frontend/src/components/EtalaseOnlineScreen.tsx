@@ -4,6 +4,7 @@ import type { Session } from '@supabase/supabase-js';
 import { Store, CheckCircle2, ExternalLink, Copy, Check, Sparkles, Loader2, XCircle, CreditCard, AlertTriangle } from 'lucide-react';
 import { usePublicPage } from '../hooks/usePublicPage';
 import type { PublicPageInput, DpMode, PaymentChangeLog, BankAccount } from '../hooks/usePublicPage';
+import { validateBankAccounts } from '../utils/bankAccount';
 import { useRegencies } from '../hooks/useRegencies';
 import { RegencySelect } from './RegencySelect';
 import { slugify, formatDateTimeIndo } from '../utils/formatters';
@@ -12,9 +13,6 @@ import { apiFetch } from '../lib/api';
 import { resizeImageToDataUrl } from '../utils/imageResize';
 
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-// Nomor rekening (brief 17 Nov 2026, Lebih dari satu rekening bank) --
-// cuma angka/spasi/strip, pola ramah seperti nomor WA di atas.
-const BANK_ACCOUNT_NUMBER_RE = /^[0-9\s-]+$/;
 
 // Pola sama seperti PHONE_RE/normalizePhone() di backend/src/routes/
 // bookingRequests.ts — disalin, bukan diimpor (frontend vs backend,
@@ -317,19 +315,10 @@ export function EtalaseOnlineScreen({
     // nama+nomor+pemilik lengkap (DB cuma menjaga bentuk array/panjang
     // ≤5, bukan isi tiap field -- lihat migration 069).
     if (payTransferEnabled) {
-      if (bankAccounts.length === 0) {
-        setError('Tambahkan minimal 1 rekening kalau Transfer Bank diaktifkan.');
+      const bankAccountsError = validateBankAccounts(bankAccounts);
+      if (bankAccountsError) {
+        setError(bankAccountsError);
         return;
-      }
-      for (const acc of bankAccounts) {
-        if (!acc.bank_name.trim() || !acc.account_holder.trim()) {
-          setError('Nama bank dan nama pemilik rekening wajib diisi untuk semua rekening.');
-          return;
-        }
-        if (!BANK_ACCOUNT_NUMBER_RE.test(acc.account_number.trim())) {
-          setError('Nomor rekening cuma boleh angka, spasi, dan tanda hubung.');
-          return;
-        }
       }
     }
     const dpError = dpValidationError();
