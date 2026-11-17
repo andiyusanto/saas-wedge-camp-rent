@@ -669,7 +669,9 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         <h4 className="text-sm font-bold text-[#26302B] pt-2">Impor dari Excel (banyak alat sekaligus)</h4>
         <p>
           Dipakai saat pertama kali mengisi banyak alat sekaligus, atau mengubah harga banyak alat dalam satu waktu —
-          daripada mengetik satu per satu. Tombol <Ui>Impor dari Excel</Ui> cuma terlihat untuk pemilik usaha.
+          daripada mengetik satu per satu. Tombol <Ui>Tambah Alat Baru</Ui> dan <Ui>Impor dari Excel</Ui> ada di
+          sub-tab <Ui>Alat</Ui>, sebaris dengan kotak <Ui>Cari</Ui> — <Ui>Impor dari Excel</Ui> cuma terlihat untuk
+          pemilik usaha.
         </p>
         <Steps
           items={[

@@ -361,7 +361,11 @@ export function BundlesScreen({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      {/* Pola SAMA dengan toolbar Alat (ItemsScreen.tsx) -- cuma satu
+          tombol tambah (tanpa Cari, sub-tab ini belum punya pencarian),
+          dibuat responsif supaya tidak sempit-sempit di 360px seperti
+          ItemsScreen sebelum diperbaiki. */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <p className="text-xs text-[#6E6853]">
           Paket dipecah jadi alat satuan saat transaksi dibuat — stok tetap tersambung ke komponennya, bukan stok sendiri.
         </p>
@@ -369,7 +373,7 @@ export function BundlesScreen({
           onClick={() => setModalBundle('new')}
           disabled={!writable}
           title={!writable ? 'Masa aktif langganan sudah habis — hubungi Sewalog untuk memperpanjang.' : undefined}
-          className="px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs shadow-sm transition flex items-center gap-2 disabled:opacity-50 shrink-0"
+          className="px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs shadow-sm transition flex items-center justify-center gap-2 disabled:opacity-50 shrink-0"
         >
           <Plus className="w-4 h-4 text-[#A65C2A]" />
           <span>Tambah Paket</span>

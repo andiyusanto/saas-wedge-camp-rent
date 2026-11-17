@@ -646,38 +646,12 @@ export function ItemsScreen({
   return (
     <div className="space-y-6">
       <div className="bg-[#FBFAF4] p-4 sm:p-5 rounded-2xl border border-[#DBD5C1] shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-bold text-[#26302B] flex items-center gap-2">
-              <Package className="w-5 h-5 text-[#2B4739]" />
-              <span>Katalog & Manajemen Stok Peralatan</span>
-            </h2>
-            <p className="text-xs text-[#6E6853]">Kelola daftar alat kamping, stok fisik toko, dan tarif sewa per hari.</p>
-          </div>
-          {catalogTab === 'alat' && (
-            <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
-              {role === 'owner' && (
-                <button
-                  onClick={() => setIsImportOpen(true)}
-                  disabled={!writable}
-                  title={!writable ? 'Masa aktif langganan sudah habis — hubungi Sewalog untuk memperpanjang.' : 'Impor banyak alat sekaligus dari file Excel/CSV'}
-                  className="px-3 py-2.5 rounded-xl border border-[#DBD5C1] text-[#26302B] hover:bg-[#F1EEE2] font-bold text-xs shadow-xs transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                >
-                  <FileSpreadsheet className="w-4 h-4 text-[#6E6853]" />
-                  <span>Impor dari Excel</span>
-                </button>
-              )}
-              <button
-                onClick={() => setModalItem('new')}
-                disabled={!writable}
-                title={!writable ? 'Masa aktif langganan sudah habis — hubungi Sewalog untuk memperpanjang.' : undefined}
-                className="px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs shadow-sm transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#2B4739]"
-              >
-                <Plus className="w-4 h-4 text-[#A65C2A]" />
-                <span>Tambah Alat Baru</span>
-              </button>
-            </div>
-          )}
+        <div>
+          <h2 className="text-lg font-bold text-[#26302B] flex items-center gap-2">
+            <Package className="w-5 h-5 text-[#2B4739]" />
+            <span>Katalog & Manajemen Stok Peralatan</span>
+          </h2>
+          <p className="text-xs text-[#6E6853]">Kelola daftar alat kamping, stok fisik toko, dan tarif sewa per hari.</p>
         </div>
 
         <div className="flex gap-2 pt-2 border-t border-[#E6E1D2]">
@@ -695,18 +669,48 @@ export function ItemsScreen({
         </div>
 
         {catalogTab === 'alat' && (
-          <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t border-[#E6E1D2]">
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#6E6853]" />
-              <input
-                type="text"
-                placeholder="Cari kode / nama alat..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 text-xs rounded-xl bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
-              />
+          <>
+            {/* Toolbar: Cari melebar + tombol tambah, baris TERPISAH dari
+                kategori di bawahnya (koordinator 17 Nov 2026) -- sebelumnya
+                satu baris bersama ScrollableRow kategori, yang wrapper
+                luarnya w-full (lihat ScrollableRow.tsx) jadi menyita semua
+                ruang flex dan memepet Cari sampai menyempit jadi ikon saja. */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-2 border-t border-[#E6E1D2]">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#6E6853]" />
+                <input
+                  type="text"
+                  placeholder="Cari alat (nama, kode)..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 text-xs rounded-xl bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+                />
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {role === 'owner' && (
+                  <button
+                    onClick={() => setIsImportOpen(true)}
+                    disabled={!writable}
+                    title={!writable ? 'Masa aktif langganan sudah habis — hubungi Sewalog untuk memperpanjang.' : 'Impor banyak alat sekaligus dari file Excel/CSV'}
+                    className="flex-1 sm:flex-initial px-3 py-2.5 rounded-xl border border-[#DBD5C1] text-[#26302B] hover:bg-[#F1EEE2] font-bold text-xs shadow-xs transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent basis-1/3 sm:basis-auto"
+                  >
+                    <FileSpreadsheet className="w-4 h-4 text-[#6E6853]" />
+                    <span>Impor dari Excel</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => setModalItem('new')}
+                  disabled={!writable}
+                  title={!writable ? 'Masa aktif langganan sudah habis — hubungi Sewalog untuk memperpanjang.' : undefined}
+                  className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs shadow-sm transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#2B4739] basis-2/3 sm:basis-auto"
+                >
+                  <Plus className="w-4 h-4 text-[#A65C2A]" />
+                  <span>Tambah Alat Baru</span>
+                </button>
+              </div>
             </div>
-            <ScrollableRow className="sm:w-auto">
+
+            <ScrollableRow>
               {['Semua', ...categoryOptions].map((cat) => (
                 <button
                   key={cat}
@@ -721,7 +725,7 @@ export function ItemsScreen({
                 </button>
               ))}
             </ScrollableRow>
-          </div>
+          </>
         )}
       </div>
 

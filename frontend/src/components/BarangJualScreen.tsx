@@ -292,7 +292,10 @@ export function BarangJualScreen({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      {/* Pola sama dengan toolbar Alat (ItemsScreen.tsx)/Paket
+          (BundlesScreen.tsx) -- cuma satu tombol tambah, dibuat responsif
+          supaya tidak sempit-sempit di 360px. */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <p className="text-xs text-[#6E6853]">
           Barang habis pakai yang dijual-belikan (baterai, jas hujan, dsb) — terpisah dari alat sewa, stok otomatis
           berkurang saat transaksi disimpan.
@@ -301,7 +304,7 @@ export function BarangJualScreen({
           onClick={() => setModalItem('new')}
           disabled={!writable}
           title={!writable ? 'Masa aktif langganan sudah habis — hubungi Sewalog untuk memperpanjang.' : undefined}
-          className="px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs shadow-sm transition flex items-center gap-2 disabled:opacity-50 shrink-0"
+          className="px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-xs shadow-sm transition flex items-center justify-center gap-2 disabled:opacity-50 shrink-0"
         >
           <Plus className="w-4 h-4 text-[#A65C2A]" />
           <span>Tambah Barang</span>
