@@ -359,14 +359,18 @@ export function CalendarScreen({
                             {bundle.name}
                             {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-[#6E6853]" /> : <ChevronDown className="w-3.5 h-3.5 text-[#6E6853]" />}
                           </h3>
-                          <div className="flex items-center space-x-3 text-xs mt-1">
-                            {dayOnePrice > 0 && (
+                          {dayOnePrice > 0 && (
+                            <div className="text-xs mt-1">
                               <span className="font-semibold text-[#2B4739]">
                                 Mulai {formatIDR(dayOnePrice)} <span className="text-[10px] font-normal text-[#6E6853]">/hari</span>
                               </span>
-                            )}
-                            <span className="text-[#6E6853]">{bundle.bundle_items.length} alat dalam paket</span>
-                          </div>
+                            </div>
+                          )}
+                          {/* Baris sendiri di bawah harga, bukan sebaris (koordinator
+                              17 Nov 2026) -- di layar lebar sebelumnya sesak
+                              bersama "Mulai Rp X /hari", pola sama kartu alat
+                              (nama -> harga -> info stok di baris terpisah). */}
+                          <p className="text-[10px] text-[#6E6853] mt-0.5">{bundle.bundle_items.length} alat dalam paket</p>
                         </div>
                       </button>
 
