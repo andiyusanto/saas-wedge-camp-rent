@@ -1,10 +1,32 @@
 import { useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { Search, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Package } from 'lucide-react';
+import { Search, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Package, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAvailability } from '../hooks/useAvailability';
+import { useBundles } from '../hooks/useBundles';
+import { computeBundleAvailability } from '../utils/bundleAvailability';
 import { formatIDR, formatDateIndo, todayStr } from '../utils/formatters';
 import { ScrollableRow } from './ScrollableRow';
 import { ImagePreviewModal } from './ImagePreviewModal';
+
+const PAKET_COLLAPSE_KEY = 'sewalog_kalender_paket_collapsed_v1';
+
+function readPaketCollapsed(): boolean {
+  try {
+    return localStorage.getItem(PAKET_COLLAPSE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writePaketCollapsed(collapsed: boolean) {
+  try {
+    if (collapsed) localStorage.setItem(PAKET_COLLAPSE_KEY, '1');
+    else localStorage.removeItem(PAKET_COLLAPSE_KEY);
+  } catch {
+    // localStorage bisa gagal (private window, dll) -- aman diabaikan, cuma
+    // berarti status lipat tidak diingat lintas sesi di perangkat itu.
+  }
+}
 
 // Format tanggal diseragamkan dd-mm-yyyy (keputusan Andi 10 Nov 2026) —
 // pakai formatDateIndo() terpusat (rakit manual, bukan Intl/
@@ -15,13 +37,19 @@ function shortDate(dateStr: string) {
 
 export function CalendarScreen({
   session,
+  businessId,
   onSelectBookItem,
+  onSelectBookBundle,
   pendingRequestCount = 0,
   onViewPendingRequests,
   writable = true,
 }: {
   session: Session;
+  businessId: string;
   onSelectBookItem: (itemId: string, startDate: string) => void;
+  // Grup "Paket" (17 Nov 2026) -- jalur TERPISAH dari onSelectBookItem,
+  // sama pola, bundle bukan item.
+  onSelectBookBundle: (bundleId: string, startDate: string) => void;
   // Rencana langganan: "Sewa Alat Ini" membuka Catat Transaksi baru —
   // dikunci kalau hanya-baca (RLS bookings INSERT tetap penegak
   // sebenarnya, migration 044).
@@ -36,8 +64,26 @@ export function CalendarScreen({
   const [selectedCategory, setSelectedCategory] = useState('Semua');
   const [searchQuery, setSearchQuery] = useState('');
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [paketCollapsed, setPaketCollapsed] = useState(readPaketCollapsed);
+  const [expandedBundleId, setExpandedBundleId] = useState<string | null>(null);
 
   const { data, loading, error } = useAvailability(session, numDays, baseDate);
+  const { bundles } = useBundles(businessId);
+
+  const bundleAvailabilities = useMemo(() => {
+    if (!data?.items) return [];
+    return bundles
+      .map((bundle) => ({ bundle, availability: computeBundleAvailability(bundle, data.items) }))
+      .filter((b) => b.availability.allComponentsActive);
+  }, [bundles, data?.items]);
+
+  function togglePaketCollapsed() {
+    setPaketCollapsed((prev) => {
+      const next = !prev;
+      writePaketCollapsed(next);
+      return next;
+    });
+  }
 
   // Diturunkan live dari katalog sendiri (sama seperti ItemsScreen.tsx) —
   // tiap vendor punya kategori sendiri, bukan daftar tetap satu untuk semua.
@@ -173,6 +219,126 @@ export function CalendarScreen({
           </span>
         </div>
       </div>
+
+      {!loading && !error && bundleAvailabilities.length > 0 && (
+        <div className="bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] shadow-xs">
+          <button
+            type="button"
+            onClick={togglePaketCollapsed}
+            className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left"
+          >
+            <span className="font-bold text-sm text-[#26302B] flex items-center gap-2">
+              <Package className="w-4 h-4" /> Paket
+            </span>
+            {paketCollapsed ? <ChevronDown className="w-4 h-4 text-[#6E6853]" /> : <ChevronUp className="w-4 h-4 text-[#6E6853]" />}
+          </button>
+          {!paketCollapsed && (
+            <div className="px-4 pb-4 space-y-3">
+              {bundleAvailabilities.map(({ bundle, availability }) => {
+                const isExpanded = expandedBundleId === bundle.id;
+                // Indeks hari yang cocok dengan baseDate -- data.days[0]
+                // selalu = baseDate (param start_date useAvailability),
+                // dipakai utk gerbang tombol pesan (pola "Sewa Alat Ini").
+                const remainingAtBaseDate = availability.days[0]?.remaining ?? 0;
+                const bundleFull = remainingAtBaseDate <= 0;
+                return (
+                  <div key={bundle.id} className="rounded-xl border border-[#DBD5C1] overflow-hidden">
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setExpandedBundleId(isExpanded ? null : bundle.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') setExpandedBundleId(isExpanded ? null : bundle.id);
+                      }}
+                      className="w-full flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-3 text-left hover:bg-[#F1EEE2]/60 transition cursor-pointer"
+                    >
+                      <div className="flex items-start space-x-3 min-w-[240px]">
+                        {bundle.image_url ? (
+                          <img src={bundle.image_url} alt={bundle.name} className="w-14 h-14 rounded-xl object-cover border border-[#DBD5C1] bg-[#F1EEE2]" />
+                        ) : (
+                          <div className="w-14 h-14 rounded-xl border border-[#DBD5C1] shrink-0 bg-[#F1EEE2] flex items-center justify-center text-[#6E6853]">
+                            <Package className="w-5 h-5" />
+                          </div>
+                        )}
+                        <div>
+                          <h3 className="font-bold text-sm text-[#26302B]">{bundle.name}</h3>
+                          <span className="text-xs text-[#6E6853]">{bundle.bundle_items.length} alat dalam paket</span>
+                        </div>
+                      </div>
+
+                      <div className="flex-1 overflow-x-auto pb-1 scrollbar-none">
+                        <div className="flex items-center gap-2 min-w-max">
+                          {(data?.days ?? []).map((dateStr, i) => {
+                            const day = availability.days[i];
+                            const remaining = day?.remaining ?? 0;
+                            const status = day?.status ?? 'penuh';
+                            const styles =
+                              status === 'penuh'
+                                ? 'bg-[#FAF0EE] text-[#A8412E] border-[#A8412E]/30'
+                                : status === 'sisa_sedikit'
+                                  ? 'bg-[#F9EFE7] text-[#A65C2A] border-[#A65C2A]/30'
+                                  : 'bg-[#E8EFEA] text-[#2B4739] border-[#2B4739]/30';
+                            const countBg =
+                              status === 'penuh' ? 'bg-[#A8412E] text-white' : status === 'sisa_sedikit' ? 'bg-[#A65C2A] text-white' : 'bg-[#2B4739] text-[#FBFAF4]';
+                            return (
+                              <div
+                                key={dateStr}
+                                title={day?.limitingComponentName ? `Terbatas: ${day.limitingComponentName}` : undefined}
+                                className={`flex flex-col items-center p-2 rounded-xl border min-w-[64px] text-center ${styles}`}
+                              >
+                                <span className="text-[10px] font-medium opacity-80">{shortDate(dateStr)}</span>
+                                <div className={`mt-1 w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs ${countBg}`}>{remaining}</div>
+                                <span className="text-[9px] mt-1 font-semibold opacity-90">{status === 'penuh' ? 'HABIS' : `Sisa ${remaining}`}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-end shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-[#E6E1D2]">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectBookBundle(bundle.id, baseDate);
+                          }}
+                          disabled={!writable || bundleFull}
+                          title={
+                            !writable
+                              ? 'Masa aktif langganan sudah habis — hubungi Sewalog untuk memperpanjang.'
+                              : bundleFull
+                                ? 'Paket ini penuh di tanggal yang dipilih.'
+                                : undefined
+                          }
+                          className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-[#FBFAF4] text-xs font-semibold shadow-xs transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#2B4739]"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Pesan Paket Ini</span>
+                        </button>
+                      </div>
+                    </div>
+                    {isExpanded && (
+                      <div className="px-3 pb-3 pt-1 border-t border-[#E6E1D2] bg-[#F1EEE2]/40">
+                        <p className="text-[11px] font-semibold text-[#6E6853] mb-1">Isi paket:</p>
+                        <ul className="text-xs text-[#26302B] space-y-0.5">
+                          {bundle.bundle_items.map((c) => {
+                            const item = data?.items.find((i) => i.id === c.item_id);
+                            return (
+                              <li key={c.id}>
+                                {c.quantity}× {item?.name ?? c.item_id}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <p className="text-sm text-[#6E6853]">Memuat kalender...</p>

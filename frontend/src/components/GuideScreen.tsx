@@ -284,6 +284,12 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           tanggal mulai sudah terisi otomatis. Ketersediaan dihitung langsung dari transaksi aktif — tidak ada jadwal
           tersimpan terpisah yang perlu disinkronkan manual.
         </p>
+        <Note>
+          Kalau sudah punya <Ui>Paket</Ui> aktif di Katalog, muncul grup <Ui>Paket</Ui> di atas daftar alat — sisa per
+          hari dihitung dari sisa komponen paling sedikit (bukan stok terpisah). Grup ini bisa dilipat, dan status
+          lipatnya diingat di perangkat itu saja. Paket yang salah satu alatnya dinonaktifkan tidak ditampilkan sama
+          sekali, sama seperti di Catat Transaksi/Etalase.
+        </Note>
       </Section>
 
       <Section id="g-transaksi-aktif" num="3" title="Transaksi Aktif" kicker="Daftar transaksi aktif — status pengambilan barang, jaminan yang ditahan, dan dua jenis denda dipisah eksplisit.">

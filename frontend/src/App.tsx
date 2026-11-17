@@ -237,6 +237,7 @@ function App() {
 
   const [isNewBookingOpen, setIsNewBookingOpen] = useState(false);
   const [preselectedItemId, setPreselectedItemId] = useState<string | null>(null);
+  const [preselectedBundleId, setPreselectedBundleId] = useState<string | null>(null);
   const [preselectedStartDate, setPreselectedStartDate] = useState<string | null>(null);
 
   const [inviteCode, setInviteCode] = useState<string | null>(readInviteCode);
@@ -354,6 +355,16 @@ function App() {
 
   function openNewBooking(itemId?: string, startDate?: string) {
     setPreselectedItemId(itemId ?? null);
+    setPreselectedBundleId(null);
+    setPreselectedStartDate(startDate ?? null);
+    setIsNewBookingOpen(true);
+  }
+
+  // Kalender Ketersediaan, grup "Paket" (17 Nov 2026) -- jalur TERPISAH
+  // dari openNewBooking() di atas, sama pola, beda state yang diisi.
+  function openNewBookingBundle(bundleId: string, startDate?: string) {
+    setPreselectedItemId(null);
+    setPreselectedBundleId(bundleId);
     setPreselectedStartDate(startDate ?? null);
     setIsNewBookingOpen(true);
   }
@@ -380,7 +391,9 @@ function App() {
           <CalendarScreen
             key={`cal-${refreshSignal}`}
             session={session}
+            businessId={business.id}
             onSelectBookItem={openNewBooking}
+            onSelectBookBundle={openNewBookingBundle}
             pendingRequestCount={pendingRequestCount}
             onViewPendingRequests={() => setTab('tracking')}
             writable={subscription?.writable ?? true}
@@ -444,6 +457,7 @@ function App() {
           session={session}
           business={business}
           preselectedItemId={preselectedItemId}
+          preselectedBundleId={preselectedBundleId}
           preselectedStartDate={preselectedStartDate}
           onSaved={() => {
             setIsNewBookingOpen(false);

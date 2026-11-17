@@ -230,6 +230,7 @@ export function NewBookingModal({
   session,
   business,
   preselectedItemId,
+  preselectedBundleId,
   preselectedStartDate,
   requestPrefill,
   onSaved,
@@ -240,6 +241,12 @@ export function NewBookingModal({
   session: Session;
   business: Business;
   preselectedItemId?: string | null;
+  // Kalender Ketersediaan, grup "Paket" (17 Nov 2026) -- jalur prefill
+  // TERPISAH dari preselectedItemId (bukan ganti bentuk prop lama),
+  // pakai logika pilih paket yang SUDAH ADA (bundleQuantities/
+  // bundleInstanceIds) supaya komponen+alokasi harga sama persis
+  // seperti memilih manual lewat checkbox.
+  preselectedBundleId?: string | null;
   preselectedStartDate?: string | null;
   requestPrefill?: BookingRequestPrefill | null;
   onSaved: (bookingId: string) => void;
@@ -374,8 +381,8 @@ export function NewBookingModal({
       setStartDate(initialStart);
       setEndDate(business.rental_day_mode === 'per_malam' ? addDaysStr(initialStart, 1) : initialStart);
       setQuantities(preselectedItemId ? { [preselectedItemId]: 1 } : {});
-      setBundleQuantities({});
-      setBundleInstanceIds({});
+      setBundleQuantities(preselectedBundleId ? { [preselectedBundleId]: 1 } : {});
+      setBundleInstanceIds(preselectedBundleId ? { [preselectedBundleId]: crypto.randomUUID() } : {});
       setBundleComponentOverrides({});
       setSaleQuantities({});
       setBundlePrefillWarning(null);
@@ -404,7 +411,7 @@ export function NewBookingModal({
     // state yang sama dari requestPrefill, tidak menimpa edit manual
     // staf (edit manual terjadi di luar efek ini, dependency-nya tidak
     // berubah karenanya).
-  }, [isOpen, preselectedItemId, preselectedStartDate, requestPrefill, business.rental_day_mode, bundles]);
+  }, [isOpen, preselectedItemId, preselectedBundleId, preselectedStartDate, requestPrefill, business.rental_day_mode, bundles]);
 
   useEffect(() => {
     return () => {
