@@ -4,7 +4,7 @@
 // seperti alat satuan.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeBundleAvailability, computeBundleStatus } from '../bundleAvailability.js';
+import { computeBundleAvailability, computeBundleStatus, computeBundleDayOnePrice, resolveBundleImageUrl } from '../bundleAvailability.js';
 import type { Bundle, BundleComponentRow } from '../../hooks/useBundles.js';
 import type { AvailabilityItem } from '../../hooks/useAvailability.js';
 
@@ -91,4 +91,46 @@ test('computeBundleAvailability: komponen habis -> paket penuh', () => {
   const result = computeBundleAvailability(b, items);
   assert.equal(result.days[0].remaining, 0);
   assert.equal(result.days[0].status, 'penuh');
+});
+
+test('computeBundleDayOnePrice: mode ikuti_alat, jumlah tarif hari-1 komponen tanpa potongan', () => {
+  const b = bundle({
+    pricing_mode: 'ikuti_alat',
+    bundle_items: [component({ item_id: 'item-1', quantity: 1 }), component({ id: 'c2', item_id: 'item-2', quantity: 2 })],
+  });
+  const items = [availItem({ id: 'item-1', price_per_day: 20_000 }), availItem({ id: 'item-2', price_per_day: 5_000 })];
+  // 1*20.000 + 2*5.000 = 30.000
+  assert.equal(computeBundleDayOnePrice(b, items), 30_000);
+});
+
+test('computeBundleDayOnePrice: mode ikuti_alat dengan potongan persen, dibulatkan ke rupiah', () => {
+  const b = bundle({
+    pricing_mode: 'ikuti_alat',
+    discount_type: 'percent',
+    discount_value: 10,
+    bundle_items: [component({ item_id: 'item-1', quantity: 1 })],
+  });
+  const items = [availItem({ id: 'item-1', price_per_day: 12_555 })];
+  // 12.555 * 0.9 = 11.299,5 -> dibulatkan 11.300
+  assert.equal(computeBundleDayOnePrice(b, items), 11_300);
+});
+
+test('computeBundleDayOnePrice: mode sendiri, pakai price_per_day paket langsung', () => {
+  const b = bundle({ pricing_mode: 'sendiri', price_per_day: 45_000, bundle_items: [component({})] });
+  assert.equal(computeBundleDayOnePrice(b, [availItem({})]), 45_000);
+});
+
+test('resolveBundleImageUrl: pakai bundle.image_url kalau ada', () => {
+  const b = bundle({ image_url: 'https://cdn/bundle.png', bundle_items: [component({ item_id: 'item-1' })] });
+  assert.equal(resolveBundleImageUrl(b, [availItem({ id: 'item-1', image_url: 'https://cdn/item.png' })]), 'https://cdn/bundle.png');
+});
+
+test('resolveBundleImageUrl: fallback ke foto komponen pertama kalau bundle.image_url kosong', () => {
+  const b = bundle({ image_url: null, bundle_items: [component({ item_id: 'item-1' })] });
+  assert.equal(resolveBundleImageUrl(b, [availItem({ id: 'item-1', image_url: 'https://cdn/item.png' })]), 'https://cdn/item.png');
+});
+
+test('resolveBundleImageUrl: null kalau tidak ada foto sama sekali', () => {
+  const b = bundle({ image_url: null, bundle_items: [component({ item_id: 'item-1' })] });
+  assert.equal(resolveBundleImageUrl(b, [availItem({ id: 'item-1', image_url: null })]), null);
 });

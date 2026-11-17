@@ -3,7 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import { Search, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Package, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAvailability } from '../hooks/useAvailability';
 import { useBundles } from '../hooks/useBundles';
-import { computeBundleAvailability } from '../utils/bundleAvailability';
+import { computeBundleAvailability, computeBundleDayOnePrice, resolveBundleImageUrl } from '../utils/bundleAvailability';
 import { formatIDR, formatDateIndo, todayStr } from '../utils/formatters';
 import { ScrollableRow } from './ScrollableRow';
 import { ImagePreviewModal } from './ImagePreviewModal';
@@ -241,30 +241,41 @@ export function CalendarScreen({
                 // dipakai utk gerbang tombol pesan (pola "Sewa Alat Ini").
                 const remainingAtBaseDate = availability.days[0]?.remaining ?? 0;
                 const bundleFull = remainingAtBaseDate <= 0;
+                const imageUrl = resolveBundleImageUrl(bundle, data?.items ?? []);
+                const dayOnePrice = computeBundleDayOnePrice(bundle, data?.items ?? []);
                 return (
-                  <div key={bundle.id} className="rounded-xl border border-[#DBD5C1] overflow-hidden">
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setExpandedBundleId(isExpanded ? null : bundle.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') setExpandedBundleId(isExpanded ? null : bundle.id);
-                      }}
-                      className="w-full flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-3 text-left hover:bg-[#F1EEE2]/60 transition cursor-pointer"
-                    >
-                      <div className="flex items-start space-x-3 min-w-[240px]">
-                        {bundle.image_url ? (
-                          <img src={bundle.image_url} alt={bundle.name} className="w-14 h-14 rounded-xl object-cover border border-[#DBD5C1] bg-[#F1EEE2]" />
+                  <div
+                    key={bundle.id}
+                    className="bg-[#FBFAF4] rounded-2xl p-4 border border-[#DBD5C1] shadow-xs hover:border-[#2B4739]/50 transition"
+                  >
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedBundleId(isExpanded ? null : bundle.id)}
+                        className="flex items-start space-x-3 min-w-[240px] text-left"
+                      >
+                        {imageUrl ? (
+                          <img src={imageUrl} alt={bundle.name} className="w-14 h-14 rounded-xl object-cover border border-[#DBD5C1] bg-[#F1EEE2]" />
                         ) : (
                           <div className="w-14 h-14 rounded-xl border border-[#DBD5C1] shrink-0 bg-[#F1EEE2] flex items-center justify-center text-[#6E6853]">
                             <Package className="w-5 h-5" />
                           </div>
                         )}
                         <div>
-                          <h3 className="font-bold text-sm text-[#26302B]">{bundle.name}</h3>
-                          <span className="text-xs text-[#6E6853]">{bundle.bundle_items.length} alat dalam paket</span>
+                          <h3 className="font-bold text-sm text-[#26302B] flex items-center gap-1">
+                            {bundle.name}
+                            {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-[#6E6853]" /> : <ChevronDown className="w-3.5 h-3.5 text-[#6E6853]" />}
+                          </h3>
+                          <div className="flex items-center space-x-3 text-xs mt-1">
+                            {dayOnePrice > 0 && (
+                              <span className="font-semibold text-[#2B4739]">
+                                Mulai {formatIDR(dayOnePrice)} <span className="text-[10px] font-normal text-[#6E6853]">/hari</span>
+                              </span>
+                            )}
+                            <span className="text-[#6E6853]">{bundle.bundle_items.length} alat dalam paket</span>
+                          </div>
                         </div>
-                      </div>
+                      </button>
 
                       <div className="flex-1 overflow-x-auto pb-1 scrollbar-none">
                         <div className="flex items-center gap-2 min-w-max">
@@ -284,11 +295,14 @@ export function CalendarScreen({
                               <div
                                 key={dateStr}
                                 title={day?.limitingComponentName ? `Terbatas: ${day.limitingComponentName}` : undefined}
-                                className={`flex flex-col items-center p-2 rounded-xl border min-w-[64px] text-center ${styles}`}
+                                className={`flex flex-col items-center p-2 rounded-xl border min-w-[72px] text-center ${styles}`}
                               >
                                 <span className="text-[10px] font-medium opacity-80">{shortDate(dateStr)}</span>
                                 <div className={`mt-1 w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs ${countBg}`}>{remaining}</div>
                                 <span className="text-[9px] mt-1 font-semibold opacity-90">{status === 'penuh' ? 'HABIS' : `Sisa ${remaining}`}</span>
+                                {day?.limitingComponentName && status !== 'tersedia' && (
+                                  <span className="text-[8px] mt-0.5 opacity-80 leading-tight">Terbatas: {day.limitingComponentName}</span>
+                                )}
                               </div>
                             );
                           })}
@@ -298,10 +312,7 @@ export function CalendarScreen({
                       <div className="flex items-center justify-end shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-[#E6E1D2]">
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectBookBundle(bundle.id, baseDate);
-                          }}
+                          onClick={() => onSelectBookBundle(bundle.id, baseDate)}
                           disabled={!writable || bundleFull}
                           title={
                             !writable
@@ -313,12 +324,12 @@ export function CalendarScreen({
                           className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-[#FBFAF4] text-xs font-semibold shadow-xs transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#2B4739]"
                         >
                           <Plus className="w-3.5 h-3.5" />
-                          <span>Pesan Paket Ini</span>
+                          <span>Sewa Paket Ini</span>
                         </button>
                       </div>
                     </div>
                     {isExpanded && (
-                      <div className="px-3 pb-3 pt-1 border-t border-[#E6E1D2] bg-[#F1EEE2]/40">
+                      <div className="mt-3 pt-3 border-t border-[#E6E1D2]">
                         <p className="text-[11px] font-semibold text-[#6E6853] mb-1">Isi paket:</p>
                         <ul className="text-xs text-[#26302B] space-y-0.5">
                           {bundle.bundle_items.map((c) => {
