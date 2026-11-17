@@ -259,9 +259,12 @@ export async function downloadLaporanExcel(args: {
       jumlahTransaksi: row.jumlahTransaksi,
       totalUnitHari: row.totalUnitHari,
       pendapatan: row.pendapatan,
-      keterpakaian: Number(row.keterpakaianPersen.toFixed(1)),
+      // Format persen Excel 0.0% mengharapkan pecahan dari 1 (bukan 0-100)
+      // supaya tetap bisa dihitung, bukan teks (brief 17 Nov 2026).
+      keterpakaian: row.keterpakaianPersen / 100,
     });
     r.getCell('pendapatan').numFmt = '#,##0';
+    r.getCell('keterpakaian').numFmt = '0.0%';
   }
   perAlatSheet.addRow([]);
   if (args.perAlatResult.itemsNeverRented.length > 0) {

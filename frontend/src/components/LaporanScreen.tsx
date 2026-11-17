@@ -4,7 +4,7 @@ import { fetchHistoryBookings, fetchPaymentsInYear } from '../hooks/useHistory';
 import type { HistoryBooking } from '../hooks/useHistory';
 import { useItems } from '../hooks/useItems';
 import { formatIDR } from '../utils/formatters';
-import { buildMonthlyReport, buildCashReceivedByMonth, buildPerAlatReport, buildBarangJualReport } from '../utils/reportAggregation';
+import { buildMonthlyReport, buildCashReceivedByMonth, buildPerAlatReport, buildBarangJualReport, formatKeterpakaianPersen } from '../utils/reportAggregation';
 import type { MonthlyReportRow, PerAlatReportResult } from '../utils/reportAggregation';
 import { downloadLaporanExcel } from '../utils/historyExport';
 
@@ -453,7 +453,7 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
                         <td className="p-2.5 text-right">{row.jumlahTransaksi}</td>
                         <td className="p-2.5 text-right">{row.totalUnitHari}</td>
                         <td className="p-2.5 text-right font-bold text-[#26302B]">{formatIDR(row.pendapatan)}</td>
-                        <td className="p-2.5 text-right">{row.keterpakaianPersen.toFixed(0)}%</td>
+                        <td className="p-2.5 text-right">{formatKeterpakaianPersen(row.keterpakaianPersen)}</td>
                       </tr>
                     ))}
                     {sortedRows.length === 0 && (

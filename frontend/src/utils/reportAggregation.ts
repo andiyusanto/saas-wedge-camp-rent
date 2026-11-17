@@ -318,6 +318,22 @@ export function buildPerAlatReport(
   return { rows, itemsNeverRented, bundleSummary, periodDaysCount };
 }
 
+// Format Keterpakaian di tabel Laporan per Alat (brief 17 Nov 2026) --
+// pembulatan ke bilangan bulat sebelumnya membuat alat yang disewa
+// beberapa kali di periode Tahun (penyebut besar) tampil "0%" walau
+// sebenarnya tidak nol. Ambang TIDAK saling tumpang tindih:
+// 0 -> "0%"; (0, 0.1) -> "<0,1%"; [0.1, 10) -> satu desimal, koma
+// Indonesia; [10, ...] -> bilangan bulat.
+export function formatKeterpakaianPersen(persen: number): string {
+  if (persen <= 0) return '0%';
+  if (persen < 0.1) return '<0,1%';
+  if (persen < 10) {
+    const rounded = Math.round(persen * 10) / 10;
+    return `${rounded.toFixed(1).replace('.', ',')}%`;
+  }
+  return `${Math.round(persen)}%`;
+}
+
 // ----------------------------------------------------------------
 // Bagian B tambahan: ringkasan Barang Jual (habis pakai), v1 (brief 16
 // Nov 2026) -- LEBIH SEDERHANA dari buildPerAlatReport: tidak ada

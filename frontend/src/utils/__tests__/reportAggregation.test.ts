@@ -3,7 +3,14 @@
 // diuji murni (tanpa Supabase/React) -- fixture HistoryBooking minimal.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMonthlyReport, buildCashReceivedByMonth, buildPerAlatReport, buildBarangJualReport, clipOccupiedDaysToPeriod } from '../reportAggregation.js';
+import {
+  buildMonthlyReport,
+  buildCashReceivedByMonth,
+  buildPerAlatReport,
+  buildBarangJualReport,
+  clipOccupiedDaysToPeriod,
+  formatKeterpakaianPersen,
+} from '../reportAggregation.js';
 import type { HistoryBooking, HistoryBookingItem, HistorySaleItem } from '../../hooks/useHistory.js';
 
 function item(overrides: Partial<HistoryBookingItem>): HistoryBookingItem {
@@ -188,6 +195,17 @@ test('buildPerAlatReport: alat aktif yang tidak pernah disewa di periode ikut di
   const result = buildPerAlatReport([b], activeItems, '2026-01-01', '2026-01-31');
   assert.equal(result.itemsNeverRented.length, 1);
   assert.equal(result.itemsNeverRented[0].id, 'item-b');
+});
+
+// Format Keterpakaian di Laporan per Alat (brief 17 Nov 2026) -- pembulatan
+// ke bilangan bulat sebelumnya membuat alat yang disewa beberapa kali di
+// periode Tahun tampil "0%" walau sebenarnya tidak nol.
+test('formatKeterpakaianPersen: batas-batas ambang', () => {
+  assert.equal(formatKeterpakaianPersen(0), '0%');
+  assert.equal(formatKeterpakaianPersen(0.05), '<0,1%');
+  assert.equal(formatKeterpakaianPersen(0.1), '0,1%');
+  assert.equal(formatKeterpakaianPersen(9.95), '10,0%'); // <10 -> satu desimal, pembulatan 9.95->10.0
+  assert.equal(formatKeterpakaianPersen(10), '10%');
 });
 
 // Kolom Kategori di Laporan per Alat (brief 17 Nov 2026).
