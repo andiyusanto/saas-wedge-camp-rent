@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { addDays, toDateStrInTz } from './dates.js';
+import { addDays, toDateStrInTz, todayInTz } from './dates.js';
 
 // Dipindah ke sini (dari routes/availability.ts) supaya bisa dipakai ulang
 // oleh routes/etalase.ts (pencarian ketersediaan publik di Etalase Online)
@@ -97,11 +97,13 @@ export function marginDaysFromReadinessHours(readinessHoursList: number[]): numb
 //
 // Dipecah per KELOMPOK STATUS (bukan satu .or() bersarang) supaya gampang
 // dibaca & diverifikasi:
-// - 'aktif' tidak dibatasi end_date (blokir tanpa batas atas sampai Proses
-//   Pengembalian, lihat usedUnitsOn()) -- TAPI tetap dibatasi business_id
-//   dan tetap lewat fetchAllPages(), jadi tidak ada risiko silent-drop
-//   meski suatu saat ada >1.000 booking 'aktif' bersamaan (skenario sangat
-//   tidak realistis untuk skala pilot saat ini).
+// - 'aktif' tidak dibatasi end_date SAMA SEKALI di sini (pengambilan data
+//   apa adanya, paling aman) -- batas tanggal yang sesungguhnya (simetris
+//   kalau belum telat, tanpa batas atas kalau sudah telat, Opsi B brief
+//   URGENT 17 Nov 2026) dihitung di usedUnitsOn(), bukan di query ini.
+//   Tetap dibatasi business_id dan tetap lewat fetchAllPages(), jadi tidak
+//   ada risiko silent-drop meski suatu saat ada >1.000 booking 'aktif'
+//   bersamaan (skenario sangat tidak realistis untuk skala pilot saat ini).
 // - 'dipesan': start_date <= windowEnd+margin DAN end_date >= windowStart-margin.
 // - 'telat'/'selesai': dua kemungkinan jangkar (end_date TERJADWAL atau
 //   actual_return_at SUNGGUHAN, mana saja yang lebih besar) harus beririsan
@@ -220,6 +222,10 @@ export function usedUnitsOn(
   excludeBookingId?: string,
 ): number {
   const readinessDays = readinessHours > 0 ? Math.ceil(readinessHours / 24) : 0;
+  // Opsi B (brief URGENT 17 Nov 2026, komplain Campease) -- dihitung SEKALI
+  // di luar filter per-baris, bukan per booking, murni optimasi (hasilnya
+  // selalu sama untuk satu panggilan usedUnitsOn).
+  const today = todayInTz(timezone);
 
   return bookingItems
     .filter((bi) => {
@@ -230,16 +236,28 @@ export function usedUnitsOn(
 
       // 'aktif' = barang sudah diambil fisik (langsung saat dibuat kalau
       // start_date <= hari ini, atau lewat "Tandai Barang Diambil" untuk
-      // booking yang dipesan duluan) tapi BELUM ditandai kembali — blokir
-      // TANPA batas end_date sampai benar-benar diproses lewat Proses
-      // Pengembalian (insiden serupa dan sudah diperbaiki di Bilbo-Outdoors,
-      // 2026-09-02 — lihat memory bug-scenario-comparison-framework). Batas
-      // mundur (readinessDays sebelum start_date) tetap diterapkan untuk
-      // konsistensi formula, meski jarang berarti banyak karena start_date
-      // booking 'aktif' biasanya sudah lewat.
+      // booking yang dipesan duluan) tapi BELUM ditandai kembali.
+      //
+      // Opsi B (brief URGENT 17 Nov 2026, komplain Campease — revisi dari
+      // aturan Bilbo-Outdoors 2026-09-02 yang SEBELUMNYA dipakai di sini
+      // tanpa syarat): SELAMA BELUM TELAT (today <= end_date, "hari ini" di
+      // zona rental), blokir SIMETRIS persis seperti 'dipesan' (start-
+      // readiness s/d end_date+readiness) -- supaya transaksi aktif tidak
+      // lagi menutup SEMUA tanggal ke depan selama masih dalam masa sewa
+      // yang wajar. Begitu SUDAH TELAT (today > end_date, berbasis TANGGAL,
+      // bukan toleransi jam/batas jam kembali), baru kembali ke aturan lama
+      // (blokir tanpa batas atas sampai Proses Pengembalian) -- alat yang
+      // tidak kembali tepat waktu memang harus mengunci stok sampai
+      // ketahuan statusnya, insiden yang sama persis dengan yang ditutup
+      // Bilbo-Outdoors 2026-09-02 (lihat memory bug-scenario-comparison-
+      // framework) tetap berlaku untuk kasus telat.
       if (booking.status === 'aktif') {
         const effectiveStart = readinessDays > 0 ? addDays(booking.start_date, -readinessDays) : booking.start_date;
-        return effectiveStart <= dateStr;
+        if (effectiveStart > dateStr) return false;
+        const isTelat = today > booking.end_date;
+        if (isTelat) return true;
+        const effectiveEnd = readinessDays > 0 ? addDays(booking.end_date, readinessDays) : booking.end_date;
+        return dateStr <= effectiveEnd;
       }
 
       // 'dipesan' (belum pernah diambil sama sekali) — SIMETRIS: mundur

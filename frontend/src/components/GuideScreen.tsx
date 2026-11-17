@@ -285,6 +285,14 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           transaksi aktif — tidak ada jadwal tersimpan terpisah yang perlu disinkronkan manual.
         </p>
         <Note>
+          Alat yang sedang disewa (status <Ui>Sedang Disewa</Ui>) memblokir stok sampai tanggal kembali yang
+          dijadwalkan — tanggal SETELAH itu tetap tersedia untuk booking baru. Tapi kalau sudah lewat tanggal kembali
+          dan belum ditandai <Ui>Kembalikan</Ui>, alat itu terkunci untuk booking baru TANPA BATAS WAKTU sampai kamu
+          memproses pengembaliannya lewat <Ui>Proses Pengembalian</Ui> (<SectionLink id="g-transaksi-aktif">bagian 3</SectionLink>) — jadi kalau Kalender menunjukkan alat
+          "Habis" padahal menurutmu sudah waktunya kembali, cek dulu Transaksi Aktif, mungkin ada transaksi yang
+          belum ditutup.
+        </Note>
+        <Note>
           Kalau sudah punya <Ui>Paket</Ui> aktif di Katalog, muncul grup <Ui>Paket</Ui> di atas daftar alat — sisa per
           hari dihitung dari sisa komponen paling sedikit (bukan stok terpisah). Sama seperti alat, ada tombol{' '}
           <Ui>+ Sewa Paket Ini</Ui> untuk langsung membuka Catat Transaksi dengan isi paket sudah terpilih otomatis.
