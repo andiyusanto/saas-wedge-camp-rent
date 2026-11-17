@@ -280,15 +280,18 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           ]}
         />
         <p>
-          Klik salah satu kotak tanggal pada strip untuk langsung membuka form <Ui>Catat Transaksi</Ui> dengan alat dan
-          tanggal mulai sudah terisi otomatis. Ketersediaan dihitung langsung dari transaksi aktif — tidak ada jadwal
-          tersimpan terpisah yang perlu disinkronkan manual.
+          Tekan tombol <Ui>+ Sewa Alat Ini</Ui> di bawah kartu alat untuk langsung membuka form <Ui>Catat Transaksi</Ui>{' '}
+          dengan alat dan tanggal yang sedang dilihat sudah terisi otomatis. Ketersediaan dihitung langsung dari
+          transaksi aktif — tidak ada jadwal tersimpan terpisah yang perlu disinkronkan manual.
         </p>
         <Note>
           Kalau sudah punya <Ui>Paket</Ui> aktif di Katalog, muncul grup <Ui>Paket</Ui> di atas daftar alat — sisa per
-          hari dihitung dari sisa komponen paling sedikit (bukan stok terpisah). Grup ini bisa dilipat, dan status
-          lipatnya diingat di perangkat itu saja. Paket yang salah satu alatnya dinonaktifkan tidak ditampilkan sama
-          sekali, sama seperti di Catat Transaksi/Etalase.
+          hari dihitung dari sisa komponen paling sedikit (bukan stok terpisah). Sama seperti alat, ada tombol{' '}
+          <Ui>+ Sewa Paket Ini</Ui> untuk langsung membuka Catat Transaksi dengan isi paket sudah terpilih otomatis.
+          Kalau hari tertentu sisa sedikit/habis, muncul keterangan kecil "Terbatas: [nama alat]" — alat itu yang
+          jumlahnya paling mepet, jadi penyebab paketnya tidak bisa dipesan lebih banyak. Grup ini bisa dilipat, dan
+          status lipatnya diingat di perangkat itu saja. Paket yang salah satu alatnya dinonaktifkan tidak ditampilkan
+          sama sekali, sama seperti di Catat Transaksi/Etalase.
         </Note>
       </Section>
 
@@ -511,6 +514,19 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           setelah memilih, pilihan itu otomatis dilepas dan dianggap pelanggan baru saat disimpan.
         </Note>
         <Note>
+          Kolom <Ui>Uang Muka (DP)</Ui> &amp; <Ui>Cara Bayar DP</Ui> opsional — isi kalau pelanggan sudah bayar
+          sebagian saat transaksi dicatat. DP TIDAK BOLEH melebihi Total Harga (ditolak kalau dipaksakan). Sisa
+          tagihannya nanti dilunasi lewat <Ui>Catat Pembayaran</Ui> di Transaksi Aktif — lihat{' '}
+          <SectionLink id="g-transaksi-aktif">bagian 3</SectionLink>, bagian Pelunasan.
+        </Note>
+        <Note>
+          Kalau muncul pesan <em>"Alat ... tidak cukup pada ... (sisa 0, diminta N)"</em> saat Simpan, artinya stok
+          alat itu baru saja habis diambil kasir lain tepat sebelum kamu — BUKAN kesalahan input kamu. Transaksi ini
+          sengaja TIDAK tersimpan sama sekali (bukan separuh tersimpan), supaya stok tidak pernah dobel-dipesan.
+          Kurangi jumlah alatnya, pilih tanggal lain, atau cek Kalender Ketersediaan (<SectionLink id="g-kalender">bagian 2</SectionLink>) dulu sebelum coba
+          Simpan lagi.
+        </Note>
+        <Note>
           Untuk transaksi yang langsung <Ui>Sedang Disewa</Ui> (ambil hari ini, bukan dipesan dulu) dan tidak pilih
           jaminan sama sekali — muncul kotak centang tambahan "Konfirmasi: tidak ada jaminan untuk transaksi ini",
           wajib dicentang sebelum bisa disimpan, supaya tidak kelupaan tanpa sadar.
@@ -642,6 +658,11 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           memuatnya lewat <Ui>Ubah Alat</Ui> (supaya stoknya bisa dikembalikan), tapi tidak bisa dipilih sebagai
           tambahan baru — sama seperti alat sewa yang dinonaktifkan.
         </Note>
+        <Note>
+          Di struk WA, Nota Sewa cetak, dan struk printer thermal (<SectionLink id="g-cetak-thermal">bagian 3b</SectionLink>), barang jual selalu tampil di
+          bagian TERPISAH dari alat sewa (dengan Total Sewa dan Total Barang Jual sendiri-sendiri) — supaya tidak
+          tercampur dengan alat yang harus dikembalikan.
+        </Note>
 
         <h4 className="text-sm font-bold text-[#26302B] pt-2">Impor dari Excel (banyak alat sekaligus)</h4>
         <p>
@@ -689,7 +710,11 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         <FieldsTable
           rows={[
             { label: 'Total Transaksi', desc: 'Jumlah transaksi pada rentang tanggal yang dipilih (tidak termasuk yang Dibatalkan).' },
-            { label: 'Sudah Diterima', desc: 'Total uang muka/pembayaran yang sudah tercatat masuk pada rentang tersebut (tidak termasuk yang Dibatalkan).' },
+            {
+              label: 'Sudah Diterima',
+              desc:
+                'Total uang muka/pembayaran yang sudah tercatat masuk, dihitung dari transaksi yang tanggal AMBILnya ada di rentang ini (tidak termasuk yang Dibatalkan) — BEDA dari "Uang Diterima" di sub-tab Laporan di bawah, yang dihitung dari tanggal uangnya DICATAT, bukan tanggal ambil.',
+            },
             { label: 'Piutang', desc: 'Sisa tagihan yang belum lunas dari transaksi yang belum dibatalkan.' },
             {
               label: 'Jatuh Tempo Hari Ini',
@@ -753,8 +778,13 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           items={[
             <>
               <Ui>Pemasukan per Bulan</Ui>: pilih tahun, lihat grafik batang 12 bulan — tekan salah satu batang untuk
-              lihat rincian bulan itu: pendapatan sewa, denda telat, denda rusak/hilang, sudah diterima, belum
-              lunas, jumlah transaksi, rata-rata per transaksi, dan naik/turun (%) dibanding bulan sebelumnya.
+              lihat rincian bulan itu: pendapatan sewa, denda telat, denda rusak/hilang, belum lunas, jumlah
+              transaksi, rata-rata per transaksi, dan naik/turun (%) dibanding bulan sebelumnya. Angka{' '}
+              <Ui>Uang Diterima</Ui> di sini dihitung dari BULAN UANGNYA DICATAT masuk — bukan bulan tanggal ambil
+              seperti angka lainnya di laporan ini. Jadi uang muka yang dibayar bulan lalu untuk sewa yang baru mulai
+              bulan ini akan muncul di bulan lalu, bukan bulan ini. Kalau ada pembatalan yang uangnya dikembalikan
+              lewat <Ui>Catat Pengembalian</Ui> (<SectionLink id="g-transaksi-aktif">bagian 3</SectionLink>), angka
+              ini ikut berkurang di bulan pengembaliannya dicatat.
             </>,
             <>
               <Ui>Laporan per Alat</Ui>: pilih periode (bulan/tahun/rentang tanggal bebas), lihat tabel per alat —
@@ -998,8 +1028,10 @@ export function GuideScreen({ businessName }: { businessName: string }) {
               (nomor rekening, gambar QRIS, dsb) — tombol <Ui>Terima pesanan online</Ui> cuma bisa dinyalakan kalau
               sudah ada minimal satu cara bayar aktif. Kalau usahamu punya lebih dari satu rekening, tekan{' '}
               <Ui>+ Tambah rekening</Ui> di bawah Transfer Bank (sampai 5) — rekening pertama otomatis jadi{' '}
-              <Ui>Rekening Utama</Ui>, urutannya bisa diatur lewat tombol panah naik/turun, dan semua rekening aktif
-              akan ditampilkan ke pelanggan di halaman status pesanannya setelah kamu Konfirmasi.
+              <Ui>Rekening Utama</Ui>, urutannya bisa diatur lewat tombol panah naik/turun, dan ada tombol{' '}
+              <Ui>Hapus</Ui> (minta konfirmasi dulu) kalau sudah tidak dipakai. Semua rekening aktif akan ditampilkan
+              ke pelanggan sebagai kartu terpisah (masing-masing punya tombol <Ui>Salin nomor</Ui> sendiri) di halaman
+              status pesanannya setelah kamu Konfirmasi.
             </>,
             <>
               Isi <strong>Nomor WA admin untuk pesanan online</strong> — sampai 3 nomor (label tetap <Ui>Admin
@@ -1081,6 +1113,12 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           <strong>Sewalog tidak pernah menerima atau menyimpan dana dari pelanggan.</strong> Transfer/QRIS/tunai
           langsung ke rekening atau tangan usahamu sendiri — Sewalog cuma menampilkan info pembayaran yang kamu isi
           sendiri, tidak ikut proses transaksi uangnya sama sekali.
+        </Note>
+        <Note>
+          Info rekening/QRIS yang dilihat pelanggan dibekukan PERSIS seperti saat kamu Konfirmasi pesanan itu — kalau
+          sesudahnya kamu ganti/hapus rekening di Pesanan Online, pesanan yang SUDAH dikonfirmasi tetap menampilkan
+          info lama (tidak ikut berubah diam-diam), supaya pelanggan tidak bingung tiba-tiba transfer ke rekening
+          yang berbeda dari yang pertama kali ditampilkan.
         </Note>
 
         <p className="font-bold text-[#26302B] text-sm pt-1">Syarat &amp; Ketentuan sewa</p>
@@ -1167,6 +1205,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         </Section>
       )}
 
+      {/* TODO 4 Des 2026: update bagian ini begitu harga berlangganan resmi diumumkan -- JANGAN diubah sebelum tanggal itu. */}
       <Section id="g-langganan" num="9" title="Langganan" kicker="Status masa aktif usahamu dan cara konfirmasi pembayaran — belum dikenakan biaya sampai 31 Desember 2026.">
         <p>
           Sewalog <strong>gratis sampai 31 Desember 2026</strong>. Harga setelahnya belum diputuskan — akan
