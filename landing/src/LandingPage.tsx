@@ -15,6 +15,9 @@ import {
   Timer,
   ListChecks,
   Hourglass,
+  ShoppingBag,
+  Wallet,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { waLink, WHATSAPP_DISPLAY } from './lib/whatsapp';
 
@@ -67,7 +70,27 @@ const FAQ_ITEMS: { question: string; answer: string }[] = [
   {
     question: 'Bisa lihat rekap pemasukan?',
     answer:
-      'Bisa. Menu Riwayat Transaksi (khusus akun pemilik) menampilkan jumlah transaksi, uang yang sudah diterima, dan piutang untuk rentang tanggal yang kamu pilih. Ada juga tombol Unduh Excel yang menghasilkan file berisi daftar transaksi (denda telat dan kerusakan dipisah), ringkasan, dan pendapatan per alat.',
+      'Bisa. Lewat menu Riwayat Transaksi → Laporan (khusus pemilik), ada pemasukan per bulan — sewa dan denda dipisah, uang yang sudah diterima, dan piutang — plus laporan per alat: berapa kali disewa, pendapatannya, dan seberapa sering terpakai. Ada juga tombol Unduh Excel untuk rekap lengkapnya.',
+  },
+  {
+    question: 'Bisa cetak struk ke printer thermal?',
+    answer:
+      'Bisa. Dari HP Android, struk bisa dicetak ke printer thermal Bluetooth 58/80mm lewat aplikasi bantu gratis (RawBT), atau dari laptop lewat printer USB. Untuk iPhone, cetak ke printer Bluetooth belum bisa — ini batasan dari Apple, bukan dari Sewalog.',
+  },
+  {
+    question: 'Bisa sewa per paket?',
+    answer:
+      'Bisa. Kamu bisa buat paket (misalnya Paket Camping berisi tenda, sleeping bag, dan kompor) dengan harga sendiri. Saat dipilih di transaksi, stok tiap alat di dalamnya otomatis ikut terpotong — tidak perlu diatur manual satu-satu.',
+  },
+  {
+    question: 'Pelanggan sering minta tambah alat atau ganti tanggal, bisa diubah?',
+    answer:
+      'Bisa. Sebelum alat diambil, kamu bisa tambah, kurangi, atau ganti alat dan ubah jadwal. Setelah alat diambil, sewa bisa diperpanjang. Total harga otomatis dihitung ulang.',
+  },
+  {
+    question: 'Bisa catat DP dan pelunasan bertahap?',
+    answer:
+      'Bisa. Saat transaksi dibuat kamu bisa catat DP dan cara bayarnya, lalu lunasi sisanya saat alat diambil atau dikembalikan. Sisa tagihan otomatis sudah termasuk denda kalau ada, dan nota bisa dicetak ulang kapan saja dari Riwayat.',
   },
   {
     question: 'Apakah Sewalog tetap cepat kalau transaksinya sudah ribuan?',
@@ -121,6 +144,12 @@ const BLOG_PICKS: { href: string; title: string; summary: string }[] = [
 ];
 
 const APP_URL = import.meta.env.VITE_APP_URL || 'http://localhost:5173';
+
+// Buka form daftar di web app langsung (param dibaca app, commit 760bcea).
+// `src` menandai posisi tombol di landing untuk tracking, huruf/angka/strip saja.
+function daftarUrl(src: string): string {
+  return `${APP_URL}/?daftar=1&src=${src}`;
+}
 
 // Klip video (demo utama + klip fitur pendek) — MP4 + poster JPG di R2
 // (image.sewalog.com), ATAU embed URL YouTube unlisted lewat type: 'youtube'.
@@ -336,7 +365,7 @@ const ETALASE_ITEMS = [
   { name: 'Tenda Dome 4P', price: '60.000' },
   { name: 'Sleeping Bag', price: '15.000' },
   { name: 'Kompor Portable', price: '20.000' },
-  { name: 'Carrier 60L', price: '35.000' },
+  { name: 'Paket Tektok', price: '85.000' },
 ];
 
 function EtalaseMock() {
@@ -576,15 +605,23 @@ export function LandingPage() {
               Tips Rental
             </a>
           </div>
-          <a
-            href={waLink(MSG_UMUM)}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2 bg-[#A65C2A] hover:bg-[#9E5524] active:scale-95 transition text-white text-sm font-semibold px-4 py-2 rounded-xl shadow-xs"
-          >
-            <WaIcon className="w-4 h-4" />
-            Hubungi Kami
-          </a>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <a
+              href={daftarUrl('landing-header')}
+              className="inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 active:scale-95 transition text-white text-sm font-semibold px-3 py-2 rounded-xl border border-white/25"
+            >
+              Daftar
+            </a>
+            <a
+              href={waLink(MSG_UMUM)}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 bg-[#A65C2A] hover:bg-[#9E5524] active:scale-95 transition text-white text-sm font-semibold px-4 py-2 rounded-xl shadow-xs"
+            >
+              <WaIcon className="w-4 h-4" />
+              Hubungi Kami
+            </a>
+          </div>
         </div>
       </header>
 
@@ -598,15 +635,24 @@ export function LandingPage() {
               Sewalog bantu kamu lihat stok alat yang masih kosong, catat transaksi sewa dalam hitungan detik, dan
               pantau jaminan &amp; denda — semua dari HP, sambil tetap layani pelanggan di depan rak.
             </p>
-            <a
-              href={waLink(MSG_UMUM)}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 bg-[#A65C2A] hover:bg-[#9E5524] active:scale-95 transition text-white font-semibold px-6 py-3.5 rounded-xl shadow-md"
-            >
-              <WaIcon className="w-5 h-5" />
-              Ngobrol Dulu Yuk
-            </a>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <a
+                href={daftarUrl('landing-hero')}
+                className="inline-flex items-center justify-center gap-2 bg-[#A65C2A] hover:bg-[#9E5524] active:scale-95 transition text-white font-semibold px-6 py-3.5 rounded-xl shadow-md"
+              >
+                Daftar Gratis
+              </a>
+              <a
+                href={waLink(MSG_UMUM)}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center gap-2 bg-white hover:bg-[#F1EEE2] active:scale-95 transition text-[#2B4739] font-semibold px-6 py-3.5 rounded-xl border border-[#2B4739]/30 shadow-xs"
+              >
+                <WaIcon className="w-5 h-5" />
+                Ngobrol Dulu Yuk
+              </a>
+            </div>
+            <p className="text-xs text-[#6E6853] mt-3">Gratis sampai 31 Desember 2026, tanpa kartu kredit.</p>
           </div>
           <div className="mt-12 lg:mt-0 lg:flex-1 flex justify-center">
             <HeroPreview />
@@ -654,9 +700,9 @@ export function LandingPage() {
                   ) : undefined
                 }
               >
-                Isi form singkat sambil pelanggan menunggu — alat, tanggal, sampai total harga otomatis kehitung.
-                Termasuk harga bertingkat: hari pertama bisa beda tarif dari hari berikutnya, tetap terhitung
-                otomatis.
+                Isi form singkat sambil pelanggan menunggu — alat, tanggal, sampai total harga otomatis kehitung,
+                termasuk DP dan cetak struk. Harga bertingkat juga didukung: hari pertama bisa beda tarif dari
+                hari berikutnya, tetap terhitung otomatis.
               </FeatureCard>
               <FeatureCard
                 icon={ShieldAlert}
@@ -692,6 +738,22 @@ export function LandingPage() {
               <MiniFeatureItem icon={Hourglass} title="Toleransi Keterlambatan" divider>
                 Tentukan sendiri berapa jam toleransi sebelum denda telat mulai dihitung.
               </MiniFeatureItem>
+              <MiniFeatureItem icon={Package} title="Paket Alat" divider={false}>
+                Sewakan paket (misal Paket Camping: tenda + sleeping bag + kompor). Stok tiap alat di dalamnya
+                otomatis ikut terpotong.
+              </MiniFeatureItem>
+              <MiniFeatureItem icon={ShoppingBag} title="Barang Jual" divider>
+                Baterai, gas, jas hujan — barang habis pakai yang ikut dijual saat transaksi, tercatat terpisah
+                dari sewa di nota dan laporan.
+              </MiniFeatureItem>
+              <MiniFeatureItem icon={Wallet} title="DP & Pelunasan" divider>
+                Catat DP saat transaksi, lunasi saat ambil atau kembali — sisa tagihan otomatis sudah termasuk
+                denda kalau ada.
+              </MiniFeatureItem>
+              <MiniFeatureItem icon={SlidersHorizontal} title="Cara Hitung Denda, Sesuai Aturanmu" divider>
+                Pilih cara hitung denda telat yang cocok: bertahap per 12 jam, per hari, per jam, atau tanpa denda.
+                Bisa juga atur jam batas kembali tetap, misalnya maks jam 22.00.
+              </MiniFeatureItem>
             </div>
           </div>
         </section>
@@ -705,8 +767,9 @@ export function LandingPage() {
               <h2 className="text-2xl font-bold text-[#26302B] mb-3">Etalase Online Buat Pelanggan Kamu</h2>
               <p className="text-sm text-[#6E6853] mb-4 max-w-md">
                 Selain buat kelola internal, Sewalog otomatis buatkan halaman katalog online yang bisa kamu bagikan
-                ke pelanggan — foto alat, filter kategori, sampai cek ketersediaan langsung tanpa perlu WhatsApp
-                dulu. Nggak perlu bikin website sendiri.
+                ke pelanggan — foto alat dan paket, filter kategori, cek ketersediaan langsung, sampai pelanggan
+                bisa kirim pesanan dari halaman ini. Kamu yang konfirmasi; info rekening/QRIS/tunai kamu sendiri
+                baru tampil ke pelanggan setelah itu — Sewalog tidak pernah memegang uangnya.
               </p>
               <a
                 href={ETALASE_DEMO_URL}
@@ -753,6 +816,14 @@ export function LandingPage() {
                 <div>
                   <h3 className="text-[15px] font-bold text-[#26302B] mb-0.5">{step.title}</h3>
                   <p className="text-sm text-[#6E6853]">{step.desc}</p>
+                  {i === 2 && (
+                    <a
+                      href={daftarUrl('landing-caramulai')}
+                      className="inline-block mt-1.5 text-sm font-semibold text-[#2B4739] hover:underline"
+                    >
+                      Daftar sekarang →
+                    </a>
+                  )}
                 </div>
               </li>
             ))}
@@ -767,12 +838,18 @@ export function LandingPage() {
               lalu klik tombol <strong className="text-[#26302B]">&quot;Mulai demo akun, Reset data demo&quot;</strong>{' '}
               buat langsung masuk lihat contoh alat dan transaksi.
             </p>
-            <div>
+            <div className="flex flex-col sm:flex-row justify-center gap-3">
+              <a
+                href={daftarUrl('landing-coba')}
+                className="inline-flex items-center justify-center gap-2 bg-[#A65C2A] hover:bg-[#9E5524] active:scale-95 transition text-white font-semibold px-5 py-2.5 rounded-xl shadow-xs"
+              >
+                Daftar Gratis
+              </a>
               <a
                 href={APP_URL}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-2 bg-white hover:bg-[#F1EEE2] active:scale-95 transition text-[#2B4739] font-semibold px-5 py-2.5 rounded-xl border border-[#2B4739]/30 shadow-xs"
+                className="inline-flex items-center justify-center gap-2 bg-white hover:bg-[#F1EEE2] active:scale-95 transition text-[#2B4739] font-semibold px-5 py-2.5 rounded-xl border border-[#2B4739]/30 shadow-xs"
               >
                 <PlayCircle className="w-4 h-4" />
                 Buka Demo
@@ -797,6 +874,12 @@ export function LandingPage() {
               <WaIcon className="w-5 h-5" />
               Hubungi Kami Sekarang
             </a>
+            <p className="text-sm text-[#6E6853] mt-4">
+              atau{' '}
+              <a href={daftarUrl('landing-penutup')} className="font-semibold text-[#2B4739] hover:underline">
+                langsung daftar di sini
+              </a>
+            </p>
           </div>
         </section>
 
