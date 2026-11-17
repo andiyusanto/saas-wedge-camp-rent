@@ -766,7 +766,8 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           Bagian <Ui>Peralatan Terlaris Disewa</Ui> menampilkan alat yang paling sering disewa pada rentang tanggal
           yang sama (juga tidak termasuk transaksi Dibatalkan), dikelompokkan per kategori — tekan judul kategori
           buat buka/tutup daftar alatnya. Berguna buat lihat alat mana yang perlu ditambah stoknya atau justru
-          jarang dipakai.
+          jarang dipakai. Yang tampil 3 kategori teratas; tekan <Ui>Lihat semua</Ui> untuk menampilkan kategori
+          lainnya.
         </p>
         <Note>Sama seperti Kelola Usaha, tab ini cuma terlihat dan bisa diakses oleh pemilik.</Note>
 
@@ -791,9 +792,10 @@ export function GuideScreen({ businessName }: { businessName: string }) {
               ini ikut berkurang di bulan pengembaliannya dicatat.
             </>,
             <>
-              <Ui>Laporan per Alat</Ui>: pilih periode (bulan/tahun/rentang tanggal bebas), lihat tabel per alat —
-              berapa kali disewa, total unit-hari, pendapatan, dan persen keterpakaian. Bisa diurutkan berdasarkan
-              Pendapatan/Keterpakaian/Jumlah Sewa. Alat aktif yang tidak pernah disewa di periode itu ditampilkan
+              <Ui>Laporan per Alat</Ui>: pilih periode (bulan/tahun/rentang tanggal bebas), lihat tabel per alat
+              (kolom pertama Kategori, lalu Nama Alat) — berapa kali disewa, total unit-hari, pendapatan, dan persen
+              keterpakaian. Bisa diurutkan berdasarkan Pendapatan/Keterpakaian/Jumlah Sewa/Kategori. Alat aktif yang
+              tidak pernah disewa di periode itu ditampilkan
               terpisah di bawah tabel, begitu juga ringkasan paket (berapa kali tiap paket dipilih) kalau usahamu
               punya Paket Alat (<SectionLink id="g-katalog">bagian 5</SectionLink>), dan ringkasan{' '}
               <Ui>Penjualan Barang</Ui> (berapa kali terjual + pendapatan) kalau usahamu punya Barang Jual (<SectionLink id="g-katalog">bagian 5</SectionLink>).

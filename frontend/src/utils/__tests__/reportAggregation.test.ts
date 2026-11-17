@@ -134,7 +134,7 @@ test('buildPerAlatReport: keterpakaian dipotong ke periode -- tidak pernah >100%
     end_date: '2026-02-28',
     items: [item({ item_id: 'item-a', quantity: 2, total_units: 2 })],
   });
-  const activeItems = [{ id: 'item-a', name: 'Tenda Dome', total_units: 2 }];
+  const activeItems = [{ id: 'item-a', name: 'Tenda Dome', total_units: 2, category: null }];
   const result = buildPerAlatReport([b], activeItems, '2026-02-01', '2026-02-28');
   assert.equal(result.periodDaysCount, 28);
   const row = result.rows.find((r) => r.itemId === 'item-a')!;
@@ -148,7 +148,7 @@ test('buildPerAlatReport: fallback subtotal null -> price_at_booking x quantity 
     rental_day_mode: 'per_hari_kalender', // 3 hari inklusif
     items: [item({ item_id: 'item-a', quantity: 2, price_at_booking: 10_000, subtotal: null })],
   });
-  const activeItems = [{ id: 'item-a', name: 'Tenda Dome', total_units: 5 }];
+  const activeItems = [{ id: 'item-a', name: 'Tenda Dome', total_units: 5, category: null }];
   const result = buildPerAlatReport([b], activeItems, '2026-04-01', '2026-04-30');
   const row = result.rows.find((r) => r.itemId === 'item-a')!;
   assert.equal(row.pendapatan, 10_000 * 2 * 3); // 60000
@@ -164,8 +164,8 @@ test('buildPerAlatReport: baris komponen paket memakai subtotal teralokasi (buka
     ],
   });
   const activeItems = [
-    { id: 'tenda', name: 'Tenda Dome', total_units: 5 },
-    { id: 'carrier', name: 'Carrier', total_units: 5 },
+    { id: 'tenda', name: 'Tenda Dome', total_units: 5, category: null },
+    { id: 'carrier', name: 'Carrier', total_units: 5, category: null },
   ];
   const result = buildPerAlatReport([b], activeItems, '2026-06-01', '2026-06-30');
   const tendaRow = result.rows.find((r) => r.itemId === 'tenda')!;
@@ -182,12 +182,28 @@ test('buildPerAlatReport: baris komponen paket memakai subtotal teralokasi (buka
 test('buildPerAlatReport: alat aktif yang tidak pernah disewa di periode ikut dilaporkan', () => {
   const b = booking({ items: [item({ item_id: 'item-a' })] });
   const activeItems = [
-    { id: 'item-a', name: 'Disewa', total_units: 5 },
-    { id: 'item-b', name: 'Tidak Pernah Disewa', total_units: 3 },
+    { id: 'item-a', name: 'Disewa', total_units: 5, category: null },
+    { id: 'item-b', name: 'Tidak Pernah Disewa', total_units: 3, category: null },
   ];
   const result = buildPerAlatReport([b], activeItems, '2026-01-01', '2026-01-31');
   assert.equal(result.itemsNeverRented.length, 1);
   assert.equal(result.itemsNeverRented[0].id, 'item-b');
+});
+
+// Kolom Kategori di Laporan per Alat (brief 17 Nov 2026).
+
+test('buildPerAlatReport: category diambil dari katalog alat aktif', () => {
+  const b = booking({ items: [item({ item_id: 'item-a' })] });
+  const activeItems = [{ id: 'item-a', name: 'Tenda Dome', total_units: 5, category: 'Tenda' }];
+  const result = buildPerAlatReport([b], activeItems, '2026-01-01', '2026-01-31');
+  assert.equal(result.rows[0].category, 'Tenda');
+});
+
+test('buildPerAlatReport: category fallback "Lainnya" kalau null di katalog', () => {
+  const b = booking({ items: [item({ item_id: 'item-a' })] });
+  const activeItems = [{ id: 'item-a', name: 'Tenda Dome', total_units: 5, category: null }];
+  const result = buildPerAlatReport([b], activeItems, '2026-01-01', '2026-01-31');
+  assert.equal(result.rows[0].category, 'Lainnya');
 });
 
 // Barang Jual (habis pakai), v1 (brief 16 Nov 2026, migration 066).

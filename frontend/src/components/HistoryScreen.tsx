@@ -217,6 +217,11 @@ export function HistoryScreen({
     });
   }
 
+  // "Peralatan Terlaris Disewa" cuma 3 kategori teratas secara default
+  // (brief 17 Nov 2026) -- state lokal saja, tidak ikut filter tanggal.
+  const [showAllCategories, setShowAllCategories] = useState(false);
+  const visibleCategoryGroups = showAllCategories ? categoryGroups : categoryGroups.slice(0, 3);
+
   const [exporting, setExporting] = useState(false);
 
   async function handleExport() {
@@ -349,7 +354,7 @@ export function HistoryScreen({
             <span>Peralatan Terlaris Disewa</span>
           </h3>
           <div className="space-y-2">
-            {categoryGroups.map((group, gi) => {
+            {visibleCategoryGroups.map((group, gi) => {
               const isCollapsed = !expandedCategories.has(group.category);
               return (
                 <div key={group.category} className="rounded-xl border border-[#DBD5C1] overflow-hidden">
@@ -395,6 +400,15 @@ export function HistoryScreen({
               );
             })}
           </div>
+          {categoryGroups.length > 3 && (
+            <button
+              type="button"
+              onClick={() => setShowAllCategories((prev) => !prev)}
+              className="mt-3 w-full text-center text-xs font-bold text-[#2B4739] underline py-1"
+            >
+              {showAllCategories ? 'Tampilkan lebih sedikit' : `Lihat semua (${categoryGroups.length} kategori)`}
+            </button>
+          )}
         </div>
       )}
 

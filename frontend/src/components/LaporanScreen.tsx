@@ -80,7 +80,7 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
   const [perAlatMonth, setPerAlatMonth] = useState(now.getMonth() + 1);
   const [rangeFrom, setRangeFrom] = useState(`${now.getFullYear()}-01-01`);
   const [rangeTo, setRangeTo] = useState(`${now.getFullYear()}-12-31`);
-  const [sortBy, setSortBy] = useState<'pendapatan' | 'keterpakaian' | 'jumlahSewa'>('pendapatan');
+  const [sortBy, setSortBy] = useState<'pendapatan' | 'keterpakaian' | 'jumlahSewa' | 'kategori'>('pendapatan');
 
   const { periodStart, periodEnd } = useMemo(() => {
     if (periodMode === 'bulan') {
@@ -114,7 +114,7 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
   }, [businessId, periodStart, periodEnd]);
 
   const perAlatResult: PerAlatReportResult = useMemo(() => {
-    const activeItemRefs = activeItems.map((i) => ({ id: i.id, name: i.name, total_units: i.total_units }));
+    const activeItemRefs = activeItems.map((i) => ({ id: i.id, name: i.name, total_units: i.total_units, category: i.category }));
     return buildPerAlatReport(
       perAlatBookings.filter((b) => b.status !== 'dibatalkan'),
       activeItemRefs,
@@ -133,7 +133,10 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
 
   const sortedRows = useMemo(() => {
     const rows = [...perAlatResult.rows];
-    if (sortBy === 'pendapatan') rows.sort((a, b) => b.pendapatan - a.pendapatan);
+    // Urutkan "Kategori" (brief 17 Nov 2026) -- urutan sekunder dalam
+    // kategori yang sama pakai Pendapatan (sama seperti default).
+    if (sortBy === 'kategori') rows.sort((a, b) => a.category.localeCompare(b.category, 'id') || b.pendapatan - a.pendapatan);
+    else if (sortBy === 'pendapatan') rows.sort((a, b) => b.pendapatan - a.pendapatan);
     else if (sortBy === 'keterpakaian') rows.sort((a, b) => b.keterpakaianPersen - a.keterpakaianPersen);
     else rows.sort((a, b) => b.jumlahTransaksi - a.jumlahTransaksi);
     return rows;
@@ -404,6 +407,7 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
                 <option value="pendapatan">Pendapatan</option>
                 <option value="keterpakaian">Keterpakaian</option>
                 <option value="jumlahSewa">Jumlah Sewa</option>
+                <option value="kategori">Kategori</option>
               </select>
             </label>
             <button
@@ -430,9 +434,10 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
           ) : (
             <>
               <div className="bg-[#FBFAF4] rounded-2xl border border-[#DBD5C1] overflow-x-auto">
-                <table className="w-full text-xs min-w-[640px]">
+                <table className="w-full text-xs min-w-[740px]">
                   <thead>
                     <tr className="border-b border-[#DBD5C1] text-left text-[#6E6853]">
+                      <th className="p-2.5 font-semibold">Kategori</th>
                       <th className="p-2.5 font-semibold">Nama Alat</th>
                       <th className="p-2.5 font-semibold text-right">Jumlah Sewa</th>
                       <th className="p-2.5 font-semibold text-right">Total Unit-Hari</th>
@@ -443,6 +448,7 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
                   <tbody>
                     {sortedRows.map((row) => (
                       <tr key={row.itemId} className="border-b border-[#E6E1D2] last:border-0">
+                        <td className="p-2.5 text-[#6E6853]">{row.category}</td>
                         <td className="p-2.5 font-semibold text-[#26302B]">{row.name}</td>
                         <td className="p-2.5 text-right">{row.jumlahTransaksi}</td>
                         <td className="p-2.5 text-right">{row.totalUnitHari}</td>
@@ -452,7 +458,7 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
                     ))}
                     {sortedRows.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="p-4 text-center text-[#6E6853] italic">
+                        <td colSpan={6} className="p-4 text-center text-[#6E6853] italic">
                           Tidak ada transaksi pada periode ini.
                         </td>
                       </tr>

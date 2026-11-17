@@ -183,11 +183,12 @@ export function clipOccupiedDaysToPeriod(
   return daysBetweenInclusive(clippedStart, clippedEnd);
 }
 
-export type ActiveItemRef = { id: string; name: string; total_units: number };
+export type ActiveItemRef = { id: string; name: string; total_units: number; category: string | null };
 
 export type PerAlatReportRow = {
   itemId: string;
   name: string;
+  category: string; // brief 17 Nov 2026, sama fallback dengan "Peralatan Terlaris Disewa" (HistoryScreen) -- null/kosong -> "Lainnya"
   jumlahTransaksi: number;
   totalUnitHari: number; // TIDAK dipotong -- booking yang MULAI di periode (konsisten sheet "Per Alat" Riwayat yang sudah ada)
   pendapatan: number; // Σ subtotal baris, booking yang MULAI di periode -- BISA beda dari total_price transaksi kalau vendor override manual (lihat catatan UI)
@@ -229,16 +230,27 @@ export function buildPerAlatReport(
     (b) => b.start_date >= periodStart && b.start_date <= periodEnd,
   );
 
-  type Agg = { name: string; bookingIds: Set<string>; totalUnitHari: number; pendapatan: number; unitHariClipped: number };
+  type Agg = { name: string; category: string; bookingIds: Set<string>; totalUnitHari: number; pendapatan: number; unitHariClipped: number };
   const byItemId = new Map<string, Agg>();
   const totalUnitsByItemId = new Map<string, number>();
-  for (const item of activeItems) totalUnitsByItemId.set(item.id, item.total_units);
+  const categoryByItemId = new Map<string, string>();
+  for (const item of activeItems) {
+    totalUnitsByItemId.set(item.id, item.total_units);
+    categoryByItemId.set(item.id, item.category ?? 'Lainnya');
+  }
 
   for (const b of startedInPeriod) {
     const days = rentalDays(b.start_date, b.end_date, b.rental_day_mode);
     for (const item of b.items) {
       if (!item.item_id) continue;
-      const agg = byItemId.get(item.item_id) ?? { name: item.name, bookingIds: new Set(), totalUnitHari: 0, pendapatan: 0, unitHariClipped: 0 };
+      const agg = byItemId.get(item.item_id) ?? {
+        name: item.name,
+        category: categoryByItemId.get(item.item_id) ?? item.category ?? 'Lainnya',
+        bookingIds: new Set(),
+        totalUnitHari: 0,
+        pendapatan: 0,
+        unitHariClipped: 0,
+      };
       agg.bookingIds.add(b.id);
       agg.totalUnitHari += item.quantity * days;
       agg.pendapatan += itemSubtotal(item, days);
@@ -253,7 +265,14 @@ export function buildPerAlatReport(
     if (clippedDays <= 0) continue;
     for (const item of b.items) {
       if (!item.item_id) continue;
-      const agg = byItemId.get(item.item_id) ?? { name: item.name, bookingIds: new Set(), totalUnitHari: 0, pendapatan: 0, unitHariClipped: 0 };
+      const agg = byItemId.get(item.item_id) ?? {
+        name: item.name,
+        category: categoryByItemId.get(item.item_id) ?? item.category ?? 'Lainnya',
+        bookingIds: new Set(),
+        totalUnitHari: 0,
+        pendapatan: 0,
+        unitHariClipped: 0,
+      };
       agg.unitHariClipped += item.quantity * clippedDays;
       byItemId.set(item.item_id, agg);
     }
@@ -266,6 +285,7 @@ export function buildPerAlatReport(
     return {
       itemId,
       name: agg.name,
+      category: agg.category,
       jumlahTransaksi: agg.bookingIds.size,
       totalUnitHari: agg.totalUnitHari,
       pendapatan: agg.pendapatan,

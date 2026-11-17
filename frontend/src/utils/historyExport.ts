@@ -244,6 +244,7 @@ export async function downloadLaporanExcel(args: {
 
   const perAlatSheet = workbook.addWorksheet('Laporan per Alat');
   perAlatSheet.columns = [
+    { header: 'Kategori', key: 'category', width: 20 },
     { header: 'Nama Alat', key: 'name', width: 28 },
     { header: 'Jumlah Sewa', key: 'jumlahTransaksi', width: 14 },
     { header: 'Total Unit-Hari', key: 'totalUnitHari', width: 16 },
@@ -253,6 +254,7 @@ export async function downloadLaporanExcel(args: {
   perAlatSheet.getRow(1).font = { bold: true };
   for (const row of args.perAlatResult.rows) {
     const r = perAlatSheet.addRow({
+      category: row.category,
       name: row.name,
       jumlahTransaksi: row.jumlahTransaksi,
       totalUnitHari: row.totalUnitHari,
