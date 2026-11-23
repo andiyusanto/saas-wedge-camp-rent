@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
-import type { RentalDayMode } from '../utils/formatters';
+import type { DurationLabelStyle, RentalDayMode } from '../utils/formatters';
 import type { BusinessTimezone } from './useRegencies';
 
 export type Business = {
@@ -20,6 +20,11 @@ export type Business = {
   // punya snapshot sendiri di bookings.rental_day_mode, tidak ikut
   // berubah kalau ini diganti (lihat utils/formatters.ts).
   rental_day_mode: RentalDayMode;
+  // Label lama sewa "2H1M" (migration 072) -- setting LIVE, owner-only,
+  // cuma tampil kalau rental_day_mode='per_malam' (BusinessInfoSection.tsx).
+  // Transaksi yang sudah dibuat punya snapshot sendiri di
+  // bookings.duration_label_style.
+  duration_label_style: Exclude<DurationLabelStyle, null>;
   // Paket minimal/maksimal hari sewa (migration 054) — setting LIVE,
   // nullable = tanpa batas. Transaksi yang sudah dibuat punya snapshot
   // sendiri di bookings.min_rental_days/max_rental_days.
@@ -54,6 +59,7 @@ export type BusinessUpdateInput = {
   late_tolerance_hours: number;
   logo_url: string | null;
   rental_day_mode: RentalDayMode;
+  duration_label_style: Exclude<DurationLabelStyle, null>;
   timezone: BusinessTimezone;
   min_rental_days: number | null;
   max_rental_days: number | null;
@@ -86,7 +92,7 @@ export function useBusiness(session: Session | null) {
     // RLS (members_select_own_business) sudah membatasi ke baris milik user ini.
     const { data, error: queryError } = await supabase
       .from('businesses')
-      .select('id, name, owner_name, phone, address, regency_id, district_id, late_tolerance_hours, logo_url, rental_day_mode, timezone, min_rental_days, max_rental_days, reschedule_deadline_days, return_deadline_time, return_deadline_next_day, late_fee_mode, late_fee_per_hour, late_fee_per_hour_cap_enabled, created_at')
+      .select('id, name, owner_name, phone, address, regency_id, district_id, late_tolerance_hours, logo_url, rental_day_mode, duration_label_style, timezone, min_rental_days, max_rental_days, reschedule_deadline_days, return_deadline_time, return_deadline_next_day, late_fee_mode, late_fee_per_hour, late_fee_per_hour_cap_enabled, created_at')
       .maybeSingle();
 
     // PENTING: error di sini (mis. PGRST116 "multiple rows" kalau akun ini
@@ -150,6 +156,7 @@ export function useBusiness(session: Session | null) {
         late_tolerance_hours: input.late_tolerance_hours,
         logo_url: input.logo_url,
         rental_day_mode: input.rental_day_mode,
+        duration_label_style: input.duration_label_style,
         timezone: input.timezone,
         min_rental_days: input.min_rental_days,
         max_rental_days: input.max_rental_days,

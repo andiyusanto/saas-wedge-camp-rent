@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { Store, CheckCircle2, Upload, X } from 'lucide-react';
 import type { Business, BusinessUpdateInput } from '../hooks/useBusiness';
-import type { RentalDayMode } from '../utils/formatters';
+import type { DurationLabelStyle, RentalDayMode } from '../utils/formatters';
 import { useRegencies } from '../hooks/useRegencies';
 import { RegencySelect } from './RegencySelect';
 import { TIMEZONE_OPTIONS, suggestedTimezoneForProvince, type BusinessTimezone } from '../hooks/useRegencies';
@@ -40,6 +40,9 @@ export function BusinessInfoSection({
   const suggestedTimezone = suggestedTimezoneForProvince(selectedProvinceName);
   const [toleranceHours, setToleranceHours] = useState(String(business.late_tolerance_hours));
   const [rentalDayMode, setRentalDayMode] = useState<RentalDayMode>(business.rental_day_mode);
+  // Label lama sewa "2H1M" (migration 072) -- cuma relevan/tampil kalau
+  // rentalDayMode === 'per_malam' (lihat JSX di bawah).
+  const [durationLabelStyle, setDurationLabelStyle] = useState<Exclude<DurationLabelStyle, null>>(business.duration_label_style);
   const [timezone, setTimezone] = useState<BusinessTimezone>(business.timezone ?? 'Asia/Jakarta');
   const [minRentalDays, setMinRentalDays] = useState(business.min_rental_days != null ? String(business.min_rental_days) : '');
   const [maxRentalDays, setMaxRentalDays] = useState(business.max_rental_days != null ? String(business.max_rental_days) : '');
@@ -82,6 +85,7 @@ export function BusinessInfoSection({
     setDistrictId(business.district_id ?? '');
     setToleranceHours(String(business.late_tolerance_hours));
     setRentalDayMode(business.rental_day_mode);
+    setDurationLabelStyle(business.duration_label_style);
     setTimezone(business.timezone ?? 'Asia/Jakarta');
     setMinRentalDays(business.min_rental_days != null ? String(business.min_rental_days) : '');
     setMaxRentalDays(business.max_rental_days != null ? String(business.max_rental_days) : '');
@@ -150,6 +154,7 @@ export function BusinessInfoSection({
       late_tolerance_hours: Math.max(0, Number(toleranceHours) || 0),
       logo_url: logoUrl.trim() || null,
       rental_day_mode: rentalDayMode,
+      duration_label_style: durationLabelStyle,
       timezone,
       min_rental_days: minDays,
       max_rental_days: maxDays,
@@ -442,6 +447,43 @@ export function BusinessInfoSection({
             <p className="text-xs font-semibold text-[#A65C2A]">
               Berlaku untuk transaksi baru. Transaksi lama tetap dihitung seperti saat dibuat.
             </p>
+          )}
+          {/* Label lama sewa "2H1M" (brief 23 Nov 2026, migration 072) --
+              cuma relevan kalau mode Per Malam, karena "N+1H/NM" murni
+              istilah sewa per MALAM. Pindah ke Per Hari Kalender tidak
+              menghapus pilihan ini (tetap tersimpan), cuma disembunyikan
+              -- formatRentalDuration() juga memaksa "N hari" kalau mode
+              booking itu bukan per_malam, jadi aman dari sudut mana pun. */}
+          {rentalDayMode === 'per_malam' && (
+            <div className="flex flex-col gap-2 pt-2 border-t border-[#E6E1D2]/60">
+              <p className="text-sm font-semibold text-[#26302B]">Label Lama Sewa</p>
+              <label className="flex items-start gap-2 text-sm text-[#26302B]">
+                <input
+                  type="radio"
+                  checked={durationLabelStyle === 'hari'}
+                  onChange={() => setDurationLabelStyle('hari')}
+                  className="mt-0.5 accent-[#2B4739]"
+                />
+                <span>
+                  <strong>Hari</strong> — mis. "1 hari".
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm text-[#26302B]">
+                <input
+                  type="radio"
+                  checked={durationLabelStyle === 'hari_malam'}
+                  onChange={() => setDurationLabelStyle('hari_malam')}
+                  className="mt-0.5 accent-[#2B4739]"
+                />
+                <span>
+                  <strong>Hari-malam (2H1M)</strong> — mis. 1 malam ditulis "2H1M".
+                </span>
+              </label>
+              <p className="text-[11px] text-[#6E6853]">
+                Murni teks di struk/nota/ringkasan — harga tetap dihitung dan ditampilkan "/hari" di katalog, tidak
+                berubah.
+              </p>
+            </div>
           )}
         </div>
 
