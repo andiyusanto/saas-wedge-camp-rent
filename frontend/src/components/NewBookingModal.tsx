@@ -11,8 +11,10 @@ import { useSaleItems } from '../hooks/useSaleItems';
 import { useCustomerTypes } from '../hooks/useCustomerTypes';
 import type { Business } from '../hooks/useBusiness';
 import { apiFetch } from '../lib/api';
-import { useCustomerSearch, fetchCustomerHistorySummary, findCustomerByPhone } from '../hooks/useCustomerSearch';
+import { useCustomerSearch, fetchCustomerHistorySummary, findCustomerByPhone, findCustomerById } from '../hooks/useCustomerSearch';
 import type { CustomerMatch, CustomerHistorySummary } from '../hooks/useCustomerSearch';
+import { saveBookingDraft, deleteBookingDraft, getBookingDraft, isDraftDataMeaningless } from '../hooks/useBookingDrafts';
+import type { BookingDraftData } from '../hooks/useBookingDrafts';
 import { resizeImageToDataUrl } from '../utils/imageResize';
 import {
   formatIDR,
@@ -239,11 +241,17 @@ export function NewBookingModal({
   requestPrefill,
   onSaved,
   writable = true,
+  draftId = null,
 }: {
   isOpen: boolean;
   onClose: () => void;
   session: Session;
   business: Business;
+  // Draf Transaksi / Keranjang (brief 23 Nov 2026) -- id draf untuk
+  // dilanjutkan (dari DraftListModal "Lanjutkan"), null untuk form kosong
+  // biasa. TIDAK dipakai sama sekali kalau requestPrefill terisi
+  // (Konfirmasi Pesanan Online tidak pernah membuat/melanjutkan draf).
+  draftId?: string | null;
   preselectedItemId?: string | null;
   // Kalender Ketersediaan, grup "Paket" (17 Nov 2026) -- jalur prefill
   // TERPISAH dari preselectedItemId (bukan ganti bentuk prop lama),
@@ -338,10 +346,19 @@ export function NewBookingModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bundlePrefillWarning, setBundlePrefillWarning] = useState<string | null>(null);
+  // Draf Transaksi / Keranjang (brief 23 Nov 2026) -- activeDraftIdRef
+  // melacak draf yang SEDANG ditulis autosave (null = belum ada draf
+  // untuk sesi form ini, diisi draf pertama kali tersimpan). Ref, bukan
+  // state -- tidak perlu memicu render, cuma dibaca dalam effect autosave.
+  const activeDraftIdRef = useRef<string | null>(null);
+  const draftSaveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [draftResumeWarning, setDraftResumeWarning] = useState<string | null>(null);
+  const [draftHadPhoto, setDraftHadPhoto] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
     if (requestPrefill) {
+      activeDraftIdRef.current = null;
       setStartDate(requestPrefill.startDate);
       setEndDate(requestPrefill.endDate);
 
@@ -419,43 +436,154 @@ export function NewBookingModal({
         }
       });
     } else {
-      const initialStart = preselectedStartDate || todayStr();
-      setStartDate(initialStart);
-      setEndDate(business.rental_day_mode === 'per_malam' ? addDaysStr(initialStart, 1) : initialStart);
-      setQuantities(preselectedItemId ? { [preselectedItemId]: 1 } : {});
-      setBundleQuantities(preselectedBundleId ? { [preselectedBundleId]: 1 } : {});
-      setBundleInstanceIds(preselectedBundleId ? { [preselectedBundleId]: crypto.randomUUID() } : {});
-      setBundleComponentOverrides({});
-      setSaleQuantities({});
-      setBundlePrefillWarning(null);
-      setCustomerName('');
-      setCustomerPhone('');
+      function resetBlank() {
+        const initialStart = preselectedStartDate || todayStr();
+        setStartDate(initialStart);
+        setEndDate(business.rental_day_mode === 'per_malam' ? addDaysStr(initialStart, 1) : initialStart);
+        setQuantities(preselectedItemId ? { [preselectedItemId]: 1 } : {});
+        setBundleQuantities(preselectedBundleId ? { [preselectedBundleId]: 1 } : {});
+        setBundleInstanceIds(preselectedBundleId ? { [preselectedBundleId]: crypto.randomUUID() } : {});
+        setBundleComponentOverrides({});
+        setSaleQuantities({});
+        setBundlePrefillWarning(null);
+        setCustomerName('');
+        setCustomerPhone('');
+        setPickedUpNow(false);
+        setSelectedCustomerId(null);
+        setSelectedCustomer(null);
+        setApplyDiscount(true);
+        setCustomerAddress('');
+        setDepositType('ktp');
+        setDepositNote('');
+        setDepositAmount('');
+        setNoDepositConfirmed(false);
+        setDpPaid('0');
+        setDpMethod('');
+        setDraftResumeWarning(null);
+        setDraftHadPhoto(false);
+      }
+
+      // Draf Transaksi / Keranjang (brief 23 Nov 2026) -- draf DICEK ULANG
+      // saat dilanjutkan (bagian C brief), bukan dipercaya mentah-mentah:
+      // alat/paket/barang nonaktif dibuang, harga dihitung ulang dari
+      // `items`/`bundles`/`saleItems` LIVE (sudah difilter aktif-saja oleh
+      // hook masing-masing, lihat deactivated_at di hook-nya) bukan dari
+      // draf, jenis diskon pelanggan dibaca ulang (bukan disimpan di
+      // draf), dan tanggal yang sudah lewat diminta dipilih ulang (jangan
+      // diam-diam diganti).
+      const draft = draftId ? getBookingDraft(business.id, draftId) : null;
+      if (draft) {
+        activeDraftIdRef.current = draft.id;
+        const d = draft.data;
+        const droppedNames: string[] = [];
+
+        const liveItemIds = new Set(items.map((i) => i.id));
+        const nextQuantities: Record<string, number> = {};
+        for (const [itemId, qty] of Object.entries(d.quantities)) {
+          if (liveItemIds.has(itemId)) nextQuantities[itemId] = qty;
+          else droppedNames.push('alat');
+        }
+
+        const liveBundleIds = new Set(bundles.map((b) => b.id));
+        const nextBundleQuantities: Record<string, number> = {};
+        const nextBundleInstanceIds: Record<string, string> = {};
+        const nextBundleOverrides: Record<string, Record<string, number>> = {};
+        for (const [bundleId, qty] of Object.entries(d.bundleQuantities)) {
+          if (liveBundleIds.has(bundleId)) {
+            nextBundleQuantities[bundleId] = qty;
+            if (d.bundleInstanceIds[bundleId]) nextBundleInstanceIds[bundleId] = d.bundleInstanceIds[bundleId];
+            if (d.bundleComponentOverrides[bundleId]) nextBundleOverrides[bundleId] = d.bundleComponentOverrides[bundleId];
+          } else {
+            droppedNames.push('paket');
+          }
+        }
+
+        const liveSaleItemIds = new Set(saleItems.map((s) => s.id));
+        const nextSaleQuantities: Record<string, number> = {};
+        for (const [saleItemId, qty] of Object.entries(d.saleQuantities)) {
+          if (liveSaleItemIds.has(saleItemId)) nextSaleQuantities[saleItemId] = qty;
+          else droppedNames.push('barang jual');
+        }
+
+        const today = todayStr();
+        const datesExpired = (d.startDate && d.startDate < today) || (d.endDate && d.endDate < today);
+
+        setQuantities(nextQuantities);
+        setBundleQuantities(nextBundleQuantities);
+        setBundleInstanceIds(nextBundleInstanceIds);
+        setBundleComponentOverrides(nextBundleOverrides);
+        setSaleQuantities(nextSaleQuantities);
+        setBundlePrefillWarning(null);
+        setCustomerName(d.customerName);
+        setCustomerPhone(d.customerPhone);
+        setCustomerAddress(d.customerAddress);
+        setSelectedCustomerId(d.selectedCustomerId);
+        setSelectedCustomer(null); // dibaca ulang live di bawah, bukan dari draf
+        setApplyDiscount(d.applyDiscount);
+        if (datesExpired) {
+          setStartDate('');
+          setEndDate('');
+        } else {
+          setStartDate(d.startDate);
+          setEndDate(d.endDate);
+        }
+        setPickedUpNow(datesExpired ? false : d.pickedUpNow);
+        setDepositType(d.depositType as DepositType);
+        setDepositNote(d.depositNote);
+        setDepositAmount(d.depositAmount);
+        setNoDepositConfirmed(d.noDepositConfirmed);
+        setDpPaid(d.dpPaid);
+        setDpMethod(d.dpMethod);
+        setAutoOpenWA(d.autoOpenWA);
+        setDraftHadPhoto(d.hadPhoto);
+
+        if (d.selectedCustomerId) {
+          findCustomerById(d.selectedCustomerId).then((match) => {
+            if (match) setSelectedCustomer(match);
+          });
+        }
+
+        const warnings: string[] = [];
+        if (droppedNames.length > 0) {
+          const unique = Array.from(new Set(droppedNames));
+          warnings.push(`${unique.join(', ')} yang sudah nonaktif dibuang dari draf ini.`);
+        }
+        if (datesExpired) warnings.push('Tanggal draf ini sudah lewat — pilih ulang Mulai Sewa/Kembali.');
+        if (d.hadPhoto) warnings.push('Foto pelanggan tidak ikut tersimpan di draf — perlu diambil ulang kalau diperlukan.');
+        setDraftResumeWarning(warnings.length > 0 ? warnings.join(' ') : null);
+      } else {
+        activeDraftIdRef.current = null;
+        resetBlank();
+      }
     }
     setItemSearchQuery('');
-    setCustomerAddress('');
-    setSelectedCustomerId(null);
-    setSelectedCustomer(null);
-    setApplyDiscount(true);
     setShowSuggestions(false);
     setHistorySummary(null);
     clearCustomerSuggestions();
     setCustomerPhotoKey('');
     setCustomerPhotoPreview('');
-    setDepositType('ktp');
-    setDepositNote('');
-    setDepositAmount('');
-    setDpPaid('0');
-    setDpMethod('');
     setError(null);
-    // bundles sengaja masuk dependency -- useBundles() mulai dari array
-    // kosong sebelum fetch-nya selesai; tanpa ini, prefill paket yang
-    // terjadi SEBELUM bundles termuat akan salah dianggap "tidak
-    // ditemukan" (fallback ke alat lepas padahal paketnya valid).
+    // bundles/items/saleItems sengaja masuk dependency -- hook masing-
+    // masing mulai dari array kosong sebelum fetch-nya selesai; tanpa
+    // ini, prefill paket/resume draf yang terjadi SEBELUM data termuat
+    // akan salah dianggap "tidak ditemukan/nonaktif" padahal valid.
     // Re-run di sini aman/idempoten -- efek ini SELALU menurunkan ulang
-    // state yang sama dari requestPrefill, tidak menimpa edit manual
-    // staf (edit manual terjadi di luar efek ini, dependency-nya tidak
-    // berubah karenanya).
-  }, [isOpen, preselectedItemId, preselectedBundleId, preselectedStartDate, requestPrefill, business.rental_day_mode, bundles]);
+    // state yang sama dari requestPrefill/draftId, tidak menimpa edit
+    // manual staf (edit manual terjadi di luar efek ini, dependency-nya
+    // tidak berubah karenanya).
+  }, [
+    isOpen,
+    preselectedItemId,
+    preselectedBundleId,
+    preselectedStartDate,
+    requestPrefill,
+    draftId,
+    business.rental_day_mode,
+    business.id,
+    bundles,
+    items,
+    saleItems,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -545,6 +673,97 @@ export function NewBookingModal({
   const totalPrice = rentalBruto + saleItemsTotal - discountAmount;
 
   const remainingPayment = Math.max(0, totalPrice - (Number(dpPaid) || 0));
+
+  // Draf Transaksi / Keranjang (brief 23 Nov 2026) -- disimpan otomatis
+  // saat form berubah (debounce) dan saat ditutup TANPA Simpan. TIDAK
+  // PERNAH untuk Konfirmasi Pesanan Online (requestPrefill terisi) --
+  // sumbernya sudah tersimpan di booking_requests, draf baru di sini
+  // cuma akan menduplikasi data yang sama.
+  function buildDraftData(): BookingDraftData {
+    return {
+      customerName,
+      customerPhone,
+      customerAddress,
+      selectedCustomerId,
+      applyDiscount,
+      startDate,
+      endDate,
+      pickedUpNow,
+      quantities,
+      bundleQuantities,
+      bundleInstanceIds,
+      bundleComponentOverrides,
+      saleQuantities,
+      depositType,
+      depositNote,
+      depositAmount,
+      noDepositConfirmed,
+      dpPaid,
+      dpMethod,
+      autoOpenWA,
+      hadPhoto: draftHadPhoto || !!customerPhotoKey,
+    };
+  }
+
+  function draftLabel(): string {
+    const trimmed = customerName.trim();
+    if (trimmed) return trimmed;
+    return `Tanpa nama · ${new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`;
+  }
+
+  // Dipanggil dari autosave (debounced) DAN langsung (tanpa debounce) saat
+  // form ditutup -- supaya draf terakhir tidak hilang kalau ditutup
+  // sesaat setelah mengetik, sebelum timer debounce sempat jalan.
+  function flushDraftSave() {
+    if (requestPrefill) return;
+    const data = buildDraftData();
+    if (isDraftDataMeaningless(data)) return;
+    const itemCount = selectedEntries.length + selectedBundleEntries.length;
+    const { id } = saveBookingDraft(business.id, activeDraftIdRef.current, draftLabel(), itemCount, totalPrice, data);
+    activeDraftIdRef.current = id;
+  }
+
+  useEffect(() => {
+    if (!isOpen || requestPrefill) return;
+    if (draftSaveDebounceRef.current) clearTimeout(draftSaveDebounceRef.current);
+    draftSaveDebounceRef.current = setTimeout(() => {
+      flushDraftSave();
+    }, 800);
+    return () => {
+      if (draftSaveDebounceRef.current) clearTimeout(draftSaveDebounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isOpen,
+    requestPrefill,
+    customerName,
+    customerPhone,
+    customerAddress,
+    selectedCustomerId,
+    applyDiscount,
+    startDate,
+    endDate,
+    pickedUpNow,
+    quantities,
+    bundleQuantities,
+    bundleInstanceIds,
+    bundleComponentOverrides,
+    saleQuantities,
+    depositType,
+    depositNote,
+    depositAmount,
+    noDepositConfirmed,
+    dpPaid,
+    dpMethod,
+    autoOpenWA,
+    customerPhotoKey,
+  ]);
+
+  function handleClose() {
+    if (draftSaveDebounceRef.current) clearTimeout(draftSaveDebounceRef.current);
+    flushDraftSave();
+    onClose();
+  }
 
   function setBundleQuantity(bundleId: string, qty: number) {
     const clamped = Math.max(0, qty);
@@ -842,6 +1061,11 @@ export function NewBookingModal({
       }
     }
 
+    // Simpan sukses -> draf itu dihapus (brief 23 Nov 2026, bagian A).
+    if (activeDraftIdRef.current) {
+      deleteBookingDraft(business.id, activeDraftIdRef.current);
+      activeDraftIdRef.current = null;
+    }
     onSaved(body.id);
   }
 
@@ -853,7 +1077,7 @@ export function NewBookingModal({
             <Plus className="w-5 h-5 text-[#A65C2A]" />
             <h2 className="text-lg font-bold">Catat Transaksi Sewa Baru</h2>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/10 text-white transition">
+          <button onClick={handleClose} className="p-1.5 rounded-lg hover:bg-white/10 text-white transition">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -888,6 +1112,16 @@ export function NewBookingModal({
           {bundlePrefillWarning && (
             <p className="text-[11px] text-[#A65C2A] font-semibold bg-[#FAF0EE] border border-[#A65C2A]/30 rounded-lg p-2.5">
               {bundlePrefillWarning}
+            </p>
+          )}
+          {draftResumeWarning && (
+            <p className="text-[11px] text-[#A65C2A] font-semibold bg-[#FAF0EE] border border-[#A65C2A]/30 rounded-lg p-2.5">
+              {draftResumeWarning}
+            </p>
+          )}
+          {draftId && (
+            <p className="text-[11px] text-[#6E6853] bg-[#F1EEE2] border border-[#DBD5C1] rounded-lg p-2">
+              Draf belum mengunci alat. Stok dicek saat Simpan.
             </p>
           )}
           <div className="space-y-3 bg-[#F1EEE2] p-4 rounded-xl border border-[#DBD5C1]">
@@ -1617,7 +1851,7 @@ export function NewBookingModal({
           <div className="pt-3 border-t border-[#DBD5C1] flex items-center justify-end space-x-3 shrink-0">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="px-4 py-2.5 rounded-xl border border-[#DBD5C1] hover:bg-[#F1EEE2] text-[#26302B] font-semibold text-xs transition"
             >
               Batal

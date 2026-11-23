@@ -19,6 +19,21 @@ export type CustomerHistorySummary = {
   lastBookingDate: string | null;
 };
 
+// Dipakai melanjutkan Draf Transaksi (brief 23 Nov 2026) -- draf cuma
+// menyimpan selectedCustomerId, jenis diskon/Waspada pelanggan itu
+// dibaca ULANG dari sini (live), bukan disimpan di draf (bisa sudah
+// berubah sejak draf dibuat). null kalau pelanggan sudah dihapus (jarang
+// -- tidak ada tombol hapus customer di app ini).
+export async function findCustomerById(customerId: string): Promise<CustomerMatch | null> {
+  if (!supabase) return null;
+  const { data } = await supabase
+    .from('customers')
+    .select('id, name, phone, address, customer_type_id, is_watchlisted, note')
+    .eq('id', customerId)
+    .limit(1);
+  return (data?.[0] as CustomerMatch | undefined) ?? null;
+}
+
 // Cari pelanggan lama saat mengisi Catat Transaksi, supaya penyewa yang
 // sama tidak selalu bikin baris `customers` baru (setiap transaksi dulu
 // selalu insert baru, tidak ada riwayat per orang). Query langsung ke

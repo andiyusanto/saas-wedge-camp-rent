@@ -19,6 +19,8 @@ import { InviteConfirmScreen } from './components/RedeemInviteScreen';
 import { ItemsScreen } from './components/ItemsScreen';
 import { CalendarScreen } from './components/CalendarScreen';
 import { NewBookingModal } from './components/NewBookingModal';
+import { DraftListModal } from './components/DraftListModal';
+import { listBookingDrafts, clearAllBookingDraftsOnLogout } from './hooks/useBookingDrafts';
 import { TrackingScreen } from './components/TrackingScreen';
 import type { StatusFilter } from './components/TrackingScreen';
 import { TeamScreen } from './components/TeamScreen';
@@ -290,6 +292,15 @@ function App() {
   const [preselectedItemId, setPreselectedItemId] = useState<string | null>(null);
   const [preselectedBundleId, setPreselectedBundleId] = useState<string | null>(null);
   const [preselectedStartDate, setPreselectedStartDate] = useState<string | null>(null);
+  // Draf Transaksi / Keranjang (brief 23 Nov 2026) -- resumeDraftId cuma
+  // diisi lewat tombol "Lanjutkan" di DraftListModal, SELALU dikosongkan
+  // lagi saat modal ditutup (lihat onClose NewBookingModal di bawah)
+  // supaya "Catat Transaksi" biasa berikutnya tidak diam-diam melanjutkan
+  // draf lama. draftListVersion cuma dipakai memaksa badge "Draf (N)" di
+  // Navbar membaca ulang localStorage setelah draf berubah (disimpan di
+  // perangkat, bukan state React -- tidak otomatis trigger render).
+  const [resumeDraftId, setResumeDraftId] = useState<string | null>(null);
+  const [isDraftListOpen, setIsDraftListOpen] = useState(false);
 
   const [inviteCode, setInviteCode] = useState<string | null>(readInviteCode);
   const [forceDaftar] = useState<boolean>(readForceDaftar);
@@ -381,7 +392,7 @@ function App() {
     // selesai (race dua loading independen, lihat useIsAppAdmin.ts).
     if (isAppAdminLoading) return null;
     if (isAppAdmin) {
-      return <AdminOnlyView onLogout={() => supabase?.auth.signOut()} />;
+      return <AdminOnlyView onLogout={() => { clearAllBookingDraftsOnLogout(); supabase?.auth.signOut(); }} />;
     }
     return <OnboardingScreen onCreated={refreshBusiness} />;
   }
@@ -430,8 +441,10 @@ function App() {
         onOpenNewBooking={() => openNewBooking()}
         businessName={business.name}
         role={role}
-        onLogout={() => supabase?.auth.signOut()}
+        onLogout={() => { clearAllBookingDraftsOnLogout(); supabase?.auth.signOut(); }}
         pendingRequestCount={pendingRequestCount}
+        draftCount={listBookingDrafts(business.id).length}
+        onOpenDrafts={() => setIsDraftListOpen(true)}
         writable={subscription?.writable ?? true}
         isAppAdmin={isAppAdmin}
       />
@@ -546,20 +559,38 @@ function App() {
       {isNewBookingOpen && (
         <NewBookingModal
           isOpen={isNewBookingOpen}
-          onClose={() => setIsNewBookingOpen(false)}
+          onClose={() => {
+            setIsNewBookingOpen(false);
+            setResumeDraftId(null);
+          }}
           session={session}
           business={business}
           preselectedItemId={preselectedItemId}
           preselectedBundleId={preselectedBundleId}
           preselectedStartDate={preselectedStartDate}
+          draftId={resumeDraftId}
           onSaved={() => {
             setIsNewBookingOpen(false);
+            setResumeDraftId(null);
             setRefreshSignal((n) => n + 1);
           }}
           requestPrefill={null}
           writable={subscription?.writable ?? true}
         />
       )}
+
+      <DraftListModal
+        isOpen={isDraftListOpen}
+        onClose={() => setIsDraftListOpen(false)}
+        businessId={business.id}
+        onResume={(draftId) => {
+          setPreselectedItemId(null);
+          setPreselectedBundleId(null);
+          setPreselectedStartDate(null);
+          setResumeDraftId(draftId);
+          setIsNewBookingOpen(true);
+        }}
+      />
 
       <footer className="bg-[#1E3429] border-t border-[#3A5C4A] text-[#DBD5C1] text-xs py-4 px-4 text-center">
         <p className="font-semibold text-[#FBFAF4]">Aplikasi Operasional UKM Rental Camping se-Indonesia</p>

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Calendar, ShieldAlert, Package, Plus, LogOut, Users, BookOpen, Store, History, Globe, ShieldCheck, CreditCard, Contact } from 'lucide-react';
+import { Calendar, ShieldAlert, Package, Plus, LogOut, Users, BookOpen, Store, History, Globe, ShieldCheck, CreditCard, Contact, ClipboardList } from 'lucide-react';
 import { ScrollableRow } from './ScrollableRow';
 import { InstallAppButton } from './InstallAppButton';
 import type { MemberRole } from '../hooks/useBusiness';
@@ -63,6 +63,8 @@ export function Navbar({
   pendingRequestCount = 0,
   writable = true,
   isAppAdmin = false,
+  draftCount = 0,
+  onOpenDrafts,
 }: {
   activeTab: Tab;
   setActiveTab: (tab: Tab) => void;
@@ -70,6 +72,11 @@ export function Navbar({
   businessName: string;
   role: MemberRole | null;
   onLogout: () => void;
+  // Draf Transaksi / Keranjang (brief 23 Nov 2026) -- tombol cuma tampil
+  // kalau ada draf tersimpan (tidak menambah kepadatan navbar untuk
+  // vendor yang tidak pernah memakai fiturnya).
+  draftCount?: number;
+  onOpenDrafts?: () => void;
   // Rencana tahap 4, bagian B+C: jumlah booking_requests 'menunggu'
   // (sudah difilter belum kedaluwarsa, lihat useBookingRequests.ts) —
   // badge di tab "Transaksi Aktif", bukan tab terpisah (keputusan Andi
@@ -155,6 +162,16 @@ export function Navbar({
                 {businessName}
               </span>
             </div>
+            {draftCount > 0 && (
+              <button
+                onClick={onOpenDrafts}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#1E3429] hover:bg-[#15251D] border border-[#3A5C4A] text-[#F1EEE2] font-semibold text-xs transition active:scale-95"
+                title="Draf transaksi tersimpan"
+              >
+                <ClipboardList className="w-4 h-4 text-[#A65C2A]" />
+                <span>Draf ({draftCount})</span>
+              </button>
+            )}
             <button
               onClick={onOpenNewBooking}
               disabled={!writable}
