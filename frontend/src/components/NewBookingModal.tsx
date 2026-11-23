@@ -26,6 +26,7 @@ import {
   combinedComponentRates,
   applyBundleDiscount,
   allocateBundlePrice,
+  formatRentalDuration,
 } from '../utils/formatters';
 
 // Paket Alat Tahap 1 (brief 15 Nov 2026, migration 064) — satu paket
@@ -278,6 +279,11 @@ export function NewBookingModal({
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [startDate, setStartDate] = useState(todayStr());
   const [endDate, setEndDate] = useState(todayStr());
+  // "Alat diambil sekarang" (brief 23 Nov 2026, bagian C) -- walk-in yang
+  // mencatat Mulai Sewa di masa depan tapi barangnya benar-benar dibawa
+  // SEKARANG. Direset kalau startDate berubah jadi hari ini/lampau (lihat
+  // handler Mulai Sewa) supaya tidak nyangkut true untuk walk-in biasa.
+  const [pickedUpNow, setPickedUpNow] = useState(false);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [bundleQuantities, setBundleQuantities] = useState<Record<string, number>>({});
   // Barang Jual (habis pakai), v1 (brief 16 Nov 2026) -- stepper terpisah
@@ -619,7 +625,7 @@ export function NewBookingModal({
     // Brief 15 Nov 2026 Bagian B — walk-in tanpa jaminan wajib dikonfirmasi
     // sadar, bukan cuma lupa pilih. Tidak relevan untuk booking 'dipesan'
     // (jaminan sungguhan dikonfirmasi belakangan lewat dialog Ambil).
-    if (startDate <= todayStr() && !depositType && !noDepositConfirmed) {
+    if ((startDate <= todayStr() || pickedUpNow) && !depositType && !noDepositConfirmed) {
       setError('Centang konfirmasi tanpa jaminan dulu, atau pilih jenis jaminan.');
       return;
     }
@@ -655,6 +661,7 @@ export function NewBookingModal({
           total_price: totalPrice,
           dp_paid: Number(dpPaid) || 0,
           dp_method: dpMethod || null,
+          ...(pickedUpNow ? { picked_up_now: true } : {}),
         }),
       });
     } catch (err) {
@@ -722,6 +729,7 @@ export function NewBookingModal({
           fines: [],
           businessName: business.name,
           rentalDayMode: business.rental_day_mode,
+          durationLabelStyle: business.duration_label_style,
         });
         window.open(getWhatsAppShareUrl(customerPhone, receiptText), '_blank');
       } catch {
@@ -938,7 +946,7 @@ export function NewBookingModal({
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block font-semibold text-[#26302B] mb-1">Tanggal Ambil *</label>
+                <label className="block font-semibold text-[#26302B] mb-1">Mulai Sewa *</label>
                 <input
                   type="date"
                   required
@@ -946,6 +954,7 @@ export function NewBookingModal({
                   onChange={(e) => {
                     const newStart = e.target.value;
                     setStartDate(newStart);
+                    if (newStart <= todayStr()) setPickedUpNow(false);
                     const minEnd = business.rental_day_mode === 'per_malam' ? addDaysStr(newStart, 1) : newStart;
                     // Paket maksimal hari (migration 054) — isi otomatis tanggal
                     // kembali sesuai paket (bukan batas keras, vendor masih bisa
@@ -980,13 +989,36 @@ export function NewBookingModal({
             </div>
             <div className="p-2.5 rounded-lg bg-[#E8EFEA] border border-[#2B4739]/30 text-[#2B4739] text-xs font-semibold flex items-center justify-between">
               <span>Durasi Sewa Terhitung:</span>
-              <span className="text-sm font-extrabold">{days} Hari</span>
+              <span className="text-sm font-extrabold">
+                {formatRentalDuration(days, business.duration_label_style, business.rental_day_mode)}
+              </span>
             </div>
             {startDate > todayStr() && (
-              <p className="text-[11px] text-[#A65C2A] font-medium">
-                Tanggal ambil di masa depan → transaksi akan berstatus "Siap Diambil" sampai kamu tandai barang
-                sudah diambil.
-              </p>
+              <>
+                <p className="text-[11px] text-[#A65C2A] font-medium">
+                  Mulai Sewa di masa depan → transaksi akan berstatus "Siap Diambil" sampai kamu tandai barang
+                  sudah diambil.
+                </p>
+                {/* "Alat diambil sekarang" (brief 23 Nov 2026, bagian C) --
+                    walk-in yang barangnya SUNGGUHAN dibawa sekarang,
+                    meski Mulai Sewa dicatat di masa depan (mis. ambil
+                    malam ini untuk sewa besok, toleransi perjalanan).
+                    Dibatasi maksimal hari ini+2 (server menolak 422 kalau
+                    lebih -- jaring pengaman, pesan ramah ditampilkan
+                    lewat actionError seperti error lain). */}
+                <label className="flex items-center gap-2 text-xs font-medium text-[#26302B]">
+                  <input
+                    type="checkbox"
+                    checked={pickedUpNow}
+                    onChange={(e) => setPickedUpNow(e.target.checked)}
+                    className="rounded border-[#DBD5C1]"
+                  />
+                  Alat diambil sekarang
+                </label>
+                {pickedUpNow && startDate === addDaysStr(todayStr(), 2) && (
+                  <p className="text-[10px] text-[#A65C2A]">Stok terkunci mulai hari ini.</p>
+                )}
+              </>
             )}
             {business.min_rental_days != null && days < business.min_rental_days && (
               <p className="text-[11px] text-[#A8412E] font-semibold">
@@ -1347,7 +1379,7 @@ export function NewBookingModal({
                   (langsung 'aktif') tanpa jaminan, supaya tidak menambah
                   friksi di kasus yang sudah mengisi jaminan atau booking
                   'dipesan' (jaminannya dikonfirmasi lewat dialog Ambil). */}
-              {startDate <= todayStr() && !depositType && (
+              {(startDate <= todayStr() || pickedUpNow) && !depositType && (
                 <label className="sm:col-span-2 flex items-center gap-2 p-2.5 rounded-lg bg-white border border-[#DBD5C1] cursor-pointer">
                   <input
                     type="checkbox"

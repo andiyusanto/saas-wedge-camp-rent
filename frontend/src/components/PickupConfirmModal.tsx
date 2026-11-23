@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { X, PackageCheck, ShieldCheck } from 'lucide-react';
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import type { TrackingBooking } from '../hooks/useTrackings';
-import { depositLabel, computeRemainingBalance, formatIDR } from '../utils/formatters';
+import { depositLabel, computeRemainingBalance, formatDateIndo, formatIDR, todayStr } from '../utils/formatters';
 
 type DepositType = '' | 'ktp' | 'sim' | 'stnk' | 'paspor' | 'uang' | 'lainnya';
 
@@ -114,6 +114,17 @@ export function PickupConfirmModal({
           <p className="text-[#6E6853]">
             {booking.booking_number} · {booking.customer?.name}
           </p>
+
+          {/* Pickup lebih awal (brief 23 Nov 2026, bagian C) -- info saja,
+              bukan batas hari seperti "Alat diambil sekarang" di Catat
+              Transaksi (dipesan boleh diambil lebih awal kapan pun,
+              cukup cek stok malam itu -- 409 ramah di handleConfirm
+              lewat error state yang sudah ada kalau kurang). */}
+          {booking.start_date > todayStr() && (
+            <p className="text-[11px] text-[#A65C2A] font-medium bg-[#F9EFE7] border border-[#A65C2A]/30 rounded-lg px-3 py-2">
+              Diambil lebih awal dari Mulai Sewa ({formatDateIndo(booking.start_date, false)}). Stok terkunci sejak hari ini.
+            </p>
+          )}
 
           <div>
             <label className="block font-semibold text-[#26302B] mb-1 flex items-center gap-1.5">
