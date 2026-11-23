@@ -460,19 +460,27 @@ export async function resetDemoData(): Promise<DemoResetResult> {
   const items: Record<string, { id: string } & ItemDayRates> = {};
   for (const def of ITEM_DEFS) {
     const existingId = existingByCode[def.code];
+    let row: any;
     if (existingId) {
-      const [row] = await rest<any[]>(`items?id=eq.${existingId}`, ownerToken, {
+      [row] = await rest<any[]>(`items?id=eq.${existingId}`, ownerToken, {
         method: 'PATCH',
         body: JSON.stringify({ ...def, deactivated_at: null }),
       });
-      items[def.code] = row;
-    } else {
-      const [row] = await rest<any[]>('items', ownerToken, {
+    }
+    // PATCH baris 0 (id sudah tidak ada -- drift/dihapus di luar reset,
+    // review koordinator 23 Nov 2026: "kalau PATCH tidak menemukan baris,
+    // INSERT, jangan crash") ATAU existingId memang tidak ada sama
+    // sekali -- keduanya jatuh ke INSERT di sini, bukan membiarkan `row`
+    // undefined lalu meledak nanti saat `items[code].id` dipakai (bundle
+    // resep/booking fixture).
+    if (!row) {
+      [row] = await rest<any[]>('items', ownerToken, {
         method: 'POST',
         body: JSON.stringify({ business_id: businessId, ...def }),
       });
-      items[def.code] = row;
     }
+    if (!row) throw new Error(`resetDemoData: gagal upsert item ${def.code} (PATCH dan POST sama-sama tidak mengembalikan baris)`);
+    items[def.code] = row;
   }
 
   // Bug 10 Nov 2026 (lanjutan dari perbaikan Info Usaha di atas): alat
@@ -544,15 +552,23 @@ export async function resetDemoData(): Promise<DemoResetResult> {
         : { pricing_mode: 'ikuti_alat', price_per_day: null, day2_rate: null, day3_rate: null, day4_rate: null, day5_rate: null, extra_day_rate: null, discount_type: def.discount_type, discount_value: def.discount_value };
 
     const existingId = existingBundleByName[def.name];
-    const bundleId: string = existingId
-      ? (await rest<any[]>(`bundles?id=eq.${existingId}`, ownerToken, {
-          method: 'PATCH',
-          body: JSON.stringify({ description: def.description, deactivated_at: null, ...bundleFields }),
-        }))[0].id
-      : (await rest<any[]>('bundles', ownerToken, {
-          method: 'POST',
-          body: JSON.stringify({ business_id: businessId, name: def.name, description: def.description, ...bundleFields }),
-        }))[0].id;
+    let bundleRow: any;
+    if (existingId) {
+      [bundleRow] = await rest<any[]>(`bundles?id=eq.${existingId}`, ownerToken, {
+        method: 'PATCH',
+        body: JSON.stringify({ description: def.description, deactivated_at: null, ...bundleFields }),
+      });
+    }
+    // Sama pola dengan items di atas -- PATCH baris 0 (id drift) jatuh ke
+    // INSERT, bukan crash `[0].id` pada array kosong.
+    if (!bundleRow) {
+      [bundleRow] = await rest<any[]>('bundles', ownerToken, {
+        method: 'POST',
+        body: JSON.stringify({ business_id: businessId, name: def.name, description: def.description, ...bundleFields }),
+      });
+    }
+    if (!bundleRow) throw new Error(`resetDemoData: gagal upsert paket ${def.name} (PATCH dan POST sama-sama tidak mengembalikan baris)`);
+    const bundleId: string = bundleRow.id;
 
     // Resep diganti total (hapus semua baris lama, insert ulang) -- pola
     // sama useBundles.ts updateBundle(), lebih simpel daripada diff.
@@ -799,19 +815,6 @@ export async function resetDemoData(): Promise<DemoResetResult> {
     });
   }
 
-  // Cari id pelanggan yang baru saja dibuat by nama+telepon — dipakai buat
-  // reuse customer_id di booking kedua (pelanggan lama), BUKAN cuma
-  // mengulang nama yang sama (itu bakal bikin baris customers baru lagi,
-  // sama seperti bug lama sebelum fitur reuse pelanggan dibangun).
-  async function findCustomerId(name: string, phone: string): Promise<string> {
-    const rows = await rest<{ id: string }[]>(
-      `customers?select=id&business_id=eq.${businessId}&name=eq.${encodeURIComponent(name)}&phone=eq.${encodeURIComponent(phone)}&order=created_at.desc&limit=1`,
-      ownerToken,
-    );
-    if (!rows.length) throw new Error(`Customer ${name} tidak ditemukan setelah dibuat`);
-    return rows[0].id;
-  }
-
   await createBooking({
     customer: { name: 'Dimas Prasetyo', phone: '081234000001' },
     start_date: todayPlus(3),
@@ -851,18 +854,25 @@ export async function resetDemoData(): Promise<DemoResetResult> {
   // selalu dalam toleransi), lalu booking kedua reuse customer_id yang sama
   // supaya "Pernah sewa 1x" langsung ada contohnya begitu demo direset,
   // bukan cuma bisa dilihat kalau staf sendiri bikin transaksi duplikat.
-  await createBooking({
+  // Reuse customer_id dari booking yang baru dibuat langsung (SELECT by
+  // booking id, bukan name+phone) -- lookup by nama/telepon dulu bisa salah
+  // tautan sekarang karena POST /bookings mencocokkan pelanggan via nomor WA
+  // (23 Nov 2026): kalau nomor fixture ini sudah pernah dipakai pelanggan lain
+  // (data demo lama/pengujian manual), booking Ahmad Fauzi bisa ditautkan ke
+  // customer_id ITU, bukan baris "Ahmad Fauzi" yang dicari persis by nama.
+  const ahmadFirstBooking = await createBooking({
     customer: { name: 'Ahmad Fauzi', phone: '081234000004' },
     start_date: todayPlus(-3),
     end_date: todayPlus(0),
     deposit: { type: 'paspor' },
     entries: [['MT-04', 1], ['HL-06', 1]],
   });
-  const ahmadCustomerId = await findCustomerId('Ahmad Fauzi', '081234000004');
-  const [ahmadFirstBooking] = await rest<{ id: string }[]>(
-    `bookings?select=id&business_id=eq.${businessId}&customer_id=eq.${ahmadCustomerId}&order=created_at.desc&limit=1`,
+  const [ahmadBookingRow] = await rest<{ customer_id: string }[]>(
+    `bookings?select=customer_id&id=eq.${ahmadFirstBooking.id}`,
     ownerToken,
   );
+  if (!ahmadBookingRow) throw new Error('resetDemoData: booking pertama Ahmad Fauzi tidak ditemukan setelah dibuat');
+  const ahmadCustomerId = ahmadBookingRow.customer_id;
   await selfApi(`/api/bookings/${ahmadFirstBooking.id}/return`, ownerToken, {
     method: 'POST',
     body: JSON.stringify({ late_fee_amount: 0, extra_penalties: [], return_deposits: true }),
