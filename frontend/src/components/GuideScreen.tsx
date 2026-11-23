@@ -473,7 +473,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
             <tr className="border-b border-[#E6E1D2]">
               <td className="py-1.5 pr-2 text-[#26302B]">iPhone + Bluetooth</td>
               <td className="py-1.5 pr-2 text-sewa-danger font-bold">Tidak bisa</td>
-              <td className="py-1.5 text-[#6E6853]">Kirim struk WA / simpan PDF</td>
+              <td className="py-1.5 text-[#6E6853]">Tekan <Ui>Bagikan Nota</Ui> (gambar), bukan Nota/PDF</td>
             </tr>
             <tr>
               <td className="py-1.5 pr-2 text-[#26302B]">iPhone + printer Wi-Fi (AirPrint)</td>
@@ -505,6 +505,16 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           HP Huawei tanpa Google Play (hanya AppGallery): belum ada kepastian RawBT tersedia di sana — kalau tidak
           ditemukan, cetak lewat Bluetooth belum didukung di HP tersebut untuk sekarang, pakai kirim struk lewat WA
           atau simpan PDF.
+        </Note>
+        <Note>
+          <strong>Bagikan Nota (gambar).</strong> Di jendela Nota, tombol <Ui>Bagikan Nota</Ui> (di samping Nota/PDF
+          dan Cetak Struk) membuat GAMBAR nota (format .png) langsung di HP, lalu membuka menu Bagikan bawaan
+          (WhatsApp dan lainnya) — pelanggan lebih mudah membaca gambar dibanding file PDF atau teks struk WA biasa.
+          Khusus iPhone yang sudah memasang aplikasi ini di layar utama ("Pasang Aplikasi"): dialog cetak iOS TIDAK
+          pernah muncul sama sekali kalau dibuka dari aplikasi yang terpasang (batasan Apple, bukan error) — jendela
+          Nota otomatis memberi tahu ini dan menjadikan <Ui>Bagikan Nota</Ui> tombol utama. Kalau menu Bagikan tidak
+          muncul (HP/browser lama), gambar otomatis terunduh ke galeri/folder Unduhan sebagai gantinya. Tidak ada
+          yang diunggah ke server — gambarnya dibuat langsung di HP.
         </Note>
 
         <p className="font-bold text-xs mt-2">Masalah umum</p>

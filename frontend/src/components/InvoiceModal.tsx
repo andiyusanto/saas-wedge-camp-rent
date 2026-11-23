@@ -1,6 +1,6 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Printer, Settings2, X } from 'lucide-react';
+import { Printer, Settings2, Share2, X } from 'lucide-react';
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import type { ReceiptData } from '../utils/formatters';
 import {
@@ -20,7 +20,8 @@ import {
 } from '../utils/formatters';
 import { usePrinterSettings } from '../hooks/usePrinterSettings';
 import { buildThermalReceiptDoc } from '../utils/thermalReceipt';
-import { printThermalReceipt } from '../utils/thermalPrint';
+import { printThermalReceipt, isIosStandalone } from '../utils/thermalPrint';
+import { renderNotaImageCanvas, fetchLogoAsDataUrl } from '../utils/notaImage';
 import { PrinterSetupWizard } from './PrinterSetupWizard';
 
 // Nota cetak/PDF — dirender dari data yang sama dengan struk WA (lihat
@@ -59,8 +60,60 @@ export function InvoiceModal({
 }) {
   const { settings, saveSettings } = usePrinterSettings();
   const [wizardOpen, setWizardOpen] = useState(false);
+  // Bagikan Nota (brief 24 Nov 2026, bagian B) -- gambar DI-RENDER LEBIH
+  // DULU (saat modal terbuka/data berubah), BUKAN ditunda sampai tombol
+  // ditekan -- syarat iOS: navigator.share() HARUS dipanggil sedekat
+  // mungkin dengan gesture klik pengguna, kalau menunggu proses async
+  // yang panjang (fetch logo + gambar canvas) baru dimulai SETELAH klik,
+  // Safari bisa menolak panggilan share() dianggap bukan lagi hasil
+  // gesture langsung.
+  const [shareBlob, setShareBlob] = useState<Blob | null>(null);
+
+  useEffect(() => {
+    if (!data) {
+      setShareBlob(null);
+      return;
+    }
+    let cancelled = false;
+    setShareBlob(null);
+    (async () => {
+      const logoDataUrl = data.businessLogoUrl ? await fetchLogoAsDataUrl(data.businessLogoUrl) : null;
+      if (cancelled) return;
+      const canvas = await renderNotaImageCanvas(data, logoDataUrl);
+      canvas.toBlob((blob) => {
+        if (!cancelled) setShareBlob(blob);
+      }, 'image/png');
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // data.bookingNumber + isReprint sebagai proxy identitas nota --
+    // `data` sendiri objek baru tiap render orang tua, memasukkannya utuh
+    // ke dependency akan render ulang gambar terus-menerus tanpa guna.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.bookingNumber, data?.isReprint, data?.businessLogoUrl]);
 
   if (!isOpen || !data) return null;
+
+  async function handleShareNota() {
+    if (!shareBlob || !data) return;
+    const file = new File([shareBlob], `Nota-${data.bookingNumber}.png`, { type: 'image/png' });
+    if (navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: `Nota ${data.bookingNumber}` });
+      } catch {
+        // Dibatalkan pengguna / gagal -- diamkan, TIDAK lanjut ke fallback
+        // unduh otomatis (bisa terasa seperti aksi ganda yang tidak diminta).
+      }
+      return;
+    }
+    const url = URL.createObjectURL(shareBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Nota-${data.bookingNumber}.png`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   const days = rentalDays(data.startDate, data.endDate, data.rentalDayMode);
   const totalFines = data.fines.reduce((sum, f) => sum + f.amount, 0);
@@ -356,6 +409,30 @@ export function InvoiceModal({
         )}
 
         <div className="p-4 border-t border-[#DBD5C1] shrink-0 print:hidden space-y-2">
+          {/* Temuan investigasi "Nota/PDF di iPhone" (24 Nov 2026) --
+              window.print() dikenal luas TIDAK memunculkan dialog apa pun
+              di PWA standalone iOS (app "Pasang Aplikasi" dari layar
+              utama, WKWebView tanpa chrome Safari). Bukan disembunyikan
+              diam-diam (Nota/PDF & Cetak Struk TETAP ada, tidak diubah
+              sama sekali) -- cuma diberi info + Bagikan Nota dijadikan
+              tombol UTAMA (di atas, gaya solid) khusus kondisi ini. */}
+          {isIosStandalone() && (
+            <p className="text-[11px] text-[#A65C2A] font-semibold text-center">
+              Di iPhone, gunakan Bagikan Nota untuk kirim ke pelanggan.
+            </p>
+          )}
+          <button
+            onClick={handleShareNota}
+            disabled={!shareBlob}
+            className={
+              isIosStandalone()
+                ? 'w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-sm shadow-md transition disabled:opacity-50'
+                : 'w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-[#A65C2A] text-[#A65C2A] font-bold text-sm transition disabled:opacity-50'
+            }
+          >
+            <Share2 className="w-4 h-4" />
+            Bagikan Nota
+          </button>
           <div className="flex gap-2">
             <button
               onClick={() => window.print()}

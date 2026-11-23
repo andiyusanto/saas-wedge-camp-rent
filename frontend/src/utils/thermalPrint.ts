@@ -16,6 +16,21 @@ export function isIosDevice(): boolean {
   );
 }
 
+// Bagikan Nota (brief 24 Nov 2026, Temuan 2) -- window.print() dikenal
+// luas TIDAK memunculkan dialog apa pun di dalam PWA standalone iOS
+// ("Pasang Aplikasi" dari layar utama), karena app standalone berjalan
+// di WKWebView tanpa chrome Safari. `navigator.standalone` adalah
+// properti non-standar KHUSUS WebKit/iOS (tidak ada di tipe TypeScript
+// bawaan, makanya `as any`) -- dicek LEBIH DULU karena paling spesifik
+// untuk iOS; `display-mode: standalone` sebagai fallback (didukung
+// browser lain/iOS 16.4+ juga, tapi less iOS-specific).
+export function isIosStandalone(): boolean {
+  if (typeof window === 'undefined' || !isIosDevice()) return false;
+  const nav = window.navigator as Navigator & { standalone?: boolean };
+  if (nav.standalone === true) return true;
+  return typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches;
+}
+
 const MM_PER_WIDTH: Record<PaperWidth, string> = { 58: '58mm', 80: '80mm' };
 
 // Cetak lewat dialog print browser, discoping @page ke ukuran kertas
