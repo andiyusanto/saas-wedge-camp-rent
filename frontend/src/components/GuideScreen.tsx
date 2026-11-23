@@ -354,6 +354,13 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           dicatat. Untuk booking yang dipesan duluan lalu diambil beberapa hari kemudian, ini memastikan toleransi
           telat dihitung dari jam ambil yang benar, bukan jam pesan.
         </Note>
+        <Note>
+          Boleh menekan <Ui>Tandai Barang Diambil</Ui> SEBELUM tanggal Mulai Sewa (pelanggan ambil lebih awal) — stok
+          malam tambahan itu ikut dicek otomatis, sama seperti transaksi normal. Kalau muncul pesan{' '}
+          <em>"Alat ... tidak cukup pada ..."</em>, artinya alat itu sudah dipakai transaksi lain pada malam
+          tersebut — transaksi TETAP berstatus <Ui>Siap Diambil</Ui> (tidak ada yang berubah/hilang), coba lagi nanti
+          atau tanyakan ke pelanggan apa bisa ambil di tanggal Mulai Sewa aslinya.
+        </Note>
         <p>
           Transaksi bisa <Ui>Dibatalkan</Ui> kapan saja sebelum selesai — jaminan yang ditahan otomatis dilepas begitu
           dibatalkan.
@@ -517,7 +524,7 @@ export function GuideScreen({ businessName }: { businessName: string }) {
             <>Ketik nama penyewa — kalau pernah sewa sebelumnya, daftar saran pelanggan lama muncul otomatis (dicari dari nama, HP, atau alamat, jadi bisa ketik salah satu yang paling diingat). Tiap saran menampilkan HP dan alamat sekaligus supaya mudah dibedakan kalau ada nama yang sama. Pilih salah satu untuk mengisi HP/Alamat sekaligus, atau lanjut ketik biasa untuk pelanggan baru.</>,
             <>Isi nomor WhatsApp penyewa (kalau belum otomatis terisi). Opsional: tekan <Ui>Foto Wajah / Setengah Badan</Ui> untuk ambil foto singkat penyewa dari kamera.</>,
             <>Cari alat lewat kotak pencarian (nama, varian, ukuran, atau warna) kalau katalog sudah banyak, lalu centang satu atau lebih alat — bisa multi-item dalam satu transaksi. Varian/ukuran/warna alat (kalau diisi) ditampilkan di bawah nama alat supaya tidak salah pilih antar varian yang mirip.</>,
-            <>Pilih tanggal ambil &amp; kembali. Total harga terhitung otomatis, termasuk harga per hari kalau alatnya punya tarif lebih murah untuk sewa lama (lihat <SectionLink id="g-katalog">bagian 5</SectionLink>).</>,
+            <>Pilih <Ui>Mulai Sewa</Ui> &amp; <Ui>Tanggal Kembali</Ui>. Total harga terhitung otomatis, termasuk harga per hari kalau alatnya punya tarif lebih murah untuk sewa lama (lihat <SectionLink id="g-katalog">bagian 5</SectionLink>).</>,
             <>Pilih jenis jaminan (KTP/SIM/STNK/Paspor/Uang/Lainnya) — kalau pilih <Ui>Uang</Ui>, jumlah deposit WAJIB diisi lebih dari
             Rp0 (ditolak kalau kosong, di form maupun server). Jenis jaminan lain tidak wajib isi jumlah. Lalu tekan <Ui>Simpan &amp; Terbitkan Nota</Ui>.</>,
           ]}
@@ -572,6 +579,23 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           <Ui>Tambahan: barang jual</Ui> muncul di bagian bawah form — harganya flat (tidak tergantung jumlah hari
           sewa), langsung dijumlahkan ke Total Harga. Stok otomatis berkurang saat Simpan, dan kembali otomatis
           kalau transaksi ini dibatalkan nanti.
+        </Note>
+        <Note>
+          <Ui>Mulai Sewa</Ui> ≠ <Ui>Diambil</Ui>: <Ui>Mulai Sewa</Ui> adalah tanggal masa sewa mulai dihitung (dipakai
+          untuk harga &amp; denda telat). Kalau barang SUNGGUHAN diambil lebih awal dari itu (mis. malam sebelumnya,
+          toleransi perjalanan), tanggal/jam pengambilan sungguhan muncul sebagai baris terpisah "Diambil: ..." di
+          kartu transaksi, struk, dan Nota — malam pengambilan itu sendiri tetap GRATIS (tidak menambah hari sewa),
+          tapi stoknya otomatis ikut terkunci sejak malam itu juga (supaya tidak dobel-dipesan).
+        </Note>
+        <Note>
+          Kalau <Ui>Mulai Sewa</Ui> dipilih di masa depan (bukan hari ini), muncul kotak centang{' '}
+          <Ui>Alat diambil sekarang</Ui> — centang kalau pelanggan sungguhan membawa barangnya SEKARANG juga (bukan
+          nanti di tanggal Mulai Sewa). Transaksi langsung berstatus <Ui>Sedang Disewa</Ui> (sama seperti walk-in
+          biasa, jaminan &amp; Lunasi Sekarang ikut muncul), dan stok langsung terkunci mulai hari ini. Hanya bisa
+          dipakai kalau Mulai Sewa maksimal <strong>2 hari</strong> dari hari ini (lebih dari itu, catat sebagai
+          pesanan biasa dulu, lalu tekan <Ui>Tandai Barang Diambil</Ui> belakangan di Transaksi Aktif — lihat{' '}
+          <SectionLink id="g-transaksi-aktif">bagian 3</SectionLink>) — kalau tepat di batas 2 hari, muncul teks kecil
+          "Stok terkunci mulai hari ini" sebagai pengingat.
         </Note>
         <Note>
           Cara tanggal ambil &amp; kembali dihitung jadi "berapa hari" tergantung pengaturan{' '}
@@ -927,6 +951,15 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           pengaturan ini CUMA berlaku untuk transaksi BARU — transaksi yang sudah dicatat sebelumnya tetap dihitung
           persis seperti saat dibuat, tidak ikut berubah.
         </Note>
+        <p className="font-bold text-xs mt-2">Label Lama Sewa</p>
+        <p>
+          Muncul HANYA kalau <Ui>Cara Hitung Durasi Sewa</Ui> di atas diatur <Ui>Per malam</Ui> — pilih{' '}
+          <Ui>Hari</Ui> (default, mis. "1 hari") atau <Ui>Hari-malam (2H1M)</Ui> (mis. 1 malam ditulis "2H1M", 2
+          malam "3H2M") untuk menyamakan istilah di struk/nota dengan kebiasaan sebagian vendor outdoor. Murni ganti
+          teks — harga tetap dihitung dan ditampilkan "/hari" di Katalog &amp; Stok Alat, tidak ada yang berubah
+          soal rumus harga/denda/stok. Pindah ke <Ui>Per hari kalender</Ui> otomatis menyembunyikan pengaturan ini
+          lagi (teks balik ke "N hari" di transaksi baru, pilihan 2H1M tetap tersimpan kalau mau dipakai lagi nanti).
+        </p>
         <p className="font-bold text-xs mt-2">Paket Minimal/Maksimal Hari Sewa</p>
         <p>
           Juga di kartu <Ui>Info Usaha</Ui>, di bawah Cara Hitung Durasi Sewa. Untuk usaha yang sewa per-trip/paket
