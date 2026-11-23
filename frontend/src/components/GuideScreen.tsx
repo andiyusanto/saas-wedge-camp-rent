@@ -152,6 +152,7 @@ const TOC: { id: string; num: string; title: string }[] = [
   { id: 'g-transaksi-aktif', num: '3', title: 'Transaksi Aktif' },
   { id: 'g-cetak-thermal', num: '3b', title: 'Cetak Struk ke Printer Thermal' },
   { id: 'g-catat', num: '4', title: 'Catat Transaksi Sewa' },
+  { id: 'g-pelanggan', num: '4b', title: 'Pelanggan' },
   { id: 'g-katalog', num: '5', title: 'Katalog & Stok Alat' },
   { id: 'g-riwayat', num: '6', title: 'Riwayat Transaksi' },
   { id: 'g-kelola-usaha', num: '7', title: 'Kelola Usaha' },
@@ -372,7 +373,8 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           transaksi. Stok tanggal baru dicek otomatis, dan kalau jumlah hari berubah, total harga dihitung ulang dari
           tarif alat SAAT transaksi ini dibuat (bukan harga katalog sekarang) — tetap bisa diubah manual kalau perlu.
           Perpanjang otomatis menggeser batas telat, jadi pelanggan yang minta tambah hari sebelum terlambat tidak
-          kena denda.
+          kena denda. Kalau pelanggan sedang berdiskon, total baru ikut dipotong persen yang SAMA seperti saat
+          transaksi ini dibuat (bukan jenis pelanggan yang berlaku sekarang, kalau sudah diubah).
         </p>
         <RescheduleVsExtendIllustration />
         <Note>
@@ -603,6 +605,47 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           Sabtu, kembali Minggu = 1 hari, tanggal ambil &amp; kembali tidak boleh sama). Kalau usahamu pakai{' '}
           <strong>per hari kalender</strong>, tanggal ambil &amp; kembali boleh sama (dihitung 1 hari) dan Sabtu-Minggu
           jadi 2 hari.
+        </Note>
+        <Note>
+          Begitu Minimal/Maksimal hari (<SectionLink id="g-kelola-usaha">bagian 7</SectionLink>) diisi, tanggal
+          kembali terisi otomatis saat tanggal mulai dipilih — tidak perlu menghitung sendiri.
+        </Note>
+        <Note>
+          Kalau pelanggan yang dipilih punya jenis (<SectionLink id="g-pelanggan">bagian 4b</SectionLink>, mis.
+          "Member"), tanda "Member -10%" muncul otomatis dan diskonnya langsung mengurangi Total Tagihan Sewa —
+          centang bisa dilepas kalau mau batalkan diskon untuk transaksi ini saja. Pelanggan yang ditandai{' '}
+          <Ui>Waspada</Ui> menampilkan banner peringatan beserta catatannya, bukan penghalang (transaksi tetap bisa
+          dilanjutkan).
+        </Note>
+      </Section>
+
+      <Section id="g-pelanggan" num="4b" title="Pelanggan" kicker="Daftar pelanggan, label Member/Mitra/Waspada, dan diskon otomatis.">
+        <p>
+          Daftar semua pelanggan yang pernah tercatat di <SectionLink id="g-catat">Catat Transaksi</SectionLink> —
+          nama, WA, label, jumlah sewa tahun ini, dan kapan terakhir sewa. Bisa dicari lewat nama/WA dan difilter per
+          label. Owner dan karyawan sama-sama bisa melihat dan memberi label — total belanja (Rp) cuma terlihat owner.
+        </p>
+        <Steps
+          items={[
+            <>Tekan salah satu pelanggan untuk membuka detailnya — ubah nama/WA/alamat, pilih <Ui>Jenis Pelanggan</Ui> (kalau sudah diatur di Kelola Usaha, lihat di bawah), centang <Ui>Waspada</Ui> kalau perlu ditandai, dan tulis catatan bebas.</>,
+            <>Tekan <Ui>Lihat riwayat transaksi</Ui> untuk melihat semua transaksi pelanggan ini — ada tombol Nota di tiap baris untuk cetak ulang.</>,
+          ]}
+        />
+        <p className="font-bold text-xs mt-2">Jenis Pelanggan (Member/Mitra) &amp; Diskon</p>
+        <p>
+          Diatur di Kelola Usaha (<SectionLink id="g-kelola-usaha">bagian 7</SectionLink>, owner-only) — mis.
+          "Member" 10% atau "Mitra" 15%, maksimal 5 jenis. Satu pelanggan maksimal satu jenis. Diskon HANYA memotong
+          total sewa alat/paket — TIDAK untuk denda keterlambatan, denda kerusakan/kehilangan, atau Barang Jual
+          (kecuali toggle "Diskon juga untuk barang jual" diaktifkan saat membuat jenisnya).
+        </p>
+        <Note>
+          Label <Ui>Waspada</Ui> tidak ada hubungannya dengan jenis diskon — keduanya independen, boleh dipasang
+          bersamaan (mis. Mitra yang juga ditandai bermasalah). Label ini cuma terlihat oleh usahamu sendiri, tidak
+          pernah dibagikan ke rental lain.
+        </Note>
+        <Note>
+          Menaikkan label ke Member/Mitra secara otomatis (mis. setelah belanja Rp200rb atau 4x sewa setahun) BELUM
+          ada — angkanya sudah ditampilkan di layar ini, pemberian label tetap manual oleh owner/karyawan.
         </Note>
       </Section>
 
@@ -994,6 +1037,14 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           Rp0), aplikasi tidak menyarankan denda otomatis untuk paket itu — vendor isi manual saat Proses
           Pengembalian kalau mau tetap mendenda.
         </Note>
+        <p className="font-bold text-xs mt-2">Jenis Pelanggan (Member/Mitra)</p>
+        <p>
+          Kartu terpisah di bawah Info Usaha (owner-only) — buat jenis pelanggan (mis. "Member" 10%, "Mitra" 15%,
+          maksimal 5 jenis) yang nanti dipilih di halaman <SectionLink id="g-pelanggan">Pelanggan</SectionLink> (bagian
+          4b). Toggle "Diskon juga untuk barang jual" default OFF — diskon normalnya CUMA memotong total sewa
+          alat/paket. Menonaktifkan jenis (ikon tempat sampah) tidak menghapusnya — pelanggan yang sudah punya jenis
+          itu tetap menyimpannya, cuma tidak bisa dipilih lagi untuk pelanggan baru.
+        </p>
         <p className="pt-1">
           Di bawahnya ada bagian <Ui>Kelola Karyawan</Ui> untuk undang staf lewat link, tanpa perlu bikin
           username/password dari sisi pemilik:
