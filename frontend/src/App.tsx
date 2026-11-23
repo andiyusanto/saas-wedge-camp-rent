@@ -23,6 +23,7 @@ import { TrackingScreen } from './components/TrackingScreen';
 import type { StatusFilter } from './components/TrackingScreen';
 import { TeamScreen } from './components/TeamScreen';
 import { HistoryScreen } from './components/HistoryScreen';
+import { CustomersScreen } from './components/CustomersScreen';
 import { GuideScreen } from './components/GuideScreen';
 import { OnlineStoreScreen } from './components/OnlineStoreScreen';
 import { EtalaseOnlineScreen } from './components/EtalaseOnlineScreen';
@@ -458,6 +459,16 @@ function App() {
           />
         )}
         {tab === 'alat' && <ItemsScreen businessId={business.id} session={session} role={role} writable={subscription?.writable ?? true} />}
+        {tab === 'pelanggan' && (
+          <CustomersScreen
+            session={session}
+            businessId={business.id}
+            role={role}
+            businessName={business.name}
+            businessAddress={business.address}
+            businessLogoUrl={business.logo_url}
+          />
+        )}
         {tab === 'tim' && role === 'owner' && (
           <TeamScreen session={session} businessId={business.id} business={business} onSaveBusiness={updateBusiness} writable={subscription?.writable ?? true} />
         )}

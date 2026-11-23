@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react';
-import { Calendar, ShieldAlert, Package, Plus, LogOut, Users, BookOpen, Store, History, Globe, ShieldCheck, CreditCard } from 'lucide-react';
+import { Calendar, ShieldAlert, Package, Plus, LogOut, Users, BookOpen, Store, History, Globe, ShieldCheck, CreditCard, Contact } from 'lucide-react';
 import { ScrollableRow } from './ScrollableRow';
 import { InstallAppButton } from './InstallAppButton';
 import type { MemberRole } from '../hooks/useBusiness';
 
-export type Tab = 'kalender' | 'tracking' | 'alat' | 'tim' | 'riwayat' | 'etalase-online' | 'toko-online' | 'panduan' | 'admin' | 'langganan';
+export type Tab = 'kalender' | 'tracking' | 'alat' | 'pelanggan' | 'tim' | 'riwayat' | 'etalase-online' | 'toko-online' | 'panduan' | 'admin' | 'langganan';
 
 // Disembunyikan dari Navbar sejak 2 Nov 2026 (permintaan Andi) — maknanya
 // sudah tumpang-tindih dengan Pesanan Online (bagian 6/8b CLAUDE.md), dan
@@ -18,6 +18,12 @@ const TABS: { id: Tab; label: string; icon: typeof Calendar; ownerOnly?: boolean
   { id: 'kalender', label: 'Kalender Ketersediaan', icon: Calendar },
   { id: 'tracking', label: 'Transaksi Aktif', icon: ShieldAlert },
   { id: 'alat', label: 'Katalog & Stok Alat', icon: Package },
+  // Menu Pelanggan (brief 23 Nov 2026) -- owner DAN karyawan boleh
+  // melihat/memberi label (total belanja Rp disembunyikan untuk
+  // karyawan di dalam layarnya sendiri, konsisten Riwayat owner-only
+  // untuk ANGKA, bukan seluruh tab) -- ditaruh setelah Katalog supaya
+  // tidak memisah dua tab operasional harian (Kalender/Transaksi Aktif).
+  { id: 'pelanggan', label: 'Pelanggan', icon: Contact },
   { id: 'riwayat', label: 'Riwayat Transaksi', icon: History, ownerOnly: true },
   { id: 'tim', label: 'Kelola Usaha', icon: Users, ownerOnly: true },
   // Dua tab ini SENGAJA dipisah, bukan digabung — "Etalase" (lihat-lihat,
