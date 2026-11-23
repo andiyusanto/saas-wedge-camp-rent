@@ -279,6 +279,15 @@ export function NewBookingModal({
   // diskon") -- default true, cuma relevan kalau selectedCustomer punya
   // customer_type_id.
   const [applyDiscount, setApplyDiscount] = useState(true);
+  // Cocokkan pelanggan existing via nomor WA (tugas kecil 23 Nov 2026) --
+  // begitu nomor yang diketik cocok dengan pelanggan lama, pilih OTOMATIS
+  // (supaya tanda diskon/Waspada langsung terlihat sebelum Simpan) --
+  // staf bisa membatalkan lewat "Bukan orang ini". phoneMatchDismissed
+  // dilepas lagi setiap nomor berubah (onChange WA di bawah), supaya
+  // nomor yang benar-benar beda tetap dicoba dicocokkan.
+  const [autoMatchedByPhone, setAutoMatchedByPhone] = useState(false);
+  const [phoneMatchDismissed, setPhoneMatchDismissed] = useState(false);
+  const phoneMatchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [historySummary, setHistorySummary] = useState<CustomerHistorySummary | null>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -575,6 +584,35 @@ export function NewBookingModal({
     }));
   }
 
+  // Cocokkan pelanggan existing via nomor WA (tugas kecil 23 Nov 2026) --
+  // debounce 500ms, cuma jalan kalau belum ada pelanggan terpilih (baik
+  // manual dari saran maupun auto-match sebelumnya) dan staf belum
+  // membatalkan match untuk nomor ini ("Bukan orang ini"). Dipisah dari
+  // search-by-name (searchCustomers) di atas -- ini EXACT match
+  // ternormalisasi, bukan pencarian fuzzy, dan auto-SELECT (bukan cuma
+  // menampilkan daftar saran). Hook ini HARUS di atas early-return
+  // `if (!isOpen) return null;` di bawah (rules-of-hooks -- hook tidak
+  // boleh dipanggil kondisional), makanya dipindah ke sini, terpisah
+  // dari dismissPhoneMatch()/selectCustomer() yang boleh di bawah karena
+  // bukan hook.
+  useEffect(() => {
+    if (!isOpen || selectedCustomerId || phoneMatchDismissed) return;
+    const digits = customerPhone.replace(/\D/g, '');
+    if (digits.length < 9) return;
+    if (phoneMatchDebounceRef.current) clearTimeout(phoneMatchDebounceRef.current);
+    phoneMatchDebounceRef.current = setTimeout(async () => {
+      const match = await findCustomerByPhone(business.id, customerPhone);
+      if (match) {
+        await selectCustomer(match);
+        setAutoMatchedByPhone(true);
+      }
+    }, 500);
+    return () => {
+      if (phoneMatchDebounceRef.current) clearTimeout(phoneMatchDebounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerPhone, selectedCustomerId, phoneMatchDismissed, isOpen]);
+
   if (!isOpen) return null;
 
   function toggleItem(itemId: string, checked: boolean) {
@@ -612,9 +650,16 @@ export function NewBookingModal({
     setSelectedCustomerId(match.id);
     setSelectedCustomer(match);
     setApplyDiscount(true);
+    setPhoneMatchDismissed(false);
     setShowSuggestions(false);
     clearCustomerSuggestions();
     setHistorySummary(await fetchCustomerHistorySummary(match.id));
+  }
+
+  function dismissPhoneMatch() {
+    setPhoneMatchDismissed(true);
+    setAutoMatchedByPhone(false);
+    dropSelectionIfAny();
   }
 
   async function handleUploadCustomerPhoto(file: File) {
@@ -869,7 +914,10 @@ export function NewBookingModal({
                       <li key={match.id}>
                         <button
                           type="button"
-                          onMouseDown={() => selectCustomer(match)}
+                          onMouseDown={() => {
+                            setAutoMatchedByPhone(false);
+                            selectCustomer(match);
+                          }}
                           className="w-full text-left px-3 py-2 hover:bg-[#F1EEE2] transition"
                         >
                           <p className="font-semibold text-[#26302B]">{match.name}</p>
@@ -917,9 +965,23 @@ export function NewBookingModal({
                   onChange={(e) => {
                     setCustomerPhone(e.target.value);
                     dropSelectionIfAny();
+                    setPhoneMatchDismissed(false);
+                    setAutoMatchedByPhone(false);
                   }}
                   className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
                 />
+                {autoMatchedByPhone && selectedCustomer && (
+                  <div className="mt-1.5 p-2 rounded-lg bg-[#E8EFEA] border border-[#2B4739]/30 text-[11px] text-[#2B4739] flex items-center justify-between gap-2">
+                    <span>
+                      Pelanggan terdaftar: <strong>{selectedCustomer.name}</strong>
+                      {selectedCustomerType ? ` · ${selectedCustomerType.name} -${selectedCustomerType.discount_percent}%` : ''}
+                      {selectedCustomer.is_watchlisted ? ' · ⚠ Waspada' : ''}
+                    </span>
+                    <button type="button" onClick={dismissPhoneMatch} className="shrink-0 underline font-semibold">
+                      Bukan orang ini
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="sm:col-span-2">
                 <label className="block font-semibold text-[#26302B] mb-1">Alamat Singkat / Wilayah</label>
