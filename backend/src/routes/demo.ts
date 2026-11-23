@@ -26,6 +26,7 @@ router.post('/demo/reset', async (_req, res) => {
     const result = await resetDemoData();
     res.json({ ok: true, ...result });
   } catch (err) {
+    console.error('[demo/reset] gagal:', err);
     res.status(500).json({ error: (err as Error).message });
   }
 });

@@ -648,47 +648,56 @@ export async function resetDemoData(): Promise<DemoResetResult> {
   // pelanggan itu sendiri tetap ada dari fixture booking yang dibuat
   // belakangan di fungsi ini) supaya pengunjung demo langsung lihat
   // contoh diskon otomatis di Catat Transaksi tanpa perlu setup manual.
-  const existingCustomerTypes = await rest<{ id: string; name: string }[]>(
-    `customer_types?select=id,name&business_id=eq.${businessId}`,
-    ownerToken,
-  );
-  const existingCustomerTypeByName = Object.fromEntries(existingCustomerTypes.map((t) => [t.name, t.id]));
-
-  const CUSTOMER_TYPE_DEFS: { name: string; discount_percent: number; discount_applies_to_sale_items: boolean }[] = [
-    { name: 'Member', discount_percent: 10, discount_applies_to_sale_items: false },
-    { name: 'Mitra', discount_percent: 15, discount_applies_to_sale_items: false },
-  ];
+  // Best-effort (try/catch) -- murni hiasan demo (contoh Member/Mitra),
+  // BUKAN bagian inti reset (kalender/katalog/transaksi). Kalau gagal
+  // (mis. drift data lama dari sesi testing panjang), JANGAN gagalkan
+  // SELURUH reset -- log saja dan lanjut, pola sama paymentWarning
+  // non-blocking di tempat lain.
   const customerTypeIdByName: Record<string, string> = {};
-  for (const def of CUSTOMER_TYPE_DEFS) {
-    const existingId = existingCustomerTypeByName[def.name];
-    if (existingId) {
-      await rest(`customer_types?id=eq.${existingId}`, ownerToken, {
+  try {
+    const existingCustomerTypes = await rest<{ id: string; name: string }[]>(
+      `customer_types?select=id,name&business_id=eq.${businessId}`,
+      ownerToken,
+    );
+    const existingCustomerTypeByName = Object.fromEntries(existingCustomerTypes.map((t) => [t.name, t.id]));
+
+    const CUSTOMER_TYPE_DEFS: { name: string; discount_percent: number; discount_applies_to_sale_items: boolean }[] = [
+      { name: 'Member', discount_percent: 10, discount_applies_to_sale_items: false },
+      { name: 'Mitra', discount_percent: 15, discount_applies_to_sale_items: false },
+    ];
+    for (const def of CUSTOMER_TYPE_DEFS) {
+      const existingId = existingCustomerTypeByName[def.name];
+      if (existingId) {
+        await rest(`customer_types?id=eq.${existingId}`, ownerToken, {
+          method: 'PATCH',
+          headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify({ discount_percent: def.discount_percent, discount_applies_to_sale_items: def.discount_applies_to_sale_items, deactivated_at: null }),
+        });
+        customerTypeIdByName[def.name] = existingId;
+      } else {
+        const created = await rest<{ id: string }[]>('customer_types', ownerToken, {
+          method: 'POST',
+          headers: { Prefer: 'return=representation' },
+          body: JSON.stringify({ business_id: businessId, ...def }),
+        });
+        if (created?.[0]?.id) customerTypeIdByName[def.name] = created[0].id;
+      }
+    }
+
+    // Jenis TAMBAHAN yang dibuat pengunjung demo dinonaktifkan (bukan
+    // dihapus -- FK dari customers.customer_type_id tidak boleh yatim kalau
+    // ada pengunjung lain sempat memberi label itu ke pelanggan).
+    const seedTypeNames = new Set(CUSTOMER_TYPE_DEFS.map((d) => d.name));
+    const extraTypeIds = existingCustomerTypes.filter((t) => !seedTypeNames.has(t.name)).map((t) => t.id);
+    if (extraTypeIds.length > 0) {
+      await rest(`customer_types?id=in.(${extraTypeIds.join(',')})`, ownerToken, {
         method: 'PATCH',
         headers: { Prefer: 'return=minimal' },
-        body: JSON.stringify({ discount_percent: def.discount_percent, discount_applies_to_sale_items: def.discount_applies_to_sale_items, deactivated_at: null }),
+        body: JSON.stringify({ deactivated_at: new Date().toISOString() }),
       });
-      customerTypeIdByName[def.name] = existingId;
-    } else {
-      const created = await rest<{ id: string }[]>('customer_types', ownerToken, {
-        method: 'POST',
-        headers: { Prefer: 'return=representation' },
-        body: JSON.stringify({ business_id: businessId, ...def }),
-      });
-      customerTypeIdByName[def.name] = created[0].id;
     }
-  }
-
-  // Jenis TAMBAHAN yang dibuat pengunjung demo dinonaktifkan (bukan
-  // dihapus -- FK dari customers.customer_type_id tidak boleh yatim kalau
-  // ada pengunjung lain sempat memberi label itu ke pelanggan).
-  const seedTypeNames = new Set(CUSTOMER_TYPE_DEFS.map((d) => d.name));
-  const extraTypeIds = existingCustomerTypes.filter((t) => !seedTypeNames.has(t.name)).map((t) => t.id);
-  if (extraTypeIds.length > 0) {
-    await rest(`customer_types?id=in.(${extraTypeIds.join(',')})`, ownerToken, {
-      method: 'PATCH',
-      headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify({ deactivated_at: new Date().toISOString() }),
-    });
+  } catch (err) {
+    console.warn('[resetDemoData] contoh Jenis Pelanggan gagal dibuat (non-fatal, lanjut reset):', err);
   }
 
   // Push subscriptions (migration 056) milik business demo dihapus tiap
@@ -917,22 +926,28 @@ export async function resetDemoData(): Promise<DemoResetResult> {
   // fixture booking di atas membuatnya lewat findOrCreateCustomer. Kalau
   // belum ada (jalur createBooking sempat berubah urutan), dilewati diam-
   // diam, bukan error -- demo tetap jalan tanpa contoh label ini.
-  const CUSTOMER_LABEL_DEFS: { name: string; customerType: string; isWatchlisted: boolean; note: string | null }[] = [
-    { name: 'Bagus Setiawan', customerType: 'Member', isWatchlisted: false, note: null },
-    { name: 'Rina Wulandari', customerType: 'Mitra', isWatchlisted: true, note: 'Pernah telat 2x, tagih DP penuh di muka.' },
-  ];
-  for (const def of CUSTOMER_LABEL_DEFS) {
-    const rows = await rest<{ id: string }[]>(
-      `customers?select=id&business_id=eq.${businessId}&name=eq.${encodeURIComponent(def.name)}&order=created_at.desc&limit=1`,
-      ownerToken,
-    );
-    if (rows[0]) {
-      await rest(`customers?id=eq.${rows[0].id}`, ownerToken, {
-        method: 'PATCH',
-        headers: { Prefer: 'return=minimal' },
-        body: JSON.stringify({ customer_type_id: customerTypeIdByName[def.customerType], is_watchlisted: def.isWatchlisted, note: def.note }),
-      });
+  // Best-effort juga (lihat catatan try/catch di blok upsert customer_types
+  // di atas) -- murni hiasan demo, tidak boleh menggagalkan reset.
+  try {
+    const CUSTOMER_LABEL_DEFS: { name: string; customerType: string; isWatchlisted: boolean; note: string | null }[] = [
+      { name: 'Bagus Setiawan', customerType: 'Member', isWatchlisted: false, note: null },
+      { name: 'Rina Wulandari', customerType: 'Mitra', isWatchlisted: true, note: 'Pernah telat 2x, tagih DP penuh di muka.' },
+    ];
+    for (const def of CUSTOMER_LABEL_DEFS) {
+      const rows = await rest<{ id: string }[]>(
+        `customers?select=id&business_id=eq.${businessId}&name=eq.${encodeURIComponent(def.name)}&order=created_at.desc&limit=1`,
+        ownerToken,
+      );
+      if (rows[0] && customerTypeIdByName[def.customerType]) {
+        await rest(`customers?id=eq.${rows[0].id}`, ownerToken, {
+          method: 'PATCH',
+          headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify({ customer_type_id: customerTypeIdByName[def.customerType], is_watchlisted: def.isWatchlisted, note: def.note }),
+        });
+      }
     }
+  } catch (err) {
+    console.warn('[resetDemoData] label contoh Member/Mitra gagal (non-fatal, lanjut reset):', err);
   }
 
   return {
