@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { addDays, toDateStrInTz, todayInTz } from './dates.js';
+import { addDays, dateRange, toDateStrInTz, todayInTz } from './dates.js';
 
 // Dipindah ke sini (dari routes/availability.ts) supaya bisa dipakai ulang
 // oleh routes/etalase.ts (pencarian ketersediaan publik di Etalase Online)
@@ -23,7 +23,16 @@ export type BookingItemRow = {
   // tanggal baru (booking itu sendiri tidak boleh bersaing dengan dirinya
   // sendiri untuk stok yang sama).
   booking_id: string;
-  bookings: { start_date: string; end_date: string; status: string; actual_return_at: string | null } | null;
+  bookings: {
+    start_date: string;
+    end_date: string;
+    status: string;
+    actual_return_at: string | null;
+    // Mulai Sewa + ambil lebih awal (brief 23 Nov 2026, migration 072) --
+    // kalau terisi dan lebih awal dari start_date, batas bawah blokir
+    // 'aktif' ikut mundur ke tanggal ini (lihat usedUnitsOn di bawah).
+    picked_up_at: string | null;
+  } | null;
 };
 
 // 'dipesan'/'telat'/'selesai' sengaja ikut dihitung (bukan cuma 'aktif') —
@@ -43,6 +52,7 @@ type RawBookingRow = {
   end_date: string;
   status: string;
   actual_return_at: string | null;
+  picked_up_at: string | null;
 };
 
 // Jalankan query sampai benar2 habis lewat .range() berulang -- jaring
@@ -120,7 +130,7 @@ export async function fetchActiveBookingItems(
   const expandedStart = addDays(window.windowStart, -marginDays);
   const expandedEnd = addDays(window.windowEnd, marginDays);
 
-  const bookingCols = 'id, start_date, end_date, status, actual_return_at';
+  const bookingCols = 'id, start_date, end_date, status, actual_return_at, picked_up_at';
 
   // Tiga kelompok status tidak saling bergantung -- jalankan paralel
   // (Promise.all), bukan berurutan, supaya latency total bukan jumlah
@@ -261,7 +271,17 @@ export function usedUnitsOn(
       // Bilbo-Outdoors 2026-09-02 (lihat memory bug-scenario-comparison-
       // framework) tetap berlaku untuk kasus telat.
       if (booking.status === 'aktif') {
-        const effectiveStart = readinessDays > 0 ? addDays(booking.start_date, -readinessDays) : booking.start_date;
+        // Mulai Sewa + ambil lebih awal (brief 23 Nov 2026, migration 072) --
+        // kalau barang sungguhan diambil SEBELUM start_date (picked_up_at),
+        // batas bawah blokir ikut mundur ke tanggal itu (di zona rental),
+        // bukan cuma start_date -- harus sepakat persis dengan
+        // used_units_on_sql()/get_public_availability() (migration 072) dan
+        // create_booking_atomic(). Kalau picked_up_at >= start_date (diambil
+        // tepat waktu atau telat), least() jatuh balik ke start_date --
+        // regresi: perilaku identik dengan sebelum fitur ini ada.
+        const pickedUpDate = booking.picked_up_at ? toDateStrInTz(booking.picked_up_at, timezone) : null;
+        const earliestDate = pickedUpDate && pickedUpDate < booking.start_date ? pickedUpDate : booking.start_date;
+        const effectiveStart = readinessDays > 0 ? addDays(earliestDate, -readinessDays) : earliestDate;
         if (effectiveStart > dateStr) return false;
         const isTelat = isBookingOverdue(booking.end_date, today);
         if (isTelat) return true;
@@ -303,4 +323,56 @@ export function usedUnitsOn(
       return false;
     })
     .reduce((sum, bi) => sum + bi.quantity, 0);
+}
+
+// Stok di tanggal BARU, mengecualikan booking ini sendiri (lihat
+// excludeBookingId di usedUnitsOn, migration 055) — dipakai sama-sama oleh
+// Ubah Jadwal, Perpanjang (routes/trackings.ts), DAN pickup lebih awal pada
+// booking 'dipesan' (routes/bookings.ts, brief 23 Nov 2026). Dipindah dari
+// trackings.ts (pola yang sama) ke sini supaya bisa dipakai ulang tanpa
+// duplikasi. Mengembalikan nama alat pertama yang tidak cukup, atau null
+// kalau semua cukup.
+export async function checkStockForNewDates(
+  supabase: SupabaseClient,
+  businessId: string,
+  bookingId: string,
+  newStart: string,
+  newEnd: string,
+  itemRows: { item_id: string; quantity: number }[],
+): Promise<string | null> {
+  const itemIds = itemRows.map((i) => i.item_id);
+  const { data: catalogItems } = await supabase
+    .from('items')
+    .select('id, name, total_units, readiness_hours')
+    .in('id', itemIds);
+
+  const { data: bizRow } = await supabase.from('businesses').select('timezone').eq('id', businessId).maybeSingle();
+  const existingBookingItems = await fetchActiveBookingItems(supabase, businessId, {
+    windowStart: newStart,
+    windowEnd: newEnd,
+    marginDays: marginDaysFromReadinessHours((catalogItems ?? []).map((i: { readiness_hours: number }) => i.readiness_hours)),
+  });
+  const days = dateRange(newStart, newEnd);
+
+  // Paket Alat (migration 064) membuat item_id yang sama bisa muncul di
+  // lebih dari satu baris itemRows (komponen paket + alat tambahan biasa)
+  // -- jumlahkan dulu per item_id sebelum validasi, sama alasan POST
+  // /bookings (routes/bookings.ts).
+  const requestedQuantityByItemId = new Map<string, number>();
+  for (const requested of itemRows) {
+    requestedQuantityByItemId.set(requested.item_id, (requestedQuantityByItemId.get(requested.item_id) ?? 0) + requested.quantity);
+  }
+
+  for (const [itemId, totalQuantity] of requestedQuantityByItemId) {
+    const catalogItem = catalogItems?.find((i: { id: string }) => i.id === itemId);
+    if (!catalogItem) return 'Alat tidak ditemukan';
+
+    for (const day of days) {
+      const used = usedUnitsOn(existingBookingItems, itemId, day, catalogItem.readiness_hours, bizRow?.timezone ?? null, bookingId);
+      if (used + totalQuantity > catalogItem.total_units) {
+        return `Alat "${catalogItem.name}" tidak cukup pada ${day} (sisa ${catalogItem.total_units - used}, diminta ${totalQuantity})`;
+      }
+    }
+  }
+  return null;
 }

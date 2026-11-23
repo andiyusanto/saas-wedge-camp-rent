@@ -92,6 +92,35 @@ test('due > anchor (kasus normal) -> TIDAK ikut digeser oleh jaring pengaman', (
 });
 
 // ============================================================
+// Mulai Sewa + ambil lebih awal (brief 23 Nov 2026, migration 072) --
+// computeDueAt() TIDAK diubah kodenya sama sekali untuk fitur ini
+// (dibuktikan sudah benar lewat pembacaan manual di rencana koordinator)
+// -- dua test di bawah ini MENGUNCI pembuktian itu, bukan menguji
+// perubahan kode.
+// ============================================================
+
+test('ambil lebih awal (Jumat 20:00), mulai Sabtu, kembali Minggu, tanpa Batas Jam Kembali -> due Minggu 20:00 (jam ambil), BUKAN dihitung dari Jumat', () => {
+  // picked_up_at Jumat 20 Nov 2026 20:00 WIB = 13:00 UTC. start_date
+  // (Sabtu 21) tidak dipakai computeDueAt() sama sekali (fungsi ini
+  // cuma menerima end_date) -- diverifikasi tidak relevan di sini.
+  const pickedUpAt = '2026-11-20T13:00:00.000Z'; // Jumat 20:00 WIB
+  const due = computeDueAt('2026-11-22', pickedUpAt, pickedUpAt, WIB, null, false);
+  assert.equal(due.toISOString(), '2026-11-22T13:00:00.000Z'); // Minggu 20:00 WIB
+});
+
+test('ambil lebih awal (Jumat malam) + Batas Jam Kembali 22:00 -> due TETAP end_date 22:00, jaring pengaman "due<=anchor" TIDAK salah terpicu', () => {
+  // Anchor (picked_up_at) Jumat 20 Nov 20:00 WIB jauh lebih awal dari due
+  // mentah (Minggu 22 Nov 22:00 WIB) -- jaring pengaman "due<=anchor,+1
+  // hari" (dirancang untuk kasus pickup TELAT di hari yang sama dengan
+  // batasnya) tidak boleh ikut salah menggeser due cuma karena anchornya
+  // jauh lebih awal dari biasanya.
+  const pickedUpAt = '2026-11-20T13:00:00.000Z'; // Jumat 20:00 WIB
+  const due = computeDueAt('2026-11-22', pickedUpAt, pickedUpAt, WIB, '22:00', false);
+  assert.equal(due.toISOString(), '2026-11-22T15:00:00.000Z'); // Minggu 22:00 WIB = 15:00 UTC
+  assert.ok(due.getTime() > new Date(pickedUpAt).getTime());
+});
+
+// ============================================================
 // Cara hitung denda telat (migration 063, brief 15 Nov 2026)
 // ============================================================
 

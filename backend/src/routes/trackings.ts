@@ -12,9 +12,9 @@ import {
   fullDayLateDays,
 } from '../lib/penalty.js';
 import type { LateFeeMode } from '../lib/penalty.js';
-import { rentalDuration, dateRange, todayInTz, addDays } from '../lib/dates.js';
+import { rentalDuration, todayInTz, addDays } from '../lib/dates.js';
 import { logBookingStatus, logBookingReschedule, resolveActorName, getCallerRole } from '../lib/audit.js';
-import { fetchActiveBookingItems, usedUnitsOn, marginDaysFromReadinessHours } from '../lib/availability.js';
+import { checkStockForNewDates } from '../lib/availability.js';
 import { computeBookingTotalPrice, computeBookingItemSubtotal } from '../lib/pricing.js';
 import { mergeBookingItemsForUpdate } from '../lib/bookingItems.js';
 import type { ExistingBookingItemRow, CatalogItemRow } from '../lib/bookingItems.js';
@@ -169,7 +169,7 @@ router.get('/trackings', async (req, res) => {
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select(
-      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_key, rental_day_mode, min_rental_days, max_rental_days, return_deadline_time, return_deadline_next_day, late_fee_mode, late_fee_per_hour, late_fee_per_hour_cap_enabled, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, bundle_id, bundle_instance_id, bundle_name, bundle_quantity, items(name)), booking_sale_items(sale_item_id, name, price_at_booking, quantity, subtotal), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_payments(id, amount, method, kind, note, paid_at, created_by_name), booking_status_history(status, changed_by_name, created_at, reason), booking_reschedules(action, old_start_date, old_end_date, new_start_date, new_end_date, reason, past_deadline, changed_by_name, created_at), booking_item_changes(old_items, new_items, old_total_price, new_total_price, reason, changed_by_name, created_at)',
+      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_key, rental_day_mode, duration_label_style, min_rental_days, max_rental_days, return_deadline_time, return_deadline_next_day, late_fee_mode, late_fee_per_hour, late_fee_per_hour_cap_enabled, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, bundle_id, bundle_instance_id, bundle_name, bundle_quantity, items(name)), booking_sale_items(sale_item_id, name, price_at_booking, quantity, subtotal), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_payments(id, amount, method, kind, note, paid_at, created_by_name), booking_status_history(status, changed_by_name, created_at, reason), booking_reschedules(action, old_start_date, old_end_date, new_start_date, new_end_date, reason, past_deadline, changed_by_name, created_at), booking_item_changes(old_items, new_items, old_total_price, new_total_price, reason, changed_by_name, created_at)',
     )
     .in('status', ['dipesan', 'aktif'])
     .order('end_date');
@@ -341,6 +341,10 @@ router.get('/trackings', async (req, res) => {
       total_price: b.total_price,
       dp_paid: b.dp_paid,
       rental_day_mode: b.rental_day_mode,
+      // Label lama sewa "2H1M" (migration 072) -- snapshot per booking,
+      // null = 'hari' (formatRentalDuration juga memaksa 'hari' kalau
+      // rental_day_mode booking ini bukan 'per_malam', lihat formatters.ts).
+      duration_label_style: b.duration_label_style,
       min_rental_days: b.min_rental_days,
       max_rental_days: b.max_rental_days,
       // Snapshot (migration 062) — null = ikuti jam ambil (tidak ada
@@ -361,6 +365,10 @@ router.get('/trackings', async (req, res) => {
     // agregat tidak masuk akal berubah-ubah per baris, jadi ikut
     // kebijakan business SEKARANG, bukan campuran snapshot historis.
     late_fee_mode: business.late_fee_mode,
+    // Zona rental (migration 053) -- dipakai frontend menampilkan baris
+    // "Diambil" (brief 23 Nov 2026) dengan TANGGAL yang benar di struk/
+    // nota, konsisten dengan computeDueAt di atas yang sudah memakainya.
+    timezone: business.timezone,
     bookings: result,
   });
 });
@@ -808,55 +816,6 @@ async function updateBookingItemSubtotals(
     const newSubtotal = computeBookingItemSubtotal(bi, newDays);
     await supabase.from('booking_items').update({ subtotal: newSubtotal }).eq('booking_id', bookingId).eq('item_id', bi.item_id);
   }
-}
-
-// Stok di tanggal BARU, mengecualikan booking ini sendiri (lihat
-// excludeBookingId di usedUnitsOn, migration 055) — dipakai sama-sama oleh
-// Ubah Jadwal dan Perpanjang. Mengembalikan nama alat pertama yang tidak
-// cukup, atau null kalau semua cukup.
-async function checkStockForNewDates(
-  supabase: ReturnType<typeof createRequestClient>,
-  businessId: string,
-  bookingId: string,
-  newStart: string,
-  newEnd: string,
-  itemRows: { item_id: string; quantity: number }[],
-): Promise<string | null> {
-  const itemIds = itemRows.map((i) => i.item_id);
-  const { data: catalogItems } = await supabase
-    .from('items')
-    .select('id, name, total_units, readiness_hours')
-    .in('id', itemIds);
-
-  const { data: bizRow } = await supabase.from('businesses').select('timezone').eq('id', businessId).maybeSingle();
-  const existingBookingItems = await fetchActiveBookingItems(supabase, businessId, {
-    windowStart: newStart,
-    windowEnd: newEnd,
-    marginDays: marginDaysFromReadinessHours((catalogItems ?? []).map((i) => i.readiness_hours)),
-  });
-  const days = dateRange(newStart, newEnd);
-
-  // Paket Alat (migration 064) membuat item_id yang sama bisa muncul di
-  // lebih dari satu baris itemRows (komponen paket + alat tambahan biasa)
-  // -- jumlahkan dulu per item_id sebelum validasi, sama alasan POST
-  // /bookings (routes/bookings.ts).
-  const requestedQuantityByItemId = new Map<string, number>();
-  for (const requested of itemRows) {
-    requestedQuantityByItemId.set(requested.item_id, (requestedQuantityByItemId.get(requested.item_id) ?? 0) + requested.quantity);
-  }
-
-  for (const [itemId, totalQuantity] of requestedQuantityByItemId) {
-    const catalogItem = catalogItems?.find((i) => i.id === itemId);
-    if (!catalogItem) return 'Alat tidak ditemukan';
-
-    for (const day of days) {
-      const used = usedUnitsOn(existingBookingItems, itemId, day, catalogItem.readiness_hours, bizRow?.timezone ?? null, bookingId);
-      if (used + totalQuantity > catalogItem.total_units) {
-        return `Alat "${catalogItem.name}" tidak cukup pada ${day} (sisa ${catalogItem.total_units - used}, diminta ${totalQuantity})`;
-      }
-    }
-  }
-  return null;
 }
 
 // Ubah Jadwal — booking berstatus 'dipesan' (belum diambil fisik).

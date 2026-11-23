@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { createRequestClient } from '../lib/supabaseClient.js';
-import { fetchActiveBookingItems, usedUnitsOn, marginDaysFromReadinessHours } from '../lib/availability.js';
-import { dateRange, todayInTz, rentalDuration } from '../lib/dates.js';
+import { fetchActiveBookingItems, usedUnitsOn, marginDaysFromReadinessHours, checkStockForNewDates } from '../lib/availability.js';
+import { addDays, dateRange, todayInTz, rentalDuration } from '../lib/dates.js';
 import { logBookingStatus, resolveActorName } from '../lib/audit.js';
 import { isBusinessWritable, SUBSCRIPTION_LOCKED_MESSAGE } from '../lib/subscription.js';
 import { getCustomerPhotoSignedUrl } from '../lib/r2.js';
@@ -62,6 +62,7 @@ router.post('/bookings', async (req, res) => {
     total_price,
     dp_paid,
     dp_method,
+    picked_up_now,
   } = req.body ?? {};
 
   const requestedItems = items as BookingItemInput[] | undefined;
@@ -188,7 +189,39 @@ router.post('/bookings', async (req, res) => {
     }
   }
 
-  const days = dateRange(start_date, end_date);
+  // Jalan diambil hari ini -> langsung 'aktif' (alur walk-in biasa).
+  // Tanggal ambil di masa depan -> 'dipesan' (reservasi, belum diambil
+  // fisik). Dipindah ke SINI (sebelum validasi stok) supaya "Alat diambil
+  // sekarang" (picked_up_now, brief 23 Nov 2026) bisa ikut memperluas
+  // jendela tanggal yang dicek di bawah.
+  const todayStr = todayInTz(bizRow.timezone);
+  let status = start_date <= todayStr ? 'aktif' : 'dipesan';
+
+  // C. Walk-in "Alat diambil sekarang" (brief 23 Nov 2026) -- client HANYA
+  // bisa MENAIKKAN status ke 'aktif' kalau Mulai Sewa (start_date) di masa
+  // depan, TIDAK PERNAH menurunkannya (kalau status sudah 'aktif' lewat
+  // jalur biasa di atas, picked_up_now tidak berpengaruh apa pun). Dibatasi
+  // start_date maksimal hari ini+2 (keputusan koordinator 23 Nov 2026) --
+  // mencegah salah pilih tanggal jauh ke depan yang mengunci stok
+  // berhari-hari untuk transaksi yang sebenarnya baru mau diambil sekarang.
+  if (picked_up_now === true && status === 'dipesan') {
+    const maxEarlyPickupStart = addDays(todayStr, 2);
+    if (start_date > maxEarlyPickupStart) {
+      res.status(422).json({
+        error: 'Mulai Sewa terlalu jauh untuk "Alat diambil sekarang" (maksimal 2 hari ke depan). Catat sebagai pesanan biasa, lalu Tandai Barang Diambil nanti.',
+      });
+      return;
+    }
+    status = 'aktif';
+  }
+
+  // Jendela stok yang dicek: kalau diambil lebih awal (status 'aktif'
+  // tapi start_date masih di masa depan), stok hari ini s/d start_date-1
+  // WAJIB ikut diperiksa (brief bagian B & C) -- bukan cuma start_date..
+  // end_date seperti sebelumnya, supaya malam pengambilan awal itu sendiri
+  // tidak bisa double-booking.
+  const earliestBlockedDate = status === 'aktif' && start_date > todayStr ? todayStr : start_date;
+  const days = dateRange(earliestBlockedDate, end_date);
   // N hari yang sama dipakai frontend saat menghitung subtotal paket
   // (computeItemRentalPrice dengan rentalDuration -- ikut mode per_malam
   // / per_hari_kalender), bukan jumlah hari kalender dari dateRange().
@@ -197,7 +230,7 @@ router.post('/bookings', async (req, res) => {
   let existingBookingItems;
   try {
     existingBookingItems = await fetchActiveBookingItems(supabase, businessId, {
-      windowStart: start_date,
+      windowStart: earliestBlockedDate,
       windowEnd: end_date,
       marginDays: marginDaysFromReadinessHours((itemRows ?? []).map((i) => i.readiness_hours)),
     });
@@ -235,15 +268,14 @@ router.post('/bookings', async (req, res) => {
     }
   }
 
-  // Jalan diambil hari ini -> langsung 'aktif' (alur walk-in biasa).
-  // Tanggal ambil di masa depan -> 'dipesan' (reservasi, belum diambil
-  // fisik). status DIHITUNG di Express (butuh todayInTz/timezone bisnis)
-  // tapi picked_up_at-nya sendiri SEKARANG dihitung DI DALAM
-  // create_booking_atomic() (migration 070, revisi koordinator 17 Nov
-  // 2026) -- jam dicatat persis saat RPC itu COMMIT, bukan saat Express
-  // menyusun payload (beberapa ratus ms sebelumnya), dan tidak bisa
-  // dimanipulasi lewat pemanggilan RPC langsung.
-  const status = start_date <= todayInTz(bizRow.timezone) ? 'aktif' : 'dipesan';
+  // picked_up_at-nya sendiri dihitung DI DALAM create_booking_atomic()
+  // (migration 070/072, revisi koordinator 17 Nov 2026) -- jam dicatat
+  // persis saat RPC itu COMMIT, bukan saat Express menyusun payload
+  // (beberapa ratus ms sebelumnya), dan tidak bisa dimanipulasi lewat
+  // pemanggilan RPC langsung. Untuk pickup lebih awal (status 'aktif'
+  // tapi start_date masih di masa depan, lihat earliestBlockedDate di
+  // atas), RPC menjangkarkan batas bawah blokir ke least(start_date,
+  // tanggal picked_up_at) -- sama dengan usedUnitsOn()/used_units_on_sql().
 
   // Audit privasi 2 Nov 2026 — validasi pola key SEBELUM dikirim ke RPC,
   // jangan cuma percaya migration 050's check constraint sebagai
@@ -441,7 +473,7 @@ router.post('/bookings/:id/pickup', async (req, res) => {
 
   const { data: booking, error: bookingError } = await supabase
     .from('bookings')
-    .select('id, status, business_id')
+    .select('id, status, business_id, start_date')
     .eq('id', id)
     .maybeSingle();
 
@@ -453,6 +485,32 @@ router.post('/bookings/:id/pickup', async (req, res) => {
   if (booking.status !== 'dipesan') {
     res.status(400).json({ error: 'Transaksi ini bukan status "dipesan"' });
     return;
+  }
+
+  // Pickup lebih awal (brief 23 Nov 2026, bagian B) -- kalau ditekan
+  // SEBELUM start_date, malam-malam tambahan (hari ini s/d start_date-1)
+  // belum pernah dicek stoknya sama sekali sebelumnya (endpoint ini TIDAK
+  // mengecek stok apa pun, cuma pindah status). Dicek biasa TANPA advisory
+  // lock (disetujui koordinator -- risiko setara Ubah Jadwal/Perpanjang
+  // yang juga tidak dikunci, ditunda ke "Tahap 2 atomik"). start_date
+  // sendiri TIDAK berubah di sini -- cuma malam sebelum start_date yang
+  // ditambahkan ke jendela yang diperiksa.
+  const { data: pickupBizRow } = await supabase.from('businesses').select('timezone').eq('id', booking.business_id).maybeSingle();
+  const todayForPickup = todayInTz(pickupBizRow?.timezone ?? null);
+  if (todayForPickup < booking.start_date) {
+    const { data: pickupItems } = await supabase.from('booking_items').select('item_id, quantity').eq('booking_id', id);
+    const stockError = await checkStockForNewDates(
+      supabase,
+      booking.business_id,
+      id,
+      todayForPickup,
+      addDays(booking.start_date, -1),
+      pickupItems ?? [],
+    );
+    if (stockError) {
+      res.status(409).json({ error: stockError });
+      return;
+    }
   }
 
   // Dialog konfirmasi jaminan saat Ambil (brief 15 Nov 2026, Bagian B) —

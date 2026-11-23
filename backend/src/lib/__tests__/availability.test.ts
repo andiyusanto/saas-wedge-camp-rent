@@ -14,12 +14,17 @@ const WIB = 'Asia/Jakarta';
 const WITA = 'Asia/Makassar';
 const WIT = 'Asia/Jayapura';
 
-function aktifItem(startDate: string, endDate: string, overrides: Partial<BookingItemRow> = {}): BookingItemRow {
+function aktifItem(
+  startDate: string,
+  endDate: string,
+  overrides: Partial<BookingItemRow> = {},
+  pickedUpAt: string | null = null,
+): BookingItemRow {
   return {
     item_id: 'item-1',
     quantity: 1,
     booking_id: 'b1',
-    bookings: { start_date: startDate, end_date: endDate, status: 'aktif', actual_return_at: null },
+    bookings: { start_date: startDate, end_date: endDate, status: 'aktif', actual_return_at: null, picked_up_at: pickedUpAt },
     ...overrides,
   };
 }
@@ -123,14 +128,88 @@ test('isBookingOverdue: penentuan telat berbasis tanggal, dipakai tanda "terkunc
 test('regresi: dipesan/telat-selesai/dibatalkan TIDAK berubah oleh Opsi B', () => {
   const today = todayInTz(WIB);
   const dipesan: BookingItemRow[] = [
-    { item_id: 'item-1', quantity: 1, booking_id: 'b2', bookings: { start_date: addDays(today, 5), end_date: addDays(today, 7), status: 'dipesan', actual_return_at: null } },
+    { item_id: 'item-1', quantity: 1, booking_id: 'b2', bookings: { start_date: addDays(today, 5), end_date: addDays(today, 7), status: 'dipesan', actual_return_at: null, picked_up_at: null } },
   ];
   // dipesan tetap simetris seperti sebelumnya (tidak terpengaruh perubahan status aktif).
   assert.equal(usedUnitsOn(dipesan, 'item-1', addDays(today, 6), 0, WIB), 1);
   assert.equal(usedUnitsOn(dipesan, 'item-1', addDays(today, 20), 0, WIB), 0);
 
   const dibatalkan: BookingItemRow[] = [
-    { item_id: 'item-1', quantity: 1, booking_id: 'b3', bookings: { start_date: addDays(today, -1), end_date: addDays(today, 1), status: 'dibatalkan', actual_return_at: null } },
+    { item_id: 'item-1', quantity: 1, booking_id: 'b3', bookings: { start_date: addDays(today, -1), end_date: addDays(today, 1), status: 'dibatalkan', actual_return_at: null, picked_up_at: null } },
   ];
   assert.equal(usedUnitsOn(dibatalkan, 'item-1', today, 0, WIB), 0); // dibatalkan tidak pernah dihitung
+});
+
+// ============================================================
+// Mulai Sewa + ambil lebih awal (brief 23 Nov 2026, migration 072) --
+// 'aktif' dengan picked_up_at LEBIH AWAL dari start_date -- batas bawah
+// blokir ikut mundur ke least(start_date, tanggal picked_up_at).
+// ============================================================
+
+test('ambil lebih awal 1 hari, readiness 0: hari H-1 (malam diambil) ikut terblokir', () => {
+  const today = todayInTz(WIB);
+  const start = addDays(today, 1); // start_date BESOK
+  const end = addDays(today, 3);
+  const bi = [aktifItem(start, end, {}, `${today}T13:00:00.000Z`)]; // diambil HARI INI (H-1 dari start)
+  assert.equal(usedUnitsOn(bi, 'item-1', addDays(today, -1), 0, WIB), 0); // sebelum hari diambil -> bebas
+  assert.equal(usedUnitsOn(bi, 'item-1', today, 0, WIB), 1); // hari diambil (H-1 start) -> terblokir
+  assert.equal(usedUnitsOn(bi, 'item-1', start, 0, WIB), 1); // start_date sendiri -> tetap terblokir
+});
+
+test('ambil lebih awal 2 hari, readiness 0: dua malam sebelum start_date ikut terblokir', () => {
+  const today = todayInTz(WIB);
+  const start = addDays(today, 2); // start_date LUSA
+  const end = addDays(today, 4);
+  const bi = [aktifItem(start, end, {}, `${today}T13:00:00.000Z`)]; // diambil HARI INI (H-2 dari start)
+  assert.equal(usedUnitsOn(bi, 'item-1', addDays(today, -1), 0, WIB), 0); // sebelum hari diambil -> bebas
+  assert.equal(usedUnitsOn(bi, 'item-1', today, 0, WIB), 1); // hari diambil -> terblokir
+  assert.equal(usedUnitsOn(bi, 'item-1', addDays(today, 1), 0, WIB), 1); // di antara ambil dan start -> terblokir
+  assert.equal(usedUnitsOn(bi, 'item-1', start, 0, WIB), 1); // start_date -> terblokir
+});
+
+test('ambil lebih awal + readiness 25 jam (margin 2 hari): margin mundur dihitung dari TANGGAL AMBIL, bukan start_date', () => {
+  const today = todayInTz(WIB);
+  const start = addDays(today, 3);
+  const end = addDays(today, 5);
+  const bi = [aktifItem(start, end, {}, `${today}T13:00:00.000Z`)]; // diambil hari ini, H-3 dari start
+  // Batas bawah = least(start, tanggal ambil) - margin(2) = today - 2.
+  assert.equal(usedUnitsOn(bi, 'item-1', addDays(today, -2), 25, WIB), 1); // today-2, dalam margin
+  assert.equal(usedUnitsOn(bi, 'item-1', addDays(today, -3), 25, WIB), 0); // today-3, luar margin
+  assert.equal(usedUnitsOn(bi, 'item-1', today, 25, WIB), 1); // hari ambil sendiri
+});
+
+test('ambil lebih awal dekat tengah malam zona WITA: tanggal ambil dihitung di zona rental, bukan UTC', () => {
+  // picked_up_at 23:30 WITA (15:30 UTC) tanggal 16 Nov -- di UTC murni ini
+  // masih tanggal 16, tapi WITA (UTC+8) sudah masuk tanggal 17 kalau
+  // offsetnya lebih dari 30 menit... pilih instant yang benar-benar
+  // melewati tengah malam WITA: 16:30 UTC tanggal 16 = 00:30 WITA
+  // tanggal 17.
+  const pickedUpAtUtc = '2026-11-16T16:30:00.000Z'; // 00:30 WITA tgl 17
+  const start = '2026-11-19';
+  const end = '2026-11-20';
+  const bi = [aktifItem(start, end, {}, pickedUpAtUtc)];
+  // Tanggal ambil di WITA = 2026-11-17 (BUKAN 2026-11-16, kalau salah
+  // dihitung di UTC).
+  assert.equal(usedUnitsOn(bi, 'item-1', '2026-11-16', 0, WITA), 0); // sebelum tanggal ambil WITA -> bebas
+  assert.equal(usedUnitsOn(bi, 'item-1', '2026-11-17', 0, WITA), 1); // tanggal ambil WITA -> terblokir
+});
+
+test('diambil TEPAT di start_date atau TELAT -> least() jatuh balik ke start_date, regresi identik', () => {
+  const today = todayInTz(WIB);
+  const start = addDays(today, -2);
+  const end = addDays(today, 2);
+  // Diambil TEPAT start_date -> sama seperti tanpa picked_up_at sama sekali.
+  const tepatWaktu = [aktifItem(start, end, {}, `${start}T03:00:00.000Z`)];
+  const tanpaPickup = [aktifItem(start, end)];
+  for (const d of [addDays(start, -1), start, addDays(start, 1), end, addDays(end, 1)]) {
+    assert.equal(
+      usedUnitsOn(tepatWaktu, 'item-1', d, 0, WIB),
+      usedUnitsOn(tanpaPickup, 'item-1', d, 0, WIB),
+      `diambil tepat start_date harus identik regresi untuk tanggal ${d}`,
+    );
+  }
+  // Diambil TELAT (picked_up_at > start_date) -> least() tetap start_date,
+  // tidak pernah MEMPERSEMPIT blokir.
+  const diambilTelat = [aktifItem(start, end, {}, `${addDays(start, 1)}T03:00:00.000Z`)];
+  assert.equal(usedUnitsOn(diambilTelat, 'item-1', start, 0, WIB), 1); // start_date tetap terblokir
 });
