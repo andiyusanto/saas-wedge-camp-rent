@@ -6,6 +6,7 @@ import type { TeamInvite, TeamMember } from '../hooks/useTeam';
 import type { Business, BusinessUpdateInput } from '../hooks/useBusiness';
 import { ConfirmModal } from './ConfirmModal';
 import { BusinessInfoSection } from './BusinessInfoSection';
+import { CustomerTypesSection } from './CustomerTypesSection';
 import { formatDateIndo } from '../utils/formatters';
 
 function inviteUrl(code: string) {
@@ -67,6 +68,8 @@ export function TeamScreen({
         ownerEmail={ownerEmail}
         onSave={onSaveBusiness}
       />
+
+      <CustomerTypesSection businessId={businessId} />
 
       <div className="bg-[#FBFAF4] p-4 sm:p-5 rounded-2xl border border-[#DBD5C1] shadow-xs space-y-3">
         <h2 className="text-lg font-bold text-[#26302B] flex items-center gap-2">
