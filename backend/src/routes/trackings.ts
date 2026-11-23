@@ -15,7 +15,7 @@ import type { LateFeeMode } from '../lib/penalty.js';
 import { rentalDuration, todayInTz, addDays } from '../lib/dates.js';
 import { logBookingStatus, logBookingReschedule, resolveActorName, getCallerRole } from '../lib/audit.js';
 import { checkStockForNewDates } from '../lib/availability.js';
-import { computeBookingTotalPrice, computeBookingItemSubtotal } from '../lib/pricing.js';
+import { computeBookingTotalPrice, computeBookingItemSubtotal, applyDiscountPercentToBruto, computeDiscountAmountFromPercent } from '../lib/pricing.js';
 import { mergeBookingItemsForUpdate } from '../lib/bookingItems.js';
 import type { ExistingBookingItemRow, CatalogItemRow } from '../lib/bookingItems.js';
 import { mergeSaleItemsForUpdate } from '../lib/saleItems.js';
@@ -169,7 +169,7 @@ router.get('/trackings', async (req, res) => {
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select(
-      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_key, rental_day_mode, duration_label_style, min_rental_days, max_rental_days, return_deadline_time, return_deadline_next_day, late_fee_mode, late_fee_per_hour, late_fee_per_hour_cap_enabled, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, bundle_id, bundle_instance_id, bundle_name, bundle_quantity, items(name)), booking_sale_items(sale_item_id, name, price_at_booking, quantity, subtotal), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_payments(id, amount, method, kind, note, paid_at, created_by_name), booking_status_history(status, changed_by_name, created_at, reason), booking_reschedules(action, old_start_date, old_end_date, new_start_date, new_end_date, reason, past_deadline, changed_by_name, created_at), booking_item_changes(old_items, new_items, old_total_price, new_total_price, reason, changed_by_name, created_at)',
+      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_key, rental_day_mode, duration_label_style, min_rental_days, max_rental_days, return_deadline_time, return_deadline_next_day, late_fee_mode, late_fee_per_hour, late_fee_per_hour_cap_enabled, discount_type_name, discount_percent, discount_amount, customer_id, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, bundle_id, bundle_instance_id, bundle_name, bundle_quantity, items(name)), booking_sale_items(sale_item_id, name, price_at_booking, quantity, subtotal), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_payments(id, amount, method, kind, note, paid_at, created_by_name), booking_status_history(status, changed_by_name, created_at, reason), booking_reschedules(action, old_start_date, old_end_date, new_start_date, new_end_date, reason, past_deadline, changed_by_name, created_at), booking_item_changes(old_items, new_items, old_total_price, new_total_price, reason, changed_by_name, created_at)',
     )
     .in('status', ['dipesan', 'aktif'])
     .order('end_date');
@@ -351,6 +351,12 @@ router.get('/trackings', async (req, res) => {
       // baris batas jam kembali untuk ditampilkan di struk/nota).
       return_deadline_time: b.return_deadline_time,
       return_deadline_next_day: b.return_deadline_next_day,
+      // Pelanggan + Member/Diskon (migration 073) -- snapshot per
+      // transaksi, null/0 = tanpa diskon (regresi aman).
+      discount_type_name: b.discount_type_name,
+      discount_percent: b.discount_percent,
+      discount_amount: b.discount_amount,
+      customer_id: b.customer_id,
     };
   });
 
@@ -852,7 +858,7 @@ router.patch('/bookings/:id/reschedule', async (req, res) => {
   const { data: booking, error: bookingError } = await supabase
     .from('bookings')
     .select(
-      'id, business_id, booking_number, start_date, end_date, status, total_price, rental_day_mode, min_rental_days, max_rental_days, booking_items(item_id, quantity, price_at_booking, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking)',
+      'id, business_id, booking_number, start_date, end_date, status, total_price, rental_day_mode, min_rental_days, max_rental_days, discount_percent, booking_items(item_id, quantity, price_at_booking, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking)',
     )
     .eq('id', id)
     .maybeSingle();
@@ -909,16 +915,20 @@ router.patch('/bookings/:id/reschedule', async (req, res) => {
   }
 
   const oldDays = rentalDuration(booking.start_date, booking.end_date, booking.rental_day_mode);
-  const newTotalPrice =
-    total_price != null
-      ? Number(total_price)
-      : newDays === oldDays
-        ? booking.total_price
-        : computeBookingTotalPrice(bookingItems, newDays);
+  const newBruto = computeBookingTotalPrice(bookingItems, newDays);
+  const recomputed = newDays !== oldDays;
+  const newTotalPrice = total_price != null ? Number(total_price) : recomputed ? applyDiscountPercentToBruto(newBruto, booking.discount_percent) : booking.total_price;
+  // Pelanggan + Member/Diskon (brief 23 Nov 2026) -- discount_amount
+  // ditulis ULANG SAAT recompute otomatis (supaya baris "Diskon...%: -Rp
+  // Y" di struk tetap akurat terhadap total baru), TIDAK disentuh kalau
+  // vendor mengisi total_price manual (baris diskon snapshot tetap
+  // tampil apa adanya, pola override yang sudah ada -- keputusan
+  // koordinator).
+  const newDiscountAmount = total_price != null ? undefined : recomputed ? computeDiscountAmountFromPercent(newBruto, booking.discount_percent) : undefined;
 
   const { error: updateError } = await supabase
     .from('bookings')
-    .update({ start_date, end_date, total_price: newTotalPrice })
+    .update({ start_date, end_date, total_price: newTotalPrice, ...(newDiscountAmount != null ? { discount_amount: newDiscountAmount } : {}) })
     .eq('id', id);
 
   if (updateError) {
@@ -984,7 +994,7 @@ router.patch('/bookings/:id/extend', async (req, res) => {
   const { data: booking, error: bookingError } = await supabase
     .from('bookings')
     .select(
-      'id, business_id, start_date, end_date, status, total_price, rental_day_mode, booking_items(item_id, quantity, price_at_booking, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking)',
+      'id, business_id, start_date, end_date, status, total_price, rental_day_mode, discount_percent, booking_items(item_id, quantity, price_at_booking, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking)',
     )
     .eq('id', id)
     .maybeSingle();
@@ -1011,9 +1021,14 @@ router.patch('/bookings/:id/extend', async (req, res) => {
 
   const oldDays = rentalDuration(booking.start_date, booking.end_date, booking.rental_day_mode);
   const newDays = rentalDuration(booking.start_date, end_date, booking.rental_day_mode);
-  const newTotalPrice = total_price != null ? Number(total_price) : computeBookingTotalPrice(bookingItems, newDays);
+  const newBruto = computeBookingTotalPrice(bookingItems, newDays);
+  const newTotalPrice = total_price != null ? Number(total_price) : applyDiscountPercentToBruto(newBruto, booking.discount_percent);
+  const newDiscountAmount = total_price != null ? undefined : computeDiscountAmountFromPercent(newBruto, booking.discount_percent);
 
-  const { error: updateError } = await supabase.from('bookings').update({ end_date, total_price: newTotalPrice }).eq('id', id);
+  const { error: updateError } = await supabase
+    .from('bookings')
+    .update({ end_date, total_price: newTotalPrice, ...(newDiscountAmount != null ? { discount_amount: newDiscountAmount } : {}) })
+    .eq('id', id);
 
   if (updateError) {
     res.status(400).json({ error: updateError.message });
@@ -1091,7 +1106,7 @@ router.patch('/bookings/:id/items', async (req, res) => {
   const { data: booking, error: bookingError } = await supabase
     .from('bookings')
     .select(
-      'id, business_id, status, start_date, end_date, rental_day_mode, total_price, booking_items(item_id, quantity, price_at_booking, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, bundle_id, bundle_instance_id, bundle_name, bundle_quantity, items(name))',
+      'id, business_id, status, start_date, end_date, rental_day_mode, total_price, discount_percent, booking_items(item_id, quantity, price_at_booking, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, bundle_id, bundle_instance_id, bundle_name, bundle_quantity, items(name))',
     )
     .eq('id', id)
     .maybeSingle();
@@ -1185,7 +1200,13 @@ router.patch('/bookings/:id/items', async (req, res) => {
 
   const rentalTotal = merged.items.reduce((sum, it) => sum + it.subtotal, 0);
   const saleTotal = saleMerged.items.reduce((sum, it) => sum + it.subtotal, 0);
-  const newTotalPrice = total_price != null ? Number(total_price) : rentalTotal + saleTotal;
+  // Pelanggan + Member/Diskon (brief 23 Nov 2026) -- diskon snapshot
+  // CUMA diterapkan ke rentalTotal (sewa alat+paket), TIDAK ke barang
+  // jual (toggle "berlaku untuk barang jual" tidak di-snapshot ke
+  // bookings, default OFF -- konsisten rumus awal transaksi).
+  const newTotalPrice =
+    total_price != null ? Number(total_price) : applyDiscountPercentToBruto(rentalTotal, booking.discount_percent) + saleTotal;
+  const newDiscountAmount = total_price != null ? null : computeDiscountAmountFromPercent(rentalTotal, booking.discount_percent);
 
   const { data: actorData } = await supabase.auth.getUser();
   if (!actorData.user) {
@@ -1212,6 +1233,17 @@ router.patch('/bookings/:id/items', async (req, res) => {
   if (rpcError) {
     res.status(400).json({ error: rpcError.message });
     return;
+  }
+
+  // Pelanggan + Member/Diskon (brief 23 Nov 2026) -- discount_amount
+  // ditulis ULANG SAAT total dihitung ulang otomatis, supaya baris
+  // "Diskon...%: -Rp Y" di struk tetap akurat setelah Ubah Alat. Update
+  // TERPISAH (bukan lewat RPC migration 066 yang tidak menerima parameter
+  // ini) -- non-blocking best-effort, pola sama pelunasan otomatis saat
+  // Ambil/Kembalikan: isi utama (item/total) SUDAH tersimpan duluan lewat
+  // RPC, kalau update kecil ini gagal TIDAK membatalkan respons sukses.
+  if (newDiscountAmount != null) {
+    await supabase.from('bookings').update({ discount_amount: newDiscountAmount }).eq('id', id);
   }
 
   // items ikut dikembalikan (bukan cuma total_price) -- bentuknya SAMA

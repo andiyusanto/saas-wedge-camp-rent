@@ -8,6 +8,7 @@ import {
   computeItemRentalPrice,
   combinedComponentRates,
   applyBundleDiscount,
+  applyDiscountPercentToBruto,
   allocateBundlePrice,
   computeBundleComponentRatesSnapshot,
   computeBookingItemSubtotal,
@@ -240,4 +241,27 @@ test('Perpanjang paket dari snapshot RASIO terskala (tarif ganjil) -- tetap bula
     3,
   );
   assert.equal(Number.isInteger(extended), true);
+});
+
+// ============================================================
+// Pelanggan + Member/Diskon (brief 23 Nov 2026, migration 073) --
+// applyDiscountPercentToBruto(), dipakai Perpanjang/Ubah Jadwal/Ubah
+// Alat (routes/trackings.ts) saat total DIHITUNG ULANG otomatis dari
+// persen SNAPSHOT booking. Rumus SAMA dengan computeDiscountAmount()
+// frontend dan create_booking_atomic() (migration 073): round(bruto x
+// persen/100), bulat ke bawah/atas sesuai round() JS biasa.
+// ============================================================
+
+test('applyDiscountPercentToBruto: null/0 -> bruto apa adanya (regresi booking tanpa diskon)', () => {
+  assert.equal(applyDiscountPercentToBruto(100000, null), 100000);
+  assert.equal(applyDiscountPercentToBruto(100000, 0), 100000);
+});
+
+test('applyDiscountPercentToBruto: 10% dari 100000 = 90000', () => {
+  assert.equal(applyDiscountPercentToBruto(100000, 10), 90000);
+});
+
+test('applyDiscountPercentToBruto: pembulatan .5 (sama arah dengan PG round untuk bilangan positif)', () => {
+  // 2001 x 50% = 1000.5 -> dibulatkan 1001 -> bruto - 1001 = 1000.
+  assert.equal(applyDiscountPercentToBruto(2001, 50), 1000);
 });

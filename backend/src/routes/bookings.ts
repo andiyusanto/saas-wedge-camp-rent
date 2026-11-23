@@ -63,6 +63,12 @@ router.post('/bookings', async (req, res) => {
     dp_paid,
     dp_method,
     picked_up_now,
+    // Pelanggan + Member/Diskon (brief 23 Nov 2026) -- staf bisa melepas
+    // diskon pelanggan berlabel untuk transaksi tertentu (checkbox
+    // "Terapkan diskon" di NewBookingModal). Default true (diskon
+    // otomatis diterapkan kalau pelanggan punya jenis) kalau field ini
+    // tidak dikirim sama sekali (klien lama/belum update).
+    apply_discount,
   } = req.body ?? {};
 
   const requestedItems = items as BookingItemInput[] | undefined;
@@ -383,6 +389,7 @@ router.post('/bookings', async (req, res) => {
       : null,
     p_sale_items: mergedSaleItems,
     p_actor_name: actorData.user?.email ?? actorData.user?.id ?? 'tidak diketahui',
+    p_apply_customer_discount: apply_discount !== false,
   });
 
   if (rpcError) {
@@ -399,7 +406,17 @@ router.post('/bookings', async (req, res) => {
     return;
   }
 
-  res.status(201).json({ id: bookingRow.booking_id, booking_number: bookingRow.booking_number, status: bookingRow.status });
+  res.status(201).json({
+    id: bookingRow.booking_id,
+    booking_number: bookingRow.booking_number,
+    status: bookingRow.status,
+    // Pelanggan + Member/Diskon (brief 23 Nov 2026) -- dikirim balik
+    // supaya NewBookingModal.tsx bisa langsung menampilkan baris Diskon
+    // di struk WA tanpa round-trip tambahan.
+    discount_type_name: bookingRow.discount_type_name ?? null,
+    discount_percent: bookingRow.discount_percent ?? null,
+    discount_amount: bookingRow.discount_amount ?? 0,
+  });
 });
 
 // Audit privasi 2 Nov 2026 — satu-satunya jalur baca foto penyewa.

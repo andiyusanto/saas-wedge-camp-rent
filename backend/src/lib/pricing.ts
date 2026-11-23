@@ -187,6 +187,30 @@ export function computeBundleComponentRatesSnapshot(
   };
 }
 
+// Pelanggan + Member/Diskon (brief 23 Nov 2026, migration 073) -- dipakai
+// Perpanjang/Ubah Jadwal/Ubah Alat (routes/trackings.ts) saat total
+// DIHITUNG ULANG otomatis (bukan dari input manual vendor): bruto baru
+// (dari computeBookingTotalPrice untuk hari BARU) didiskon dengan PERSEN
+// SNAPSHOT booking itu (bookings.discount_percent, bukan jenis pelanggan
+// yang berlaku SEKARANG -- pola rental_day_mode 049). Rumus SAMA dengan
+// create_booking_atomic()/computeDiscountAmount() frontend -- round(bruto
+// x persen/100). null/0 -> bruto apa adanya (regresi aman untuk booking
+// tanpa diskon).
+export function applyDiscountPercentToBruto(bruto: number, discountPercent: number | null): number {
+  if (!discountPercent) return bruto;
+  return bruto - Math.round((bruto * discountPercent) / 100);
+}
+
+// Nominal diskon (bukan net) dari bruto+persen -- dipakai caller yang
+// perlu menyimpan ULANG bookings.discount_amount saat Perpanjang/Ubah
+// Jadwal/Ubah Alat menghitung ulang total (supaya baris "Diskon ...%: -Rp
+// Y" di struk tetap akurat terhadap total yang baru, bukan nominal lama
+// dari saat transaksi pertama dibuat).
+export function computeDiscountAmountFromPercent(bruto: number, discountPercent: number | null): number {
+  if (!discountPercent) return 0;
+  return Math.round((bruto * discountPercent) / 100);
+}
+
 export function computeBookingItemSubtotal(item: BookingItemRatesSnapshot, days: number): number {
   if (item.day2_rate_at_booking == null) {
     return item.quantity * item.price_at_booking * days;
