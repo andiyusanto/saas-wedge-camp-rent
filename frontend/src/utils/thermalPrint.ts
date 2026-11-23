@@ -22,6 +22,13 @@ const MM_PER_WIDTH: Record<PaperWidth, string> = { 58: '58mm', 80: '80mm' };
 // thermal TANPA mengubah @page Nota A4/struk langganan lain (index.css)
 // -- style dan elemen pratinjau disuntik sekali pakai, dibersihkan lagi
 // setelah dialog print selesai (event afterprint + fallback timeout).
+// #print-thermal-root SENGAJA di-append LANGSUNG ke document.body
+// (bukan dinest di mana pun di dalam #root) -- aturan sembunyikan-
+// selain-print-root yang SAMA di index.css (`body > *:not(...)`,
+// perbaikan bug halaman-ganda 24 Nov 2026) mengenali elemen ini lewat
+// id-nya, jadi visibility/positioning tidak perlu diulang di sini lagi
+// -- cuma @page ukuran kertas yang masih perlu disuntik per pemanggilan
+// (beda vendor bisa beda paperWidth).
 export function printThermalInBrowser(doc: ThermalReceiptDoc, paperWidth: PaperWidth) {
   const root = document.createElement('div');
   root.id = 'print-thermal-root';
@@ -37,9 +44,7 @@ export function printThermalInBrowser(doc: ThermalReceiptDoc, paperWidth: PaperW
   style.textContent = `
     @media print {
       @page { size: ${MM_PER_WIDTH[paperWidth]} auto; margin: 0; }
-      body * { visibility: hidden; }
-      #print-thermal-root, #print-thermal-root * { visibility: visible; }
-      #print-thermal-root { position: absolute; left: 0; top: 0; width: 100%; padding: 2mm; }
+      #print-thermal-root { padding: 2mm; }
     }
   `;
   document.head.appendChild(style);

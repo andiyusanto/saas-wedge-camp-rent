@@ -66,24 +66,30 @@
   color: #a8412e;
 }
 
-/* Cetak Nota Sewa (InvoiceModal) — sembunyikan seluruh halaman kecuali
-   subtree #print-invoice-root saat dicetak/disimpan sebagai PDF, supaya
-   nav/kartu lain yang ada di belakang modal tidak ikut kecetak. */
+/* Cetak Nota Sewa (InvoiceModal) + struk thermal jalur browser
+   (thermalPrint.ts) — tampilkan HANYA #print-invoice-root atau
+   #print-thermal-root (keduanya diposisikan langsung sebagai anak
+   <body> -- InvoiceModal.tsx lewat React Portal, thermalPrint.ts lewat
+   document.body.appendChild), buang (display:none) SEMUA anak langsung
+   body lainnya termasuk seluruh #root (app utuh). SENGAJA display:none,
+   BUKAN visibility:hidden (perilaku lama) -- visibility:hidden tetap
+   menyisakan TINGGI layout elemen yang disembunyikan (navbar, daftar
+   transaksi, dst, bisa ribuan px), yang terbukti (print-to-PDF Chromium
+   sungguhan, investigasi 24 Nov 2026) membuat browser menggambar ulang
+   konten cetak yang diposisikan absolute/fixed itu di SETIAP halaman
+   yang "muat" dalam tinggi dokumen semu itu -- hasilnya PDF berhalaman-
+   ganda dengan nota/struk yang sama diulang berkali-kali, di desktop
+   MAUPUN mobile. display:none membuang tinggi layout-nya sungguhan,
+   jadi dokumen yang dicetak PERSIS setinggi konten yang relevan. */
 @media print {
   body {
     background-color: #fff;
   }
-  body * {
-    visibility: hidden;
-  }
-  #print-invoice-root,
-  #print-invoice-root * {
-    visibility: visible;
+  body > *:not(#print-invoice-root):not(#print-thermal-root) {
+    display: none !important;
   }
   #print-invoice-root {
-    position: absolute;
-    left: 0;
-    top: 0;
+    position: static;
     width: 100%;
   }
 }
