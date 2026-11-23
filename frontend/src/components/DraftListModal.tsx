@@ -26,11 +26,16 @@ export function DraftListModal({
   onClose,
   businessId,
   onResume,
+  onChanged,
 }: {
   isOpen: boolean;
   onClose: () => void;
   businessId: string;
   onResume: (draftId: string) => void;
+  // Badge "Draf (N)" di Navbar (App.tsx) dihitung dari localStorage di
+  // render App.tsx sendiri -- dipanggil setelah hapus satu/semua supaya
+  // badge langsung ter-update tanpa harus menutup modal ini dulu.
+  onChanged?: () => void;
 }) {
   const [drafts, setDrafts] = useState<BookingDraft[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<BookingDraft | null>(null);
@@ -44,6 +49,7 @@ export function DraftListModal({
 
   function refresh() {
     setDrafts(listBookingDrafts(businessId));
+    onChanged?.();
   }
 
   return (

@@ -301,6 +301,22 @@ function App() {
   // perangkat, bukan state React -- tidak otomatis trigger render).
   const [resumeDraftId, setResumeDraftId] = useState<string | null>(null);
   const [isDraftListOpen, setIsDraftListOpen] = useState(false);
+  // Badge "Draf (N)" di Navbar dihitung inline dari localStorage tiap
+  // render App.tsx (listBookingDrafts, bukan state React) -- tick ini
+  // cuma dipakai supaya hapus satu/semua draf DI DALAM DraftListModal
+  // (state-nya sendiri, tidak otomatis memicu render App.tsx) ikut
+  // memaksa App.tsx render ulang sekali lagi, jadi badge langsung
+  // ter-update tanpa harus menutup modal daftar draf dulu.
+  const [draftListTick, setDraftListTick] = useState(0);
+  // business bisa masih null di titik ini (guard `if (!business)` ada DI
+  // BAWAH, setelah hook-hook ini -- tidak boleh dipindah karena aturan
+  // hooks). Dihitung POLOS (bukan useMemo) tiap render -- draftListTick
+  // sendiri tidak dibaca di ekspresinya, cuma dipakai SEBAGAI state yang
+  // di-bump supaya App.tsx render ulang (memaksa baca localStorage
+  // terbaru) setelah hapus draf di dalam DraftListModal yang modalnya
+  // sendiri tidak memicu render App.tsx.
+  void draftListTick;
+  const draftCount = business ? listBookingDrafts(business.id).length : 0;
 
   const [inviteCode, setInviteCode] = useState<string | null>(readInviteCode);
   const [forceDaftar] = useState<boolean>(readForceDaftar);
@@ -443,7 +459,7 @@ function App() {
         role={role}
         onLogout={() => { clearAllBookingDraftsOnLogout(); supabase?.auth.signOut(); }}
         pendingRequestCount={pendingRequestCount}
-        draftCount={listBookingDrafts(business.id).length}
+        draftCount={draftCount}
         onOpenDrafts={() => setIsDraftListOpen(true)}
         writable={subscription?.writable ?? true}
         isAppAdmin={isAppAdmin}
@@ -590,6 +606,7 @@ function App() {
           setResumeDraftId(draftId);
           setIsNewBookingOpen(true);
         }}
+        onChanged={() => setDraftListTick((t) => t + 1)}
       />
 
       <footer className="bg-[#1E3429] border-t border-[#3A5C4A] text-[#DBD5C1] text-xs py-4 px-4 text-center">

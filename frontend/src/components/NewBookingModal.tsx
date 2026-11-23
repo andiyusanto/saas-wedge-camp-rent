@@ -267,9 +267,9 @@ export function NewBookingModal({
   // default true supaya pemanggil lama tidak pecah.
   writable?: boolean;
 }) {
-  const { items } = useItems(business.id);
-  const { bundles } = useBundles(business.id);
-  const { saleItems } = useSaleItems(business.id);
+  const { items, loading: itemsLoading } = useItems(business.id);
+  const { bundles, loading: bundlesLoading } = useBundles(business.id);
+  const { saleItems, loading: saleItemsLoading } = useSaleItems(business.id);
   const { customerTypes } = useCustomerTypes(business.id);
   const { results: customerSuggestions, search: searchCustomers, clear: clearCustomerSuggestions } =
     useCustomerSearch(business.id);
@@ -354,9 +354,37 @@ export function NewBookingModal({
   const draftSaveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [draftResumeWarning, setDraftResumeWarning] = useState<string | null>(null);
   const [draftHadPhoto, setDraftHadPhoto] = useState(false);
+  // Bug ditemukan saat verifikasi Playwright draf (24 Nov 2026): items/
+  // bundles/saleItems di-fetch ULANG setiap modal ini dibuka (hook
+  // dipanggil langsung di sini, bukan di-lift ke atas), jadi `items`/
+  // `bundles`/`saleItems` BERUBAH REFERENSI begitu fetch-nya selesai --
+  // efek init di bawah (yang WAJIB mendengarkan perubahan itu supaya
+  // prefill paket/draf tidak salah dianggap "nonaktif" sebelum data
+  // termuat) akan RE-RUN dan menimpa ulang customerName/quantities ke
+  // kosong kalau staf sempat mulai mengetik SEBELUM fetch selesai. Ref
+  // ini memastikan body efek cuma benar-benar menjalankan inisialisasi
+  // SEKALI per sesi "modal terbuka" -- begitu katalog termuat dan init
+  // pertama selesai, perubahan referensi items/bundles/saleItems
+  // berikutnya (mis. refresh di belakang layar) tidak lagi menimpa isian
+  // staf. Direset ke false setiap modal ditutup (isOpen false).
+  const didInitForOpenSessionRef = useRef(false);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      didInitForOpenSessionRef.current = false;
+      return;
+    }
+    if (didInitForOpenSessionRef.current) return;
+    // Nunggu katalog termuat HANYA kalau memang dibutuhkan (prefill
+    // paket/draf/pesanan online) -- form kosong biasa (kasus PALING
+    // SERING dipakai) tidak boleh menunggu sama sekali, supaya staf yang
+    // langsung mengetik begitu modal terbuka tidak kena race: menunggu
+    // di sini untuk SEMUA kasus sempat menyebabkan isian staf tertimpa
+    // kosong begitu fetch items/bundles/saleItems selesai beberapa saat
+    // kemudian (ditemukan lewat Playwright, 24 Nov 2026).
+    const needsCatalogReady = !!requestPrefill || !!draftId || !!preselectedBundleId;
+    if (needsCatalogReady && (itemsLoading || bundlesLoading || saleItemsLoading)) return;
+    didInitForOpenSessionRef.current = true;
     if (requestPrefill) {
       activeDraftIdRef.current = null;
       setStartDate(requestPrefill.startDate);
@@ -563,16 +591,20 @@ export function NewBookingModal({
     setCustomerPhotoKey('');
     setCustomerPhotoPreview('');
     setError(null);
-    // bundles/items/saleItems sengaja masuk dependency -- hook masing-
-    // masing mulai dari array kosong sebelum fetch-nya selesai; tanpa
-    // ini, prefill paket/resume draf yang terjadi SEBELUM data termuat
-    // akan salah dianggap "tidak ditemukan/nonaktif" padahal valid.
-    // Re-run di sini aman/idempoten -- efek ini SELALU menurunkan ulang
-    // state yang sama dari requestPrefill/draftId, tidak menimpa edit
-    // manual staf (edit manual terjadi di luar efek ini, dependency-nya
-    // tidak berubah karenanya).
+    // bundles/items/saleItems (+ loading flag masing-masing) sengaja
+    // masuk dependency -- hook masing-masing mulai dari array kosong
+    // SELAMA loading=true; tanpa ini, prefill paket/resume draf yang
+    // terjadi SEBELUM data termuat akan salah dianggap "tidak
+    // ditemukan/nonaktif" padahal valid. didInitForOpenSessionRef di atas
+    // memastikan body efek ini cuma jalan SEKALI (begitu loading selesai)
+    // per sesi modal terbuka -- perubahan referensi items/bundles/
+    // saleItems setelahnya (mis. refresh latar belakang) TIDAK memicu
+    // reset ulang yang akan menimpa isian staf yang sedang diketik.
   }, [
     isOpen,
+    itemsLoading,
+    bundlesLoading,
+    saleItemsLoading,
     preselectedItemId,
     preselectedBundleId,
     preselectedStartDate,
@@ -1082,6 +1114,32 @@ export function NewBookingModal({
           </button>
         </div>
 
+        {/* Keranjang ringkas mobile (brief 23 Nov 2026, bagian B) --
+            SELALU terlihat (bukan di dalam area scroll form) walau staf
+            sedang menggulir memilih alat, supaya total & jumlah yang
+            sudah dipilih tidak perlu digulir ulang ke bawah dulu untuk
+            dilihat. Pakai totalPrice/selectedEntries/dkk yang SAMA
+            dengan form & struk -- TIDAK ADA rumus harga baru di sini.
+            Desktop cukup ringkasan yang sudah ada di bagian bawah form
+            (tidak diduplikasi di sini, sm:hidden). Ketuk -> scroll ke
+            bagian "3. Pilih Peralatan" (bukan panel -/+ terpisah yang
+            akan menduplikasi state/logic stepper yang sudah ada di
+            bagian itu -- penyederhanaan risiko rendah, kontrol +/- yang
+            sesungguhnya tetap di satu tempat). */}
+        {(selectedEntries.length > 0 || selectedBundleEntries.length > 0 || selectedSaleEntries.length > 0) && (
+          <button
+            type="button"
+            onClick={() => document.getElementById('pilih-peralatan-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            className="sm:hidden shrink-0 bg-[#1E3429] text-white px-4 py-2.5 flex items-center justify-between text-xs font-semibold active:bg-[#15251D] transition"
+          >
+            <span>
+              🛒 {selectedEntries.length} alat · {selectedBundleEntries.length} paket
+              {selectedSaleEntries.length > 0 ? ` · ${selectedSaleEntries.length} barang jual` : ''}
+            </span>
+            <span className="text-[#A65C2A]">{formatIDR(totalPrice)} ▲</span>
+          </button>
+        )}
+
         <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-5 text-xs sm:text-sm">
           {/* Review -c1: peringatan hanya-baca HARUS di PALING ATAS form,
               sebelum field apa pun — vendor tidak boleh baru tahu transaksi
@@ -1562,7 +1620,7 @@ export function NewBookingModal({
             </div>
           )}
 
-          <div className="space-y-3 bg-[#F1EEE2] p-4 rounded-xl border border-[#DBD5C1]">
+          <div id="pilih-peralatan-section" className="space-y-3 bg-[#F1EEE2] p-4 rounded-xl border border-[#DBD5C1]">
             <h3 className="font-bold text-[#26302B]">3. Pilih Peralatan ({selectedEntries.length} Jenis)</h3>
 
             {items.length === 0 ? (

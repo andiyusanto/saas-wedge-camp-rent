@@ -617,6 +617,23 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           <Ui>Waspada</Ui> menampilkan banner peringatan beserta catatannya, bukan penghalang (transaksi tetap bisa
           dilanjutkan).
         </Note>
+        <Note>
+          <strong>Draf &amp; keranjang.</strong> Isian form disimpan otomatis di PERANGKAT ini (bukan dikirim ke
+          server) begitu kamu mulai mengisi — kalau formnya ditutup tanpa tekan Simpan (mis. pelanggan masih
+          mempertimbangkan alat lain), isiannya tidak hilang. Tombol <Ui>Draf (N)</Ui> muncul di navbar begitu ada
+          draf tersimpan — buka untuk melihat daftarnya (nama, jumlah alat, total sementara, kapan dibuat), lalu{' '}
+          <Ui>Lanjutkan</Ui> untuk membuka draf itu lagi persis seperti terakhir diisi, atau <Ui>Hapus</Ui> satu per
+          satu. Maksimal 10 draf per usaha — draf paling lama otomatis dibuang kalau penuh. Draf kedaluwarsa sendiri
+          setelah 3 hari. <strong>Draf BELUM mengunci stok alat</strong> — ketersediaan tetap baru dicek saat tombol
+          Simpan ditekan, sama seperti biasa. Saat draf dilanjutkan, alat/paket/barang jual yang sudah dinonaktifkan
+          sejak draf dibuat otomatis dibuang (muncul info), harga dihitung ulang dari harga katalog SAAT INI (bukan
+          harga lama yang tersimpan di draf), dan kalau tanggalnya sudah lewat, harus dipilih ulang. Foto pelanggan
+          TIDAK ikut tersimpan di draf (perlu diambil ulang kalau diperlukan). Di HP (layar sempit), muncul juga bar
+          ringkas "🛒 N alat · M paket · Rp total" menempel di atas form begitu ada alat/paket/barang jual yang
+          dipilih — ketuk untuk langsung digulir ke bagian pilih alat. Logout menghapus SEMUA draf di perangkat ini
+          (termasuk milik usaha lain kalau device dipakai gantian) — untuk jaga privasi data pelanggan di HP
+          bersama.
+        </Note>
       </Section>
 
       <Section id="g-pelanggan" num="4b" title="Pelanggan" kicker="Daftar pelanggan, label Member/Mitra/Waspada, dan diskon otomatis.">
