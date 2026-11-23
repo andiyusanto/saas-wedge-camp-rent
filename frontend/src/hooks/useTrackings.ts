@@ -1,7 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import { apiFetch } from '../lib/api';
 import { useApiResource } from './useApiResource';
-import type { ReceiptData, RentalDayMode } from '../utils/formatters';
+import type { DurationLabelStyle, ReceiptData, RentalDayMode } from '../utils/formatters';
 
 export type TrackingBooking = {
   id: string;
@@ -95,6 +95,8 @@ export type TrackingBooking = {
   // Snapshot (migration 049) — mode saat booking ini DIBUAT, null untuk
   // baris dari sebelum fitur ini (ditafsirkan 'per_hari_kalender').
   rental_day_mode: RentalDayMode | null;
+  // Label lama sewa "2H1M" (migration 072) -- snapshot, null = 'hari'.
+  duration_label_style: DurationLabelStyle;
   // Snapshot paket min/maks hari (Tahap 1, migration 054).
   min_rental_days: number | null;
   max_rental_days: number | null;
@@ -118,6 +120,9 @@ type TrackingsResponse = {
   // label stat "Sewa Terlambat"/tombol filter "Terlambat" (keputusan
   // koordinator 15 Nov 2026).
   late_fee_mode: 'bertahap_12jam' | 'per_hari_24jam' | 'per_jam' | 'tanpa_denda';
+  // Zona rental (migration 053) -- dipakai baris "Diambil" (brief 23 Nov
+  // 2026) di struk/nota membaca TANGGAL picked_up_at yang benar.
+  timezone: string | null;
 };
 
 // Dipakai bareng oleh struk WA dan Nota Sewa (cetak/PDF) — satu sumber
@@ -127,6 +132,7 @@ export function buildReceiptData(
   businessName: string,
   businessAddress?: string | null,
   businessLogoUrl?: string | null,
+  timezone?: string | null,
 ): ReceiptData {
   const activeDeposit = b.deposits.find((d) => d.status === 'ditahan') ?? b.deposits[0];
   return {
@@ -156,6 +162,9 @@ export function buildReceiptData(
     returnDeadlineTime: b.return_deadline_time,
     returnDeadlineNextDay: b.return_deadline_next_day,
     payments: b.payments.map((p) => ({ amount: p.amount, method: p.method, kind: p.kind, note: p.note, paidAt: p.paid_at })),
+    pickedUpAt: b.picked_up_at,
+    timezone: timezone ?? null,
+    durationLabelStyle: b.duration_label_style,
   };
 }
 
@@ -304,6 +313,7 @@ export function useTrackings(session: Session | null) {
     rescheduleDeadlineDays: data?.reschedule_deadline_days ?? null,
     publicPageSlug: data?.public_page_slug ?? null,
     lateFeeMode: data?.late_fee_mode ?? 'bertahap_12jam',
+    timezone: data?.timezone ?? null,
     loading,
     error,
     refresh,

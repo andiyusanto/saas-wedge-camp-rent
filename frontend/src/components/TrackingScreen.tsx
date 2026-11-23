@@ -60,6 +60,19 @@ import {
 
 export type StatusFilter = 'all' | 'overdue' | 'active' | 'pending_pickup';
 
+// Mulai Sewa + ambil lebih awal (brief 23 Nov 2026) -- tanggal picked_up_at
+// dibaca lewat Date lokal BROWSER (device staf secara fisik ada di zona
+// rental, pola yang sama dengan todayStr()/formatDateTimeIndo di seluruh
+// frontend, CLAUDE.md bagian 4), bukan offset manual seperti backend.
+function pickedUpDateStr(pickedUpAt: string): string {
+  const d = new Date(pickedUpAt);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function pickedUpBeforeStart(b: { is_pending_pickup: boolean; picked_up_at: string | null; start_date: string }): boolean {
+  return !b.is_pending_pickup && !!b.picked_up_at && pickedUpDateStr(b.picked_up_at) < b.start_date;
+}
+
 export function TrackingScreen({
   session,
   business,
@@ -93,6 +106,7 @@ export function TrackingScreen({
     rescheduleDeadlineDays,
     publicPageSlug,
     lateFeeMode,
+    timezone,
     loading,
     error,
     refresh,
@@ -186,12 +200,12 @@ export function TrackingScreen({
 
   function handleShareWA(b: TrackingBooking) {
     if (!b.customer?.phone) return;
-    const text = generateWhatsAppReceipt(buildReceiptData(b, businessName, businessAddress));
+    const text = generateWhatsAppReceipt(buildReceiptData(b, businessName, businessAddress, undefined, timezone));
     window.open(getWhatsAppShareUrl(b.customer.phone, text), '_blank');
   }
 
   function handlePrintInvoice(b: TrackingBooking) {
-    setInvoiceData(buildReceiptData(b, businessName, businessAddress, businessLogoUrl));
+    setInvoiceData(buildReceiptData(b, businessName, businessAddress, businessLogoUrl, timezone));
   }
 
   // Review -c1 (tahap 4, poin 1a): precheck LANGSUNG dari DB tepat
@@ -967,14 +981,21 @@ function BookingCard({
 
           <div className="p-2.5 rounded-xl bg-[#F1EEE2] border border-[#DBD5C1] space-y-1 mt-2">
             <div className="flex justify-between text-[11px]">
-              <span className="text-[#6E6853]">Tanggal Ambil:</span>
-              <strong className="text-[#26302B]">{formatDateIndo(b.start_date)}</strong>
+              <span className="text-[#6E6853]">Mulai Sewa:</span>
+              <strong className="text-[#26302B]">
+                {formatDateIndo(b.start_date)}
+                {pickedUpBeforeStart(b) && <span className="ml-1 text-[9px] font-normal text-[#A65C2A]">Diambil lebih awal</span>}
+              </strong>
             </div>
             <div className="flex justify-between text-[11px]">
               <span className="text-[#6E6853]">Janji Kembali:</span>
               <strong className={`font-bold ${b.is_overdue ? 'text-[#A8412E]' : 'text-[#26302B]'}`}>{formatDateIndo(b.end_date)}</strong>
             </div>
-            {b.picked_up_at && (
+            {/* "Diambil" (brief 23 Nov 2026) -- CUMA tampil kalau TANGGAL
+                picked_up_at berbeda dari start_date, supaya pengambilan
+                tepat waktu/walk-in biasa tetap tampil PERSIS seperti
+                sebelum fitur ini ada (regresi). */}
+            {b.picked_up_at && pickedUpDateStr(b.picked_up_at) !== b.start_date && (
               <div className="flex justify-between text-[11px]">
                 <span className="text-[#6E6853]">Diambil:</span>
                 <strong className="text-[#26302B]">{formatDateTimeIndo(b.picked_up_at)}</strong>

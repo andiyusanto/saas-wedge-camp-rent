@@ -42,12 +42,15 @@ async function fetchReceiptExtras(bookingId: string): Promise<{
   payments: { amount: number; method: string | null; kind: string; note: string | null; paid_at: string }[];
   returnDeadlineTime: string | null;
   returnDeadlineNextDay: boolean | null;
+  pickedUpAt: string | null;
+  durationLabelStyle: 'hari' | 'hari_malam' | null;
+  timezone: string | null;
 } | null> {
   if (!supabase) return null;
   const { data, error } = await supabase
     .from('bookings')
     .select(
-      'return_deadline_time, return_deadline_next_day, deposits(type, note, status), booking_payments(amount, method, kind, note, paid_at)',
+      'return_deadline_time, return_deadline_next_day, picked_up_at, duration_label_style, deposits(type, note, status), booking_payments(amount, method, kind, note, paid_at), businesses(timezone)',
     )
     .eq('id', bookingId)
     .maybeSingle();
@@ -57,6 +60,9 @@ async function fetchReceiptExtras(bookingId: string): Promise<{
     payments: (data.booking_payments ?? []) as { amount: number; method: string | null; kind: string; note: string | null; paid_at: string }[],
     returnDeadlineTime: data.return_deadline_time ?? null,
     returnDeadlineNextDay: data.return_deadline_next_day ?? null,
+    pickedUpAt: data.picked_up_at ?? null,
+    durationLabelStyle: (data.duration_label_style as 'hari' | 'hari_malam' | null) ?? null,
+    timezone: (Array.isArray(data.businesses) ? data.businesses[0] : data.businesses)?.timezone ?? null,
   };
 }
 
@@ -144,6 +150,9 @@ export function HistoryScreen({
       payments: (extras?.payments ?? []).map((p) => ({ amount: p.amount, method: p.method, kind: p.kind, note: p.note, paidAt: p.paid_at })),
       isReprint: true,
       reprintedAt: todayStrLocal(),
+      pickedUpAt: extras?.pickedUpAt ?? null,
+      durationLabelStyle: extras?.durationLabelStyle ?? null,
+      timezone: extras?.timezone ?? null,
     });
   }
 

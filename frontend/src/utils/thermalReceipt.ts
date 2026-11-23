@@ -14,6 +14,8 @@ import {
   addDaysStr,
   groupReceiptItemsByBundle,
   computeRemainingBalance,
+  formatRentalDuration,
+  formatPickedUpEarlyLine,
   PAYMENT_METHOD_LABEL,
   PAYMENT_KIND_LABEL,
 } from './formatters';
@@ -125,8 +127,10 @@ export function buildThermalReceiptDoc(data: ReceiptData, paperWidth: PaperWidth
   addText(`Kode: ${data.bookingNumber}`);
   addText(`Penyewa: ${data.customerName}`);
   if (data.customerPhone) addText(`WA: ${data.customerPhone}`);
-  addText(`Ambil: ${formatDateIndo(data.startDate)}`);
-  addText(`Kembali: ${formatDateIndo(data.endDate)} (${days} hari)`);
+  addText(`Mulai Sewa: ${formatDateIndo(data.startDate)}`);
+  const pickedUpEarlyLine = formatPickedUpEarlyLine(data.startDate, data.pickedUpAt, data.timezone);
+  if (pickedUpEarlyLine) addText(pickedUpEarlyLine);
+  addText(`Kembali: ${formatDateIndo(data.endDate)} (${formatRentalDuration(days, data.durationLabelStyle ?? null, data.rentalDayMode)})`);
   if (data.returnDeadlineTime) {
     const dueDate =
       data.returnDeadlineNextDay || data.returnDeadlineTime === '00:00' ? addDaysStr(data.endDate, 1) : data.endDate;

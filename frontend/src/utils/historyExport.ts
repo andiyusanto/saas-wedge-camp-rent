@@ -333,7 +333,7 @@ export async function downloadHistoryExcel(allFiltered: HistoryBooking[], filter
     { header: 'No. Booking', key: 'booking_number', width: 16 },
     { header: 'Penyewa', key: 'customer_name', width: 22 },
     { header: 'WhatsApp', key: 'customer_phone', width: 16 },
-    { header: 'Tanggal Ambil', key: 'start_date', width: 14 },
+    { header: 'Mulai Sewa', key: 'start_date', width: 14 },
     { header: 'Tanggal Kembali', key: 'end_date', width: 14 },
     { header: 'Alat', key: 'items', width: 32 },
     { header: 'Barang Jual', key: 'sale_items', width: 24 },

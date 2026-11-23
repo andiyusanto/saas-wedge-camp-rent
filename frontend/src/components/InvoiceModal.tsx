@@ -12,6 +12,8 @@ import {
   addDaysStr,
   groupReceiptItemsByBundle,
   computeRemainingBalance,
+  formatRentalDuration,
+  formatPickedUpEarlyLine,
   PAYMENT_METHOD_LABEL,
   PAYMENT_KIND_LABEL,
 } from '../utils/formatters';
@@ -113,12 +115,18 @@ export function InvoiceModal({
               </p>
             )}
             <p>
-              <span className="text-[#6E6853]">Tanggal Ambil: </span>
+              <span className="text-[#6E6853]">Mulai Sewa: </span>
               {formatDateIndo(data.startDate)}
             </p>
+            {formatPickedUpEarlyLine(data.startDate, data.pickedUpAt, data.timezone) && (
+              <p>
+                <span className="text-[#6E6853]">Diambil: </span>
+                {formatPickedUpEarlyLine(data.startDate, data.pickedUpAt, data.timezone)!.replace('Diambil: ', '')}
+              </p>
+            )}
             <p>
               <span className="text-[#6E6853]">Tanggal Kembali: </span>
-              {formatDateIndo(data.endDate)} ({days} hari)
+              {formatDateIndo(data.endDate)} ({formatRentalDuration(days, data.durationLabelStyle ?? null, data.rentalDayMode)})
             </p>
             {data.returnDeadlineTime && (
               <p>

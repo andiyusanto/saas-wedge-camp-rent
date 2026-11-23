@@ -105,6 +105,36 @@ export function rentalDays(start: string, end: string, mode: RentalDayMode | nul
   return mode === 'per_malam' ? Math.max(1, nights) : Math.max(1, nights + 1);
 }
 
+// Label lama sewa "2H1M" (bagian E, migration 072, brief 23 Nov 2026) --
+// SATU helper, dipakai di struk WA/Nota A4/struk thermal/ringkasan Catat
+// Transaksi/Transaksi Aktif/Riwayat (brief eksplisit: jangan diduplikasi).
+// Murni TEKS -- tidak menyentuh harga/denda/stok sama sekali, dan harga
+// tetap selalu "/hari" di katalog/tarif bertingkat (tidak disentuh style
+// ini). style null (baris lama/belum diatur) ditafsirkan 'hari', sama
+// pola rental_day_mode (migration 049) -- regresi: tampilan identik
+// sebelum fitur ini ada. 'hari_malam' CUMA berarti sesuatu untuk mode
+// per_malam (N malam -> N+1 hari, mis. 1 malam = "2H1M") -- dipanggil
+// dengan style 'hari' untuk rental per_hari_kalender di semua call site
+// (keputusan koordinator: rental_day_mode='per_hari_kalender' tidak
+// pernah melihat pengaturan ini).
+export type DurationLabelStyle = 'hari' | 'hari_malam' | null;
+
+// rentalDayMode WAJIB diperiksa DI SINI (bukan tiap call site) --
+// snapshot duration_label_style tetap bisa 'hari_malam' walau rental
+// belakangan pindah ke rental_day_mode='per_hari_kalender' (owner pernah
+// memilih 2H1M, lalu ganti mode) -- "N+1H/NM" cuma bermakna untuk sewa
+// per MALAM, jadi dipaksa 'hari' kalau mode bukan 'per_malam', terlepas
+// dari nilai style yang tersimpan (catatan review koordinator 23 Nov
+// 2026). Satu titik pemeriksaan ini mencegah kalau-kalau yang sama harus
+// diulang di 6+ tempat pemakaian (struk WA/Nota/thermal/ringkasan Catat
+// Transaksi/Transaksi Aktif/Riwayat).
+export function formatRentalDuration(nights: number, style: DurationLabelStyle, rentalDayMode: RentalDayMode | null): string {
+  if (style === 'hari_malam' && rentalDayMode === 'per_malam') {
+    return `${nights + 1}H${nights}M`;
+  }
+  return `${nights} hari`;
+}
+
 // Harga bertingkat per-hari (migration 034, diadaptasi dari Bilbo-Outdoors
 // src/pricing.ts — TAPI semantik beda sengaja, lihat komentar migrasinya:
 // ini TARIF PER HARI itu sendiri, bukan total kumulatif ala Bilbo).
@@ -313,6 +343,42 @@ export type ReceiptData = {
   payments?: ReceiptPayment[];
   isReprint?: boolean;
   reprintedAt?: string | null;
+  // Mulai Sewa + ambil lebih awal (brief 23 Nov 2026) -- opsional, default
+  // null/undefined supaya struk tanpa field ini (belum diisi) tetap
+  // identik seperti sebelum fitur ini ada. timezone dipakai membaca
+  // TANGGAL picked_up_at di zona rental (pola migration 053), bukan UTC.
+  pickedUpAt?: string | null;
+  timezone?: string | null;
+  // Snapshot label lama sewa (migration 072) -- null = 'hari' (regresi).
+  durationLabelStyle?: DurationLabelStyle;
+};
+
+// Baris "Diambil: {tanggal jam}" (brief 23 Nov 2026 bagian A) -- CUMA
+// tampil kalau TANGGAL picked_up_at (di zona rental) berbeda dari
+// start_date. Sama kalau diambil tepat waktu -> baris tidak muncul,
+// supaya struk lama/transaksi yang diambil normal tampil PERSIS seperti
+// sebelum fitur ini ada. SATU helper, dipakai struk WA/Nota A4/thermal.
+export function formatPickedUpEarlyLine(startDate: string, pickedUpAt: string | null | undefined, timezone: string | null | undefined): string | null {
+  if (!pickedUpAt) return null;
+  const offsetHours = TZ_OFFSET_HOURS[timezone ?? 'Asia/Jakarta'] ?? 7;
+  const localMs = new Date(pickedUpAt).getTime() + offsetHours * 3_600_000;
+  const local = new Date(localMs);
+  const pickedUpDateStr = `${local.getUTCFullYear()}-${pad2(local.getUTCMonth() + 1)}-${pad2(local.getUTCDate())}`;
+  if (pickedUpDateStr === startDate) return null;
+  const hh = pad2(local.getUTCHours());
+  const mm = pad2(local.getUTCMinutes());
+  return `Diambil: ${formatDateIndo(pickedUpDateStr)} ${hh}:${mm}`;
+}
+
+// toDateStrInTzFrontend: versi ringan toDateStrInTz (backend/src/lib/
+// dates.ts) untuk dipakai di frontend -- offset WIB/WITA/WIT dihitung
+// manual (Indonesia tanpa DST, CLAUDE.md bagian 4), BUKAN lewat
+// toLocaleDateString (tergantung locale/timezone browser, bisa beda dari
+// zona RENTAL kalau staf mengakses dari luar zona itu).
+const TZ_OFFSET_HOURS: Record<string, number> = {
+  'Asia/Jakarta': 7,
+  'Asia/Makassar': 8,
+  'Asia/Jayapura': 9,
 };
 
 // Pelunasan (brief 17 Nov 2026) -- SATU sumber "sisa tagihan" dipakai di
@@ -449,8 +515,10 @@ Kode Booking: *${data.bookingNumber}*
 ---------------------------------------
 Penyewa: *${data.customerName}*
 WhatsApp: ${data.customerPhone}
-Tanggal Ambil: ${formatDateIndo(data.startDate)}
-Tanggal Kembali: ${formatDateIndo(data.endDate)} (${days} hari)${
+Mulai Sewa: ${formatDateIndo(data.startDate)}${
+    formatPickedUpEarlyLine(data.startDate, data.pickedUpAt, data.timezone) ? `\n${formatPickedUpEarlyLine(data.startDate, data.pickedUpAt, data.timezone)}` : ''
+  }
+Tanggal Kembali: ${formatDateIndo(data.endDate)} (${formatRentalDuration(days, data.durationLabelStyle ?? null, data.rentalDayMode)})${
     data.returnDeadlineTime
       ? `\nKembali paling lambat: ${formatDateIndo(
           data.returnDeadlineNextDay || data.returnDeadlineTime === '00:00' ? addDaysStr(data.endDate, 1) : data.endDate,
