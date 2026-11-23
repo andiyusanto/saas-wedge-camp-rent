@@ -89,3 +89,42 @@ test('computeItemRentalPrice tarif ganjil 3 hari: backend dan frontend identik',
   assert.equal(backend.computeItemRentalPrice(tendaOdd, 3), frontend.computeItemRentalPrice(tendaOdd, 3));
   assert.equal(backend.computeItemRentalPrice(tendaOdd, 3), 37_665);
 });
+
+// ============================================================
+// Pelanggan + Member/Diskon (brief 23 Nov 2026, migration 073) --
+// backend.applyDiscountPercentToBruto() (dipakai Perpanjang/Ubah Jadwal/
+// Ubah Alat merecompute total) vs frontend.computeDiscountAmount()
+// (dipakai pratinjau di NewBookingModal.tsx sebelum submit) HARUS selalu
+// sepakat soal NOMINAL diskon -- bentuknya beda (satu mengembalikan net,
+// satu mengembalikan nominal), jadi dibandingkan lewat bruto-net.
+// ============================================================
+
+function backendDiscountAmount(bruto: number, percent: number | null): number {
+  return bruto - backend.applyDiscountPercentToBruto(bruto, percent);
+}
+
+const discountParityCases: { bruto: number; percent: number; label: string }[] = [
+  { bruto: 100_000, percent: 10, label: 'kasus dasar' },
+  { bruto: 2_001, percent: 50, label: 'pembulatan .5 (1000.5 -> 1001)' },
+  { bruto: 500_000, percent: 0, label: 'persen 0' },
+  { bruto: 500_000, percent: 100, label: 'persen 100' },
+  { bruto: 0, percent: 15, label: 'bruto 0' },
+  { bruto: 333_333, percent: 33, label: 'angka ganjil' },
+];
+
+for (const { bruto, percent, label } of discountParityCases) {
+  test(`parity diskon (${label}): backend.applyDiscountPercentToBruto vs frontend.computeDiscountAmount sepakat`, () => {
+    const backendAmount = backendDiscountAmount(bruto, percent);
+    const frontendAmount = frontend.computeDiscountAmount(bruto, 0, percent, false);
+    assert.equal(backendAmount, frontendAmount, `bruto=${bruto} percent=${percent}`);
+  });
+}
+
+test('parity diskon: toggle barang jual -- frontend.computeDiscountAmount(bruto, saleBruto, persen, true) vs backend dihitung manual dari (bruto+saleBruto)', () => {
+  const bruto = 80_000;
+  const saleBruto = 20_000;
+  const percent = 10;
+  const frontendAmount = frontend.computeDiscountAmount(bruto, saleBruto, percent, true);
+  const backendAmount = backendDiscountAmount(bruto + saleBruto, percent);
+  assert.equal(frontendAmount, backendAmount);
+});
