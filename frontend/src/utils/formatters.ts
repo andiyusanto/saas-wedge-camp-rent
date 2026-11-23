@@ -362,6 +362,15 @@ export type ReceiptData = {
   timezone?: string | null;
   // Snapshot label lama sewa (migration 072) -- null = 'hari' (regresi).
   durationLabelStyle?: DurationLabelStyle;
+  // Pelanggan + Member/Diskon (brief 23 Nov 2026) -- snapshot per
+  // transaksi (bookings.discount_*). Opsional, default kosong/0 supaya
+  // struk tanpa diskon tampil PERSIS seperti sebelum fitur ini ada
+  // (regresi). discount_amount cuma INFORMASI (baris struk) -- total
+  // yang sungguhan dibayar tetap totalPrice apa adanya (vendor bisa
+  // override manual, baris diskon tetap tampil sesuai snapshot).
+  discountTypeName?: string | null;
+  discountPercent?: number | null;
+  discountAmount?: number;
 };
 
 // Baris "Diambil: {tanggal jam}" (brief 23 Nov 2026 bagian A) -- CUMA
@@ -407,6 +416,20 @@ const TZ_OFFSET_HOURS: Record<string, number> = {
 // bukan diam-diam disembunyikan jadi "LUNAS".
 export function computeRemainingBalance(totalPrice: number, penaltiesTotal: number, paidTotal: number): number {
   return totalPrice + penaltiesTotal - paidTotal;
+}
+
+// Pelanggan + Member/Diskon (brief 23 Nov 2026) -- PRATINJAU diskon di
+// form Catat Transaksi/Perpanjang/Ubah Alat SEBELUM submit. Sumber
+// kebenaran SUNGGUHAN tetap create_booking_atomic() (migration 073) yang
+// menghitung ulang dari baris booking_items/booking_sale_items yang
+// SUDAH tersimpan -- helper ini murni untuk menampilkan angka yang sama
+// di layar sebelum disimpan, rumusnya SENGAJA sesederhana mungkin (SUM x
+// persen/100 dibulatkan) supaya gampang dicocokkan manual terhadap hasil
+// RPC (bukan 2 implementasi rumus harga terpisah seperti
+// computeItemRentalPrice).
+export function computeDiscountAmount(brutoRental: number, brutoSaleItems: number, percent: number, appliesToSaleItems: boolean): number {
+  const bruto = brutoRental + (appliesToSaleItems ? brutoSaleItems : 0);
+  return Math.round((bruto * percent) / 100);
 }
 
 export const PAYMENT_METHOD_LABEL: Record<string, string> = {
@@ -547,7 +570,11 @@ ${
 
 ---------------------------------------
 Total Harga Sewa: *${formatIDR(rentalSubtotal)}*
-${saleItemsText ? `Total Barang Jual: *${formatIDR(saleItemsTotal)}*\n` : ''}${
+${
+  data.discountAmount && data.discountAmount > 0
+    ? `Diskon ${data.discountTypeName ?? ''} ${data.discountPercent ?? 0}%: -${formatIDR(data.discountAmount)}\n`
+    : ''
+}${saleItemsText ? `Total Barang Jual: *${formatIDR(saleItemsTotal)}*\n` : ''}${
   finesText ? `${finesText}\n` : ''
 }Total Tagihan: *${formatIDR(totalTagihan)}*
 Total Dibayar: ${formatIDR(data.dpPaid)}

@@ -6,6 +6,12 @@ export type CustomerMatch = {
   name: string;
   phone: string | null;
   address: string | null;
+  // Pelanggan + Member/Diskon (brief 23 Nov 2026) -- dipakai NewBookingModal.tsx
+  // menampilkan tanda "Member -10%" / banner Waspada saat pelanggan lama
+  // dipilih dari daftar saran.
+  customer_type_id: string | null;
+  is_watchlisted: boolean;
+  note: string | null;
 };
 
 export type CustomerHistorySummary = {
@@ -40,7 +46,7 @@ export function useCustomerSearch(businessId: string | undefined) {
       setSearching(true);
       const { data } = await supabase
         .from('customers')
-        .select('id, name, phone, address')
+        .select('id, name, phone, address, customer_type_id, is_watchlisted, note')
         .eq('business_id', businessId)
         .or(`name.ilike.%${safeQuery}%,phone.ilike.%${safeQuery}%,address.ilike.%${safeQuery}%`)
         .order('name')
@@ -54,6 +60,26 @@ export function useCustomerSearch(businessId: string | undefined) {
   const clear = useCallback(() => setResults([]), []);
 
   return { results, searching, search, clear };
+}
+
+// Konfirmasi Pesanan Online (brief 23 Nov 2026, poin D koordinator) --
+// kalau nomor WA pemesan cocok persis dengan pelanggan yang SUDAH ADA,
+// pelanggan itu otomatis terpilih (bukan selalu dianggap pelanggan baru)
+// supaya jenis/diskonnya ikut terpakai saat Konfirmasi. Pencarian EXACT
+// match (bukan ilike seperti search() di atas) -- nomor WA sendiri sudah
+// unik secara praktik, pencocokan fuzzy di sini berisiko salah pasang ke
+// orang lain.
+export async function findCustomerByPhone(businessId: string, phone: string): Promise<CustomerMatch | null> {
+  if (!supabase || !phone.trim()) return null;
+  const { data } = await supabase
+    .from('customers')
+    .select('id, name, phone, address, customer_type_id, is_watchlisted, note')
+    .eq('business_id', businessId)
+    .eq('phone', phone.trim())
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data as CustomerMatch | null) ?? null;
 }
 
 export async function fetchCustomerHistorySummary(customerId: string): Promise<CustomerHistorySummary> {

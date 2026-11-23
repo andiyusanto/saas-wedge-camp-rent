@@ -8,9 +8,10 @@ import type { Item } from '../hooks/useItems';
 import { useBundles } from '../hooks/useBundles';
 import type { Bundle } from '../hooks/useBundles';
 import { useSaleItems } from '../hooks/useSaleItems';
+import { useCustomerTypes } from '../hooks/useCustomerTypes';
 import type { Business } from '../hooks/useBusiness';
 import { apiFetch } from '../lib/api';
-import { useCustomerSearch, fetchCustomerHistorySummary } from '../hooks/useCustomerSearch';
+import { useCustomerSearch, fetchCustomerHistorySummary, findCustomerByPhone } from '../hooks/useCustomerSearch';
 import type { CustomerMatch, CustomerHistorySummary } from '../hooks/useCustomerSearch';
 import { resizeImageToDataUrl } from '../utils/imageResize';
 import {
@@ -28,6 +29,7 @@ import {
   allocateBundlePrice,
   formatRentalDuration,
   endDateForDays,
+  computeDiscountAmount,
 } from '../utils/formatters';
 
 // Paket Alat Tahap 1 (brief 15 Nov 2026, migration 064) — satu paket
@@ -260,6 +262,7 @@ export function NewBookingModal({
   const { items } = useItems(business.id);
   const { bundles } = useBundles(business.id);
   const { saleItems } = useSaleItems(business.id);
+  const { customerTypes } = useCustomerTypes(business.id);
   const { results: customerSuggestions, search: searchCustomers, clear: clearCustomerSuggestions } =
     useCustomerSearch(business.id);
 
@@ -267,6 +270,15 @@ export function NewBookingModal({
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  // Pelanggan + Member/Diskon (brief 23 Nov 2026) -- pelanggan lama yang
+  // dipilih dari daftar saran, dipakai menampilkan tanda "Member -10%"
+  // dan banner Waspada. null untuk pelanggan baru (tidak mungkin punya
+  // jenis/Waspada -- belum ada histori).
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerMatch | null>(null);
+  // Staf bisa melepas diskon untuk transaksi INI SAJA (checkbox "Terapkan
+  // diskon") -- default true, cuma relevan kalau selectedCustomer punya
+  // customer_type_id.
+  const [applyDiscount, setApplyDiscount] = useState(true);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [historySummary, setHistorySummary] = useState<CustomerHistorySummary | null>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -378,11 +390,25 @@ export function NewBookingModal({
       // sini SAAT prefill, murni tampilan (nilai yang disimpan ke booking
       // baru tetap dari field customerPhone, boleh dalam bentuk apapun
       // vendor ketik/edit).
-      setCustomerPhone(
-        requestPrefill.customerPhone.startsWith('62')
-          ? '0' + requestPrefill.customerPhone.slice(2)
-          : requestPrefill.customerPhone,
-      );
+      const localPhone = requestPrefill.customerPhone.startsWith('62')
+        ? '0' + requestPrefill.customerPhone.slice(2)
+        : requestPrefill.customerPhone;
+      setCustomerPhone(localPhone);
+      // Pelanggan + Member/Diskon (brief 23 Nov 2026, poin D koordinator)
+      // -- kalau nomor WA pemesan cocok pelanggan yang SUDAH ADA, otomatis
+      // terpilih supaya diskon jenisnya ikut terpakai saat Konfirmasi
+      // (bukan selalu dianggap pelanggan baru seperti sebelumnya).
+      setSelectedCustomerId(null);
+      setSelectedCustomer(null);
+      setApplyDiscount(true);
+      findCustomerByPhone(business.id, localPhone).then((match) => {
+        if (match) {
+          setSelectedCustomerId(match.id);
+          setSelectedCustomer(match);
+          setCustomerName(match.name);
+          setCustomerAddress(match.address ?? '');
+        }
+      });
     } else {
       const initialStart = preselectedStartDate || todayStr();
       setStartDate(initialStart);
@@ -399,6 +425,8 @@ export function NewBookingModal({
     setItemSearchQuery('');
     setCustomerAddress('');
     setSelectedCustomerId(null);
+    setSelectedCustomer(null);
+    setApplyDiscount(true);
     setShowSuggestions(false);
     setHistorySummary(null);
     clearCustomerSuggestions();
@@ -485,14 +513,27 @@ export function NewBookingModal({
     return saleItem ? sum + qty * saleItem.price : sum;
   }, 0);
 
-  const totalPrice =
+  const rentalBruto =
     selectedEntries.reduce((sum, [itemId, qty]) => {
       const item = items.find((i) => i.id === itemId);
       if (!item) return sum;
       return sum + qty * itemRentalPrice(item, days);
-    }, 0) +
-    explodedBundles.reduce((sum, b) => sum + b.exploded.totalForAllInstances, 0) +
-    saleItemsTotal;
+    }, 0) + explodedBundles.reduce((sum, b) => sum + b.exploded.totalForAllInstances, 0);
+
+  // Pelanggan + Member/Diskon (brief 23 Nov 2026) -- pratinjau diskon
+  // (rumus SAMA dengan create_booking_atomic migration 073, SUM bruto x
+  // persen/100 dibulatkan). Cuma dihitung kalau pelanggan LAMA (bukan
+  // baru -- belum punya histori/jenis) punya customer_type_id DAN
+  // staf tidak melepasnya lewat checkbox "Terapkan diskon".
+  const selectedCustomerType = selectedCustomer?.customer_type_id
+    ? customerTypes.find((t) => t.id === selectedCustomer.customer_type_id)
+    : null;
+  const discountAmount =
+    selectedCustomerType && applyDiscount
+      ? computeDiscountAmount(rentalBruto, saleItemsTotal, selectedCustomerType.discount_percent, selectedCustomerType.discount_applies_to_sale_items)
+      : 0;
+
+  const totalPrice = rentalBruto + saleItemsTotal - discountAmount;
 
   const remainingPayment = Math.max(0, totalPrice - (Number(dpPaid) || 0));
 
@@ -551,6 +592,7 @@ export function NewBookingModal({
   function dropSelectionIfAny() {
     if (selectedCustomerId) {
       setSelectedCustomerId(null);
+      setSelectedCustomer(null);
       setHistorySummary(null);
     }
   }
@@ -568,6 +610,8 @@ export function NewBookingModal({
     setCustomerPhone(match.phone ?? '');
     setCustomerAddress(match.address ?? '');
     setSelectedCustomerId(match.id);
+    setSelectedCustomer(match);
+    setApplyDiscount(true);
     setShowSuggestions(false);
     clearCustomerSuggestions();
     setHistorySummary(await fetchCustomerHistorySummary(match.id));
@@ -642,7 +686,14 @@ export function NewBookingModal({
 
     setSubmitting(true);
 
-    let body: { id: string; booking_number: string; status: string };
+    let body: {
+      id: string;
+      booking_number: string;
+      status: string;
+      discount_type_name: string | null;
+      discount_percent: number | null;
+      discount_amount: number;
+    };
     try {
       body = await apiFetch(session, '/api/bookings', {
         method: 'POST',
@@ -663,6 +714,11 @@ export function NewBookingModal({
           dp_paid: Number(dpPaid) || 0,
           dp_method: dpMethod || null,
           ...(pickedUpNow ? { picked_up_now: true } : {}),
+          // Pelanggan + Member/Diskon (brief 23 Nov 2026) -- RPC yang
+          // membaca persen sungguhan dari customer_types, nilai ini cuma
+          // menentukan APAKAH dicoba sama sekali (staf melepas centang =
+          // false).
+          apply_discount: applyDiscount,
         }),
       });
     } catch (err) {
@@ -731,6 +787,9 @@ export function NewBookingModal({
           businessName: business.name,
           rentalDayMode: business.rental_day_mode,
           durationLabelStyle: business.duration_label_style,
+          discountTypeName: body.discount_type_name,
+          discountPercent: body.discount_percent,
+          discountAmount: body.discount_amount,
         });
         window.open(getWhatsAppShareUrl(customerPhone, receiptText), '_blank');
       } catch {
@@ -829,6 +888,22 @@ export function NewBookingModal({
                     <History className="w-3 h-3" />
                     Pernah sewa {historySummary.count}x
                     {historySummary.lastBookingDate && `, terakhir ${formatDateIndo(historySummary.lastBookingDate, false)}`}
+                  </p>
+                )}
+                {/* Pelanggan + Member/Diskon (brief 23 Nov 2026) -- tanda
+                    jenis pelanggan + checkbox lepas diskon untuk transaksi
+                    ini saja. Cuma muncul kalau pelanggan LAMA (selectedCustomer
+                    terisi, dari daftar saran) punya customer_type_id. */}
+                {selectedCustomerType && (
+                  <label className="mt-1.5 flex items-center gap-2 text-[11px] font-semibold text-[#2B4739]">
+                    <input type="checkbox" checked={applyDiscount} onChange={(e) => setApplyDiscount(e.target.checked)} className="accent-[#2B4739]" />
+                    {selectedCustomerType.name} -{selectedCustomerType.discount_percent}%
+                    {!applyDiscount && <span className="text-[#6E6853] font-normal">(dilepas untuk transaksi ini)</span>}
+                  </label>
+                )}
+                {selectedCustomer?.is_watchlisted && (
+                  <p className="mt-1.5 p-2 rounded-lg bg-[#FAF0EE] border border-[#A8412E]/30 text-[11px] font-semibold text-[#A8412E]">
+                    ⚠ Pelanggan Waspada{selectedCustomer.note ? `: ${selectedCustomer.note}` : ''}
                   </p>
                 )}
               </div>
@@ -1439,6 +1514,12 @@ export function NewBookingModal({
               </div>
             </div>
 
+            {discountAmount > 0 && (
+              <div className="flex items-center justify-between text-xs text-[#A65C2A] font-semibold px-1">
+                <span>Diskon {selectedCustomerType?.name} {selectedCustomerType?.discount_percent}%</span>
+                <span>-{formatIDR(discountAmount)}</span>
+              </div>
+            )}
             <div className="p-3 rounded-xl bg-[#2B4739] text-[#FBFAF4] flex items-center justify-between">
               <div>
                 <p className="text-[11px] text-[#DBD5C1]">Total Tagihan Sewa</p>
