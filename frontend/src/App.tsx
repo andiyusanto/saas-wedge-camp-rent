@@ -268,6 +268,24 @@ function App() {
     navigator.serviceWorker?.register('/sw.js').catch(() => {});
   }, []);
 
+  // Bug "JWT expired" (laporan Andi 24 Nov 2026) -- di HP/PWA yang lama di
+  // background (tab disembunyikan >1 jam), timer auto-refresh supabase-js
+  // berhenti sendiri untuk menghemat baterai. Pola resmi supabase-js untuk
+  // app mobile/PWA: stopAutoRefresh() saat tab tersembunyi, startAutoRefresh()
+  // lagi begitu terlihat -- supaya token sudah segar SAAT app dibuka
+  // kembali, bukan baru ketahuan basi setelah fetch pertama gagal (yang
+  // sekarang juga sudah ditangani lewat retry di apiFetch(), lib/api.ts,
+  // tapi mencegah lebih baik daripada selalu mengandalkan retry).
+  useEffect(() => {
+    if (!supabase) return;
+    function onVisibilityChange() {
+      if (document.visibilityState === 'visible') supabase?.auth.startAutoRefresh();
+      else supabase?.auth.stopAutoRefresh();
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, []);
+
   const [isNewBookingOpen, setIsNewBookingOpen] = useState(false);
   const [preselectedItemId, setPreselectedItemId] = useState<string | null>(null);
   const [preselectedBundleId, setPreselectedBundleId] = useState<string | null>(null);
@@ -419,7 +437,28 @@ function App() {
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-12 space-y-4">
-        {!isDemoAccount && (
+        {isDemoAccount ? (
+          // Temuan wawancara Wasup (24 Nov 2026): sempat memasukkan data
+          // pelanggan ASLI ke akun demo publik -- demo ini bisa dilihat
+          // DAN direset siapa saja (tombol "Reset data demo" di layar
+          // login), jadi banner ini SELALU terlihat (bukan cuma sekali
+          // dismiss) selama memakai akun demo.
+          <p className="text-xs font-semibold text-[#A8412E] bg-[#FAF0EE] border border-[#A8412E]/30 rounded-lg px-3 py-2 flex flex-wrap items-center gap-1.5">
+            <span>
+              Akun demo bisa dilihat & di-reset siapa saja — jangan isi data pelanggan asli.
+            </span>
+            <button
+              type="button"
+              onClick={async () => {
+                await supabase?.auth.signOut();
+                window.location.href = '/?daftar=1';
+              }}
+              className="underline font-bold"
+            >
+              Daftar gratis untuk akun sendiri →
+            </button>
+          </p>
+        ) : (
           <SubscriptionBanner subscription={subscription} isOwner={role === 'owner'} businessName={business.name} />
         )}
         {tab === 'kalender' && (
