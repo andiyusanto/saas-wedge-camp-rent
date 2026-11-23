@@ -34,6 +34,14 @@ export type MonthlyReportRow = {
   // SENGAJA beda dan tidak harus sama jumlahnya per bulan -- lihat
   // disclaimer baru di LaporanScreen.tsx.
   uangDiterima: number;
+  // Pelanggan + Member/Diskon (brief 23 Nov 2026) -- murni INFORMASI
+  // (Σ bookings.discount_amount), TIDAK ikut rumus totalPemasukan apa
+  // pun (total_price yang sudah dipakai di atas SUDAH net-diskon kalau
+  // vendor menerapkannya saat Simpan, jadi menjumlahkannya lagi di sini
+  // akan dobel hitung). Kolom ini cuma muncul di LaporanScreen.tsx kalau
+  // ada transaksi berdiskon di bulan itu (diskon=0 -> kolom disembunyikan,
+  // regresi aman untuk rental tanpa fitur ini).
+  diskon: number;
   jumlahTransaksi: number;
   rataRata: number | null; // null kalau jumlahTransaksi 0
   // null = tidak ada pembanding (Januari -- bulan sebelumnya di luar
@@ -90,6 +98,7 @@ export function buildMonthlyReport(
     let piutang = 0;
     let dendaTelat = 0;
     let dendaKerusakan = 0;
+    let diskon = 0;
 
     for (const b of bookings) {
       // b.total_price adalah gabungan sewa+barang jual sejak Barang Jual
@@ -108,6 +117,7 @@ export function buildMonthlyReport(
       piutang += Math.max(0, computeRemainingBalance(b.total_price, bookingFinesTotal, b.dp_paid));
       dendaTelat += bookingPenaltyByType(b, 'keterlambatan');
       dendaKerusakan += bookingPenaltyByType(b, 'kerusakan-kehilangan');
+      diskon += b.discount_amount ?? 0;
     }
 
     const totalPemasukan = pendapatanSewa + pendapatanBarangJual + dendaTelat + dendaKerusakan;
@@ -129,6 +139,7 @@ export function buildMonthlyReport(
       sudahDiterima,
       piutang,
       uangDiterima: uangDiterimaByMonth.get(month) ?? 0,
+      diskon,
       jumlahTransaksi,
       rataRata,
       perubahanPersenVsBulanLalu,

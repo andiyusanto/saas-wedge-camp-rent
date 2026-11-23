@@ -103,6 +103,12 @@ export type TrackingBooking = {
   // Snapshot batas jam kembali (migration 062) — null = ikuti jam ambil.
   return_deadline_time: string | null;
   return_deadline_next_day: boolean | null;
+  // Pelanggan + Member/Diskon (migration 073) -- snapshot per transaksi,
+  // null/0 = tanpa diskon.
+  discount_type_name: string | null;
+  discount_percent: number | null;
+  discount_amount: number;
+  customer_id: string;
 };
 
 type TrackingsResponse = {
@@ -165,6 +171,9 @@ export function buildReceiptData(
     pickedUpAt: b.picked_up_at,
     timezone: timezone ?? null,
     durationLabelStyle: b.duration_label_style,
+    discountTypeName: b.discount_type_name,
+    discountPercent: b.discount_percent,
+    discountAmount: b.discount_amount,
   };
 }
 

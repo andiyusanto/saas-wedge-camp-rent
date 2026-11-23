@@ -187,6 +187,9 @@ export function buildThermalReceiptDoc(data: ReceiptData, paperWidth: PaperWidth
   }
 
   addPriceRow('Total Sewa', formatIDR(rentalSubtotal));
+  if (data.discountAmount && data.discountAmount > 0) {
+    addPriceRow(`Diskon ${data.discountTypeName ?? ''} ${data.discountPercent ?? 0}%`, `-${formatIDR(data.discountAmount)}`);
+  }
   if (data.saleItems.length > 0) {
     addPriceRow('Total Barang Jual', formatIDR(data.saleItems.reduce((sum, s) => sum + s.subtotal, 0)));
   }

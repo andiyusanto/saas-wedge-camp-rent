@@ -65,6 +65,9 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
   // tahun yang dipilih, supaya rental tanpa barang jual sama sekali
   // tampil PERSIS seperti sebelum fitur ini ada (regresi).
   const hasBarangJualDataMonthly = monthlyRows.some((r) => r.pendapatanBarangJual > 0);
+  // Pelanggan + Member/Diskon (brief 23 Nov 2026) -- kolom HANYA tampil
+  // kalau ada transaksi berdiskon di tahun ini (pola sama Barang Jual).
+  const hasDiscountDataMonthly = monthlyRows.some((r) => r.diskon > 0);
   const maxTotalPemasukan = Math.max(1, ...monthlyRows.map((r) => r.totalPemasukan));
   const defaultHighlightMonth = year === currentYear ? new Date().getMonth() + 1 : 12;
   const [highlightMonth, setHighlightMonth] = useState(defaultHighlightMonth);
@@ -290,6 +293,7 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
                       <th className="p-2.5 font-semibold">Bulan</th>
                       <th className="p-2.5 font-semibold text-right">Pendapatan Sewa</th>
                       {hasBarangJualDataMonthly && <th className="p-2.5 font-semibold text-right">Penjualan Barang</th>}
+                      {hasDiscountDataMonthly && <th className="p-2.5 font-semibold text-right">Diskon</th>}
                       <th className="p-2.5 font-semibold text-right">Denda Telat</th>
                       <th className="p-2.5 font-semibold text-right">Denda Rusak/Hilang</th>
                       <th className="p-2.5 font-semibold text-right">Total Pemasukan</th>
@@ -306,6 +310,7 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
                         <td className="p-2.5 font-bold text-[#26302B]">{MONTH_NAMES[row.month - 1]}</td>
                         <td className="p-2.5 text-right">{formatIDR(row.pendapatanSewa)}</td>
                         {hasBarangJualDataMonthly && <td className="p-2.5 text-right">{formatIDR(row.pendapatanBarangJual)}</td>}
+                        {hasDiscountDataMonthly && <td className="p-2.5 text-right text-[#A65C2A]">{formatIDR(row.diskon)}</td>}
                         <td className="p-2.5 text-right">{formatIDR(row.dendaTelat)}</td>
                         <td className="p-2.5 text-right">{formatIDR(row.dendaKerusakan)}</td>
                         <td className="p-2.5 text-right font-bold text-[#26302B]">{formatIDR(row.totalPemasukan)}</td>

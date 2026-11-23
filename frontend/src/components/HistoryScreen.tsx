@@ -153,6 +153,9 @@ export function HistoryScreen({
       pickedUpAt: extras?.pickedUpAt ?? null,
       durationLabelStyle: extras?.durationLabelStyle ?? null,
       timezone: extras?.timezone ?? null,
+      discountTypeName: b.discount_type_name,
+      discountPercent: b.discount_percent,
+      discountAmount: b.discount_amount,
     });
   }
 

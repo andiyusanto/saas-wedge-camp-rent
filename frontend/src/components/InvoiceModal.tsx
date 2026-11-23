@@ -238,6 +238,12 @@ export function InvoiceModal({
               <span>Total Harga Sewa</span>
               <span>{formatIDR(data.items.reduce((sum, i) => sum + (i.subtotal ?? i.price_per_day * i.quantity * days), 0))}</span>
             </div>
+            {!!data.discountAmount && data.discountAmount > 0 && (
+              <div className="flex justify-between text-[#A65C2A]">
+                <span>Diskon {data.discountTypeName} {data.discountPercent}%</span>
+                <span>-{formatIDR(data.discountAmount)}</span>
+              </div>
+            )}
             {data.saleItems.length > 0 && (
               <div className="flex justify-between">
                 <span>Total Barang Jual</span>
