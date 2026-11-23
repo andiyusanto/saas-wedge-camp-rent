@@ -139,11 +139,22 @@ export type DurationLabelStyle = 'hari' | 'hari_malam' | null;
 // 2026). Satu titik pemeriksaan ini mencegah kalau-kalau yang sama harus
 // diulang di 6+ tempat pemakaian (struk WA/Nota/thermal/ringkasan Catat
 // Transaksi/Transaksi Aktif/Riwayat).
-export function formatRentalDuration(nights: number, style: DurationLabelStyle, rentalDayMode: RentalDayMode | null): string {
-  if (style === 'hari_malam' && rentalDayMode === 'per_malam') {
-    return `${nights + 1}H${nights}M`;
+// Label "2H1M" (brief 23 Nov 2026, lalu diperluas 24 Nov 2026 untuk
+// per_hari_kalender -- Wasup: "1 kali sewa = 2 hari 1 malam" meski
+// rentalDayMode mereka per_hari_kalender, bukan per_malam) -- dua rumus
+// BEDA sengaja karena makna `days` beda per mode: di per_malam, `days`
+// SUDAH berarti jumlah malam (ambil Sabtu/kembali Minggu = 1), jadi
+// "N+1 hari N malam". Di per_hari_kalender (termasuk null, baris lama),
+// `days` berarti jumlah hari KALENDER (ambil & kembali hari sama = 1),
+// jadi "N hari N-1 malam" -- 1 hari tidak punya malam sama sekali, tetap
+// "1 hari" biasa (bukan "1H0M"). Harga/denda/stok TIDAK membaca fungsi
+// ini sama sekali -- murni teks tampilan.
+export function formatRentalDuration(days: number, style: DurationLabelStyle, rentalDayMode: RentalDayMode | null): string {
+  if (style === 'hari_malam') {
+    if (rentalDayMode === 'per_malam') return `${days + 1}H${days}M`;
+    if (days >= 2) return `${days}H${days - 1}M`;
   }
-  return `${nights} hari`;
+  return `${days} hari`;
 }
 
 // Harga bertingkat per-hari (migration 034, diadaptasi dari Bilbo-Outdoors

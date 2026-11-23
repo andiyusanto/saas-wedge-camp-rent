@@ -448,43 +448,48 @@ export function BusinessInfoSection({
               Berlaku untuk transaksi baru. Transaksi lama tetap dihitung seperti saat dibuat.
             </p>
           )}
-          {/* Label lama sewa "2H1M" (brief 23 Nov 2026, migration 072) --
-              cuma relevan kalau mode Per Malam, karena "N+1H/NM" murni
-              istilah sewa per MALAM. Pindah ke Per Hari Kalender tidak
-              menghapus pilihan ini (tetap tersimpan), cuma disembunyikan
-              -- formatRentalDuration() juga memaksa "N hari" kalau mode
-              booking itu bukan per_malam, jadi aman dari sudut mana pun. */}
-          {rentalDayMode === 'per_malam' && (
-            <div className="flex flex-col gap-2 pt-2 border-t border-[#E6E1D2]/60">
-              <p className="text-sm font-semibold text-[#26302B]">Label Lama Sewa</p>
-              <label className="flex items-start gap-2 text-sm text-[#26302B]">
-                <input
-                  type="radio"
-                  checked={durationLabelStyle === 'hari'}
-                  onChange={() => setDurationLabelStyle('hari')}
-                  className="mt-0.5 accent-[#2B4739]"
-                />
-                <span>
-                  <strong>Hari</strong> — mis. "1 hari".
-                </span>
-              </label>
-              <label className="flex items-start gap-2 text-sm text-[#26302B]">
-                <input
-                  type="radio"
-                  checked={durationLabelStyle === 'hari_malam'}
-                  onChange={() => setDurationLabelStyle('hari_malam')}
-                  className="mt-0.5 accent-[#2B4739]"
-                />
-                <span>
-                  <strong>Hari-malam (2H1M)</strong> — mis. 1 malam ditulis "2H1M".
-                </span>
-              </label>
-              <p className="text-[11px] text-[#6E6853]">
-                Murni teks di struk/nota/ringkasan — harga tetap dihitung dan ditampilkan "/hari" di katalog, tidak
-                berubah.
-              </p>
-            </div>
-          )}
+          {/* Label lama sewa "2H1M" (brief 23 Nov 2026, migration 072; diperluas
+              24 Nov 2026 untuk Per Hari Kalender juga -- Wasup: "1 kali sewa
+              = 2 hari 1 malam" meski mode mereka per_hari_kalender, bukan
+              per_malam). Dulu cuma tampil untuk Per Malam -- sekarang tampil
+              untuk KEDUA mode, cuma contoh teksnya beda (formatRentalDuration
+              di utils/formatters.ts punya rumus beda per mode: per_malam =
+              "N+1H NM", per_hari_kalender = "NH N-1M", 1 hari tetap "1 hari"
+              biasa). Harga/denda/stok tidak tersentuh -- murni teks. */}
+          <div className="flex flex-col gap-2 pt-2 border-t border-[#E6E1D2]/60">
+            <p className="text-sm font-semibold text-[#26302B]">Label Lama Sewa</p>
+            <label className="flex items-start gap-2 text-sm text-[#26302B]">
+              <input
+                type="radio"
+                checked={durationLabelStyle === 'hari'}
+                onChange={() => setDurationLabelStyle('hari')}
+                className="mt-0.5 accent-[#2B4739]"
+              />
+              <span>
+                <strong>Hari</strong> — mis. "2 hari".
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm text-[#26302B]">
+              <input
+                type="radio"
+                checked={durationLabelStyle === 'hari_malam'}
+                onChange={() => setDurationLabelStyle('hari_malam')}
+                className="mt-0.5 accent-[#2B4739]"
+              />
+              <span>
+                <strong>Hari-malam (2H1M)</strong> —{' '}
+                {rentalDayMode === 'per_malam' ? (
+                  <>mis. 1 malam ditulis "2H1M".</>
+                ) : (
+                  <>mis. 2 hari ditulis "2H1M".</>
+                )}
+              </span>
+            </label>
+            <p className="text-[11px] text-[#6E6853]">
+              Murni teks di struk/nota/ringkasan — harga tetap dihitung dan ditampilkan "/hari" di katalog, tidak
+              berubah. 1 hari tetap ditulis "1 hari" biasa (tidak ada "1H0M").
+            </p>
+          </div>
         </div>
 
         <div className="flex flex-col gap-2 pt-2 border-t border-[#E6E1D2]">

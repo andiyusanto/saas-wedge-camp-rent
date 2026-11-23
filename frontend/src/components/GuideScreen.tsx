@@ -996,12 +996,13 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         </Note>
         <p className="font-bold text-xs mt-2">Label Lama Sewa</p>
         <p>
-          Muncul HANYA kalau <Ui>Cara Hitung Durasi Sewa</Ui> di atas diatur <Ui>Per malam</Ui> — pilih{' '}
-          <Ui>Hari</Ui> (default, mis. "1 hari") atau <Ui>Hari-malam (2H1M)</Ui> (mis. 1 malam ditulis "2H1M", 2
-          malam "3H2M") untuk menyamakan istilah di struk/nota dengan kebiasaan sebagian vendor outdoor. Murni ganti
-          teks — harga tetap dihitung dan ditampilkan "/hari" di Katalog &amp; Stok Alat, tidak ada yang berubah
-          soal rumus harga/denda/stok. Pindah ke <Ui>Per hari kalender</Ui> otomatis menyembunyikan pengaturan ini
-          lagi (teks balik ke "N hari" di transaksi baru, pilihan 2H1M tetap tersimpan kalau mau dipakai lagi nanti).
+          Tampil untuk KEDUA pilihan <Ui>Cara Hitung Durasi Sewa</Ui> di atas — pilih <Ui>Hari</Ui> (default, mis.
+          "2 hari") atau <Ui>Hari-malam (2H1M)</Ui> untuk menyamakan istilah di struk/nota dengan kebiasaan sebagian
+          vendor outdoor. Contohnya beda tergantung mode: di <Ui>Per malam</Ui>, 1 malam ditulis "2H1M" (2 malam
+          "3H2M"); di <Ui>Per hari kalender</Ui>, 2 hari ditulis "2H1M" (4 hari "4H3M") — 1 hari tetap ditulis "1
+          hari" biasa (tidak ada "1H0M"). Murni ganti teks — harga tetap dihitung dan ditampilkan "/hari" di Katalog
+          &amp; Stok Alat, tidak ada yang berubah soal rumus harga/denda/stok. Tidak ditampilkan di halaman Etalase
+          publik.
         </p>
         <p className="font-bold text-xs mt-2">Paket Minimal/Maksimal Hari Sewa</p>
         <p>
