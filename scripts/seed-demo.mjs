@@ -605,6 +605,35 @@ async function main() {
     console.log(`  - ${extraSaleItemIds.length} barang jual tambahan di luar seed dihapus`);
   }
 
+  // --- Jenis Pelanggan contoh (Member/Mitra, brief 23 Nov 2026) -- sama
+  // persis demoReset.ts.
+  const existingCustomerTypes = await rest(`customer_types?select=id,name&business_id=eq.${businessId}`, ownerToken);
+  const existingCustomerTypeByName = Object.fromEntries(existingCustomerTypes.map((t) => [t.name, t.id]));
+  const customerTypeDefs = [
+    { name: 'Member', discount_percent: 10, discount_applies_to_sale_items: false },
+    { name: 'Mitra', discount_percent: 15, discount_applies_to_sale_items: false },
+  ];
+  const customerTypeIdByName = {};
+  for (const def of customerTypeDefs) {
+    const existingId = existingCustomerTypeByName[def.name];
+    if (existingId) {
+      await rest(`customer_types?id=eq.${existingId}`, ownerToken, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ discount_percent: def.discount_percent, discount_applies_to_sale_items: def.discount_applies_to_sale_items, deactivated_at: null }),
+      });
+      customerTypeIdByName[def.name] = existingId;
+    } else {
+      const created = await rest('customer_types', ownerToken, {
+        method: 'POST',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify({ business_id: businessId, ...def }),
+      });
+      customerTypeIdByName[def.name] = created[0].id;
+    }
+  }
+  console.log('  + Jenis Pelanggan contoh: Member -10%, Mitra -15%');
+
   // Push subscriptions (migration 056) milik business demo — sama persis
   // demoReset.ts.
   await rest(`push_subscriptions?business_id=eq.${businessId}`, ownerToken, {
@@ -807,6 +836,27 @@ async function main() {
   } else {
     console.log(`  (TND-01 sudah penuh di ${saturday}..${sunday} tanpa booking tambahan, dilewati)`);
   }
+
+  // --- Label contoh Member/Mitra -- sama persis demoReset.ts (dipindah
+  // ke akhir, setelah pelanggan fixture di atas benar-benar ada).
+  const customerLabelDefs = [
+    { name: 'Bagus Setiawan', customerType: 'Member', isWatchlisted: false, note: null },
+    { name: 'Rina Wulandari', customerType: 'Mitra', isWatchlisted: true, note: 'Pernah telat 2x, tagih DP penuh di muka.' },
+  ];
+  for (const def of customerLabelDefs) {
+    const rows = await rest(
+      `customers?select=id&business_id=eq.${businessId}&name=eq.${encodeURIComponent(def.name)}&order=created_at.desc&limit=1`,
+      ownerToken,
+    );
+    if (rows[0]) {
+      await rest(`customers?id=eq.${rows[0].id}`, ownerToken, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ customer_type_id: customerTypeIdByName[def.customerType], is_watchlisted: def.isWatchlisted, note: def.note }),
+      });
+    }
+  }
+  console.log('  + Label contoh: Bagus Setiawan (Member), Rina Wulandari (Mitra, Waspada)');
 
   console.log('\n== Selesai ==');
   console.log('Business demo :', BUSINESS_NAME, `(${businessId})`);

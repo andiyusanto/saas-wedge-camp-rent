@@ -642,6 +642,55 @@ export async function resetDemoData(): Promise<DemoResetResult> {
     });
   }
 
+  // --- Jenis Pelanggan contoh (Member/Mitra, brief 23 Nov 2026,
+  // migration 073) -- upsert by-nama (pola PERSIS Barang Jual di atas).
+  // 2 pelanggan seed DILABELI ULANG tiap reset (by-nama, booking
+  // pelanggan itu sendiri tetap ada dari fixture booking yang dibuat
+  // belakangan di fungsi ini) supaya pengunjung demo langsung lihat
+  // contoh diskon otomatis di Catat Transaksi tanpa perlu setup manual.
+  const existingCustomerTypes = await rest<{ id: string; name: string }[]>(
+    `customer_types?select=id,name&business_id=eq.${businessId}`,
+    ownerToken,
+  );
+  const existingCustomerTypeByName = Object.fromEntries(existingCustomerTypes.map((t) => [t.name, t.id]));
+
+  const CUSTOMER_TYPE_DEFS: { name: string; discount_percent: number; discount_applies_to_sale_items: boolean }[] = [
+    { name: 'Member', discount_percent: 10, discount_applies_to_sale_items: false },
+    { name: 'Mitra', discount_percent: 15, discount_applies_to_sale_items: false },
+  ];
+  const customerTypeIdByName: Record<string, string> = {};
+  for (const def of CUSTOMER_TYPE_DEFS) {
+    const existingId = existingCustomerTypeByName[def.name];
+    if (existingId) {
+      await rest(`customer_types?id=eq.${existingId}`, ownerToken, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ discount_percent: def.discount_percent, discount_applies_to_sale_items: def.discount_applies_to_sale_items, deactivated_at: null }),
+      });
+      customerTypeIdByName[def.name] = existingId;
+    } else {
+      const created = await rest<{ id: string }[]>('customer_types', ownerToken, {
+        method: 'POST',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify({ business_id: businessId, ...def }),
+      });
+      customerTypeIdByName[def.name] = created[0].id;
+    }
+  }
+
+  // Jenis TAMBAHAN yang dibuat pengunjung demo dinonaktifkan (bukan
+  // dihapus -- FK dari customers.customer_type_id tidak boleh yatim kalau
+  // ada pengunjung lain sempat memberi label itu ke pelanggan).
+  const seedTypeNames = new Set(CUSTOMER_TYPE_DEFS.map((d) => d.name));
+  const extraTypeIds = existingCustomerTypes.filter((t) => !seedTypeNames.has(t.name)).map((t) => t.id);
+  if (extraTypeIds.length > 0) {
+    await rest(`customer_types?id=in.(${extraTypeIds.join(',')})`, ownerToken, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ deactivated_at: new Date().toISOString() }),
+    });
+  }
+
   // Push subscriptions (migration 056) milik business demo dihapus tiap
   // reset -- pengunjung demo yang sempat menekan "Aktifkan notifikasi"
   // tidak boleh terus menerima push dari akun demo setelah reset.
@@ -860,6 +909,30 @@ export async function resetDemoData(): Promise<DemoResetResult> {
       deposit: { type: 'ktp' },
       entries: [['TND-01', tndRemaining]],
     });
+  }
+
+  // --- Label contoh Member/Mitra (brief 23 Nov 2026) -- DIPINDAH ke sini
+  // (bukan dekat upsert customer_types di atas) karena pelanggan
+  // "Bagus Setiawan"/"Rina Wulandari" baru benar-benar ada setelah
+  // fixture booking di atas membuatnya lewat findOrCreateCustomer. Kalau
+  // belum ada (jalur createBooking sempat berubah urutan), dilewati diam-
+  // diam, bukan error -- demo tetap jalan tanpa contoh label ini.
+  const CUSTOMER_LABEL_DEFS: { name: string; customerType: string; isWatchlisted: boolean; note: string | null }[] = [
+    { name: 'Bagus Setiawan', customerType: 'Member', isWatchlisted: false, note: null },
+    { name: 'Rina Wulandari', customerType: 'Mitra', isWatchlisted: true, note: 'Pernah telat 2x, tagih DP penuh di muka.' },
+  ];
+  for (const def of CUSTOMER_LABEL_DEFS) {
+    const rows = await rest<{ id: string }[]>(
+      `customers?select=id&business_id=eq.${businessId}&name=eq.${encodeURIComponent(def.name)}&order=created_at.desc&limit=1`,
+      ownerToken,
+    );
+    if (rows[0]) {
+      await rest(`customers?id=eq.${rows[0].id}`, ownerToken, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ customer_type_id: customerTypeIdByName[def.customerType], is_watchlisted: def.isWatchlisted, note: def.note }),
+      });
+    }
   }
 
   return {
