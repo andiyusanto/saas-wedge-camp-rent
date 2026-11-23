@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { createAnonClient } from '../lib/supabaseClient.js';
 import { todayInTz, tzOffsetIso, rentalDuration } from '../lib/dates.js';
 import { computeItemRentalPrice } from '../lib/pricing.js';
+import { normalizePhone } from '../lib/phone.js';
 import { sendPushToBusiness, buildNewOrderPayload } from '../lib/webPush.js';
 import {
   MAX_ITEMS_PER_REQUEST,
@@ -65,15 +66,8 @@ function recordSlugAttempt(slug: string): void {
 // karena di sini sumbernya tidak tepercaya (siapa saja tanpa login).
 const PHONE_RE = /^(\+?62|0)8[0-9]{8,12}$/;
 
-// Kanonikalisasi ke bentuk "628xxxxxxxxx" (tanpa '+', tanpa '0' depan) —
-// 08xx dan +62xx/62xx yang merujuk nomor fisik yang sama harus dianggap
-// SATU nomor yang sama, baik untuk disimpan (customer_phone) maupun untuk
-// perbandingan batas pesanan 'menunggu' per nomor (lihat bawah).
-function normalizePhone(raw: string): string {
-  const stripped = raw.replace(/[\s-]/g, '').replace(/^\+/, '');
-  if (stripped.startsWith('0')) return `62${stripped.slice(1)}`;
-  return stripped;
-}
+// normalizePhone() dipindah ke lib/phone.ts (brief 23 Nov 2026) supaya
+// dipakai ulang oleh POST /bookings juga, bukan diduplikasi di sini.
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
