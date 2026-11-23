@@ -305,6 +305,16 @@ async function main() {
   });
   console.log('OK transaksi lama dihapus');
 
+  // Hapus SEMUA customers business demo ini (SETELAH bookings dihapus di
+  // atas -- urutan FK). Pola sama demoReset.ts (review koordinator 23 Nov
+  // 2026) -- demo dipakai publik, baris customers menumpuk kalau tidak
+  // dibersihkan tiap reset.
+  await rest(`customers?business_id=eq.${businessId}`, ownerToken, {
+    method: 'DELETE',
+    headers: { Prefer: 'return=minimal' },
+  });
+  console.log('OK customers lama dihapus');
+
   // --- Seed katalog alat ---
   console.log('-- Menambahkan katalog alat demo --');
 

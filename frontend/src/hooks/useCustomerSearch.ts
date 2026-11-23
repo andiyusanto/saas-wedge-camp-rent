@@ -81,26 +81,56 @@ export function normalizePhoneClient(raw: string): string {
 // ini lalu normalize+compare di JS (pola sama backend findCustomerIdByPhone,
 // routes/bookings.ts) -- bukan `.eq()` mentah, supaya 08xx/628xx/+628xx/
 // spasi-strip yang merujuk nomor fisik sama tetap cocok.
+// PostgREST max_rows = 1.000 (CLAUDE.md bagian 7) memotong hasil DIAM-DIAM
+// -- business dengan >1.000 pelanggan akan gagal cocok tanpa error apa pun
+// kalau fetch di atas cuma satu query polos. Paginasi lewat .range() sampai
+// benar2 habis, dengan .order('id') deterministik (pola fetchAllPages()
+// backend/src/lib/availability.ts). Select cukup id/phone/created_at
+// (bukan seluruh kolom CustomerMatch) supaya tiap halaman ringan --
+// detail lengkap baru diambil SEKALI untuk baris yang akhirnya cocok.
+async function fetchAllCustomerPhonePagesClient(
+  businessId: string,
+): Promise<{ id: string; phone: string | null; created_at: string }[]> {
+  const PAGE_SIZE = 1000;
+  const rows: { id: string; phone: string | null; created_at: string }[] = [];
+  let offset = 0;
+  for (;;) {
+    const { data, error } = await supabase!
+      .from('customers')
+      .select('id, phone, created_at')
+      .eq('business_id', businessId)
+      .not('phone', 'is', null)
+      .order('id')
+      .range(offset, offset + PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) break;
+    offset += PAGE_SIZE;
+  }
+  return rows;
+}
+
 export async function findCustomerByPhone(businessId: string, phone: string): Promise<CustomerMatch | null> {
   if (!supabase || !phone.trim()) return null;
   const target = normalizePhoneClient(phone);
   if (!target) return null;
 
-  const { data } = await supabase
-    .from('customers')
-    .select('id, name, phone, address, customer_type_id, is_watchlisted, note, created_at')
-    .eq('business_id', businessId)
-    .not('phone', 'is', null);
-  const matches = ((data as (CustomerMatch & { created_at: string })[] | null) ?? []).filter(
-    (c) => c.phone && normalizePhoneClient(c.phone) === target,
-  );
+  const candidates = await fetchAllCustomerPhonePagesClient(businessId);
+  const matches = candidates.filter((c) => c.phone && normalizePhoneClient(c.phone) === target);
   if (matches.length === 0) return null;
   // Duplikat lama -- pakai yang paling baru DIBUAT sebagai proxy "paling
   // baru dipakai" (cukup untuk pratinjau sebelum submit; keputusan akhir
   // tetap di backend createBookingAtomic yang memakai booking TERAKHIR
   // sungguhan, bukan cuma customers.created_at).
   matches.sort((a, b) => b.created_at.localeCompare(a.created_at));
-  return matches[0];
+
+  const { data: full } = await supabase
+    .from('customers')
+    .select('id, name, phone, address, customer_type_id, is_watchlisted, note')
+    .eq('id', matches[0].id)
+    .limit(1);
+  return (full?.[0] as CustomerMatch | undefined) ?? null;
 }
 
 export async function fetchCustomerHistorySummary(customerId: string): Promise<CustomerHistorySummary> {

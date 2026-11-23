@@ -8,64 +8,9 @@ import { getCustomerPhotoSignedUrl } from '../lib/r2.js';
 import { computeBundleComponentRatesSnapshot } from '../lib/pricing.js';
 import { mergeDuplicateSaleItemRequests } from '../lib/saleItems.js';
 import { validateDpPaid } from '../lib/validation.js';
-import { normalizePhone } from '../lib/phone.js';
+import { findCustomerIdByPhone } from '../lib/customerPhoneMatch.js';
 
 const router = Router();
-
-// Cocokkan pelanggan existing via nomor WA (brief 23 Nov 2026) --
-// create_booking_atomic() SELALU insert baris customers baru kalau
-// p_customer_id null, TANPA cek nomor WA yang sudah ada sama sekali
-// (ditemukan sendiri saat investigasi brief ini) -- staf yang mengetik
-// nama/WA manual tanpa memilih dari daftar saran SELALU bikin baris
-// customers baru, walau nomornya sudah ada di business yang sama. Untuk
-// pilot Outdoorgear Banyumas (100+ member), ini langsung merusak fitur
-// Member/Mitra: label/diskon "ketinggalan" di baris lama, menu Pelanggan
-// penuh duplikat. Dicocokkan DI SINI (Express, SEBELUM memanggil RPC),
-// bukan di dalam RPC -- query .ilike/fetch-lalu-normalize lebih wajar di
-// TypeScript daripada regexp plpgsql, dan logic ini HANYA perlu jalan
-// sekali per request (bukan hot path RPC).
-//
-// customers.phone TIDAK dinormalisasi saat disimpan -- jadi tidak bisa
-// `.eq()` langsung, fetch SEMUA nomor business ini lalu normalize+compare
-// di JS (pola sama fetchCustomerHistorySummary dkk -- jumlah pelanggan
-// per rental jauh di bawah skala yang butuh index khusus untuk ini).
-async function findCustomerIdByPhone(
-  supabase: ReturnType<typeof createRequestClient>,
-  businessId: string,
-  rawPhone: string,
-): Promise<string | null> {
-  const target = normalizePhone(rawPhone);
-  if (!target) return null;
-
-  const { data: candidates } = await supabase
-    .from('customers')
-    .select('id, phone')
-    .eq('business_id', businessId)
-    .not('phone', 'is', null);
-  const matches = (candidates ?? []).filter((c) => c.phone && normalizePhone(c.phone) === target);
-
-  if (matches.length === 0) return null;
-  if (matches.length === 1) return matches[0].id;
-
-  // Duplikat lama (dari sebelum fitur ini) -- pakai yang PALING BARU
-  // dipakai (booking terakhir dengan created_at terbesar di antara
-  // kandidat), fallback ke customers.id kalau tidak ada satupun
-  // kandidat yang pernah punya booking (seharusnya jarang -- duplikat
-  // biasanya muncul justru KARENA pelanggan itu sudah pernah bertransaksi
-  // lebih dari sekali dengan baris berbeda-beda).
-  const candidateIds = matches.map((c) => c.id);
-  const { data: recentBookings } = await supabase
-    .from('bookings')
-    .select('customer_id, created_at')
-    .in('customer_id', candidateIds)
-    .order('created_at', { ascending: false })
-    .limit(1);
-  const chosenId = recentBookings?.[0]?.customer_id ?? matches[0].id;
-  console.warn(
-    `[findCustomerIdByPhone] ${matches.length} baris customers duplikat untuk nomor WA ternormalisasi ${target} (business ${businessId}) -- dipakai id ${chosenId} (paling baru dipakai).`,
-  );
-  return chosenId;
-}
 
 // subtotal (migration 034) dikirim sudah terhitung dari frontend (lewat
 // computeItemRentalPrice(), sama pola trust-the-client seperti total_price

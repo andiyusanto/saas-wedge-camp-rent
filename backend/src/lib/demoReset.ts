@@ -450,6 +450,21 @@ export async function resetDemoData(): Promise<DemoResetResult> {
     body: JSON.stringify({ p_business_id: businessId }),
   });
 
+  // --- Hapus SEMUA customers business demo ini (SETELAH bookings dihapus
+  // di atas -- urutan FK, customer_id dirujuk oleh bookings.customer_id).
+  // Demo ini dipakai PUBLIK (tombol di layar login), jadi pengunjung yang
+  // coba-coba Catat Transaksi juga menambah baris customers tiap kali --
+  // dibiarkan menumpuk, baris itu tidak pernah dibersihkan, dan lama-lama
+  // membengkak (ditemukan 23 Nov 2026: >1.200 baris untuk SATU business
+  // demo, sebagian jadi penyebab pencocokan nomor WA salah tautan --
+  // lihat commit perbaikan di atas). Customers fixture dibuat ulang dari
+  // nol tepat di bawah ini (createBooking), jadi reset selalu kembali ke
+  // jumlah fixture yang sama, bukan terus bertambah.
+  await rest(`customers?business_id=eq.${businessId}`, ownerToken, {
+    method: 'DELETE',
+    headers: { Prefer: 'return=minimal' },
+  });
+
   // --- Upsert katalog alat by-kode (bukan delete+insert, sama alasannya) ---
   const existingItems = await rest<{ id: string; code: string }[]>(
     `items?select=id,code&business_id=eq.${businessId}`,
