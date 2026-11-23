@@ -978,6 +978,10 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           ]}
         />
         <Note>
+          Begitu Minimal/Maksimal hari diisi, tanggal kembali terisi otomatis saat tanggal mulai dipilih (di Catat
+          Transaksi maupun Etalase) — tidak perlu menghitung sendiri.
+        </Note>
+        <Note>
           Kosongkan salah satu atau keduanya untuk tanpa batas (perilaku biasa). Harga tetap memakai Harga per hari
           di <Ui>Katalog &amp; Stok Alat</Ui> (<SectionLink id="g-katalog">bagian 5</SectionLink>) — tombol <Ui>Paket N hari</Ui> di form alat mengisi hari ke-2 sampai N
           dengan Rp0 (sudah termasuk harga paket di "Sewa /Hari") DAN hari setelahnya dengan isian <Ui>Tarif lewat

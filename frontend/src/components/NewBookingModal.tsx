@@ -27,6 +27,7 @@ import {
   applyBundleDiscount,
   allocateBundlePrice,
   formatRentalDuration,
+  endDateForDays,
 } from '../utils/formatters';
 
 // Paket Alat Tahap 1 (brief 15 Nov 2026, migration 064) — satu paket
@@ -956,15 +957,23 @@ export function NewBookingModal({
                     setStartDate(newStart);
                     if (newStart <= todayStr()) setPickedUpNow(false);
                     const minEnd = business.rental_day_mode === 'per_malam' ? addDaysStr(newStart, 1) : newStart;
-                    // Paket maksimal hari (migration 054) — isi otomatis tanggal
-                    // kembali sesuai paket (bukan batas keras, vendor masih bisa
-                    // mengubahnya manual, lihat peringatan di bawah form tanggal).
+                    // Isi otomatis tanggal kembali (brief 23 Nov 2026).
+                    // (a) Paket maksimal hari (migration 054) -- PERILAKU
+                    // LAMA dipertahankan apa adanya: selalu ditimpa ulang
+                    // tiap Mulai Sewa berubah (vendor masih bisa mengubahnya
+                    // manual sesudahnya, lihat peringatan di bawah form).
                     if (business.max_rental_days != null) {
-                      const nights = business.rental_day_mode === 'per_malam'
-                        ? business.max_rental_days
-                        : business.max_rental_days - 1;
-                      setEndDate(addDaysStr(newStart, Math.max(nights, 0)));
-                    } else if (endDate < minEnd) {
+                      setEndDate(endDateForDays(newStart, business.max_rental_days, business.rental_day_mode));
+                      return;
+                    }
+                    // (b)/(c): tanggal kembali yang SUDAH diisi (manual atau
+                    // auto sebelumnya) dipertahankan kalau MASIH VALID untuk
+                    // Mulai Sewa baru -- cuma diisi ulang kalau tidak valid
+                    // lagi, supaya tidak menimpa pilihan vendor tanpa alasan.
+                    if (endDate >= minEnd) return;
+                    if (business.min_rental_days != null) {
+                      setEndDate(endDateForDays(newStart, business.min_rental_days, business.rental_day_mode));
+                    } else {
                       setEndDate(minEnd);
                     }
                   }}
@@ -979,7 +988,13 @@ export function NewBookingModal({
                 <input
                   type="date"
                   required
-                  min={business.rental_day_mode === 'per_malam' ? addDaysStr(startDate, 1) : startDate}
+                  min={
+                    business.min_rental_days != null
+                      ? endDateForDays(startDate, business.min_rental_days, business.rental_day_mode)
+                      : business.rental_day_mode === 'per_malam'
+                        ? addDaysStr(startDate, 1)
+                        : startDate
+                  }
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] font-semibold focus:outline-none focus:ring-1 focus:ring-[#2B4739]"

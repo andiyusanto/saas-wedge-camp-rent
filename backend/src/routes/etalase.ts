@@ -1557,18 +1557,47 @@ document.addEventListener('keydown', function (e) {
   endInput.addEventListener('input', updateAvailConfirm);
   updateAvailConfirm();
 
-  // Begitu tanggal ambil diisi, default-kan tanggal kembali — hari yang
-  // sama kalau mode per hari kalender (kebanyakan pengunjung cuma mau
-  // isi satu tanggal dulu buat cek sewa 1 hari), atau BESOKNYA kalau
-  // per malam (ambil=kembali hari sama tidak valid di mode itu, sama
-  // seperti Bilbo — lihat rentalDayMode, migration 049).
+  // Isi otomatis tanggal kembali sesuai min/maks hari (brief 23 Nov 2026)
+  // -- rumus SAMA dengan endDateForDays() (frontend/src/utils/formatters.ts),
+  // salinan terpisah karena runtime JS di sini (vanilla, dirender server),
+  // bukan React. days = JUMLAH HARI (bukan malam).
+  function addDaysStrClient(dateStr, amount) {
+    var d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() + amount);
+    return localDateStr(d);
+  }
+  function endDateForDaysClient(startDateStr, days) {
+    var nights = rentalDayMode === 'per_malam' ? days : days - 1;
+    return addDaysStrClient(startDateStr, Math.max(nights, rentalDayMode === 'per_malam' ? 1 : 0));
+  }
+
+  // Begitu tanggal ambil diisi, isi otomatis tanggal kembali -- prioritas
+  // (a) maks hari (Pesanan Online diblokir keras di luar paket, jadi
+  // auto-fill ke batas maks sekalian supaya pelanggan tidak perlu
+  // menghitung sendiri), (b) minimal hari kalau maks tidak diisi, (c)
+  // batas dasar (perilaku lama -- hari yang sama kalau per hari kalender,
+  // besoknya kalau per malam). Tanggal kembali yang sudah diisi (manual
+  // atau auto sebelumnya) dipertahankan kalau MASIH VALID, cuma diisi
+  // ulang kalau tidak. endInput.min/max DITEGAKKAN keras di sini (beda
+  // dari Catat Transaksi yang cuma batas min) karena Pesanan Online
+  // ditolak keras di luar rentang min/maks (migration 054).
   startInput.addEventListener('change', function () {
-    var minEnd = rentalDayMode === 'per_malam' ? addOneDayStr(startInput.value) : startInput.value;
-    if (!endInput.value || endInput.value < minEnd) {
-      endInput.value = minEnd;
-      updateAvailConfirm();
-    }
+    var minEnd = minRentalDays != null ? endDateForDaysClient(startInput.value, minRentalDays)
+      : rentalDayMode === 'per_malam' ? addOneDayStr(startInput.value) : startInput.value;
     endInput.min = minEnd;
+    if (maxRentalDays != null) {
+      endInput.max = endDateForDaysClient(startInput.value, maxRentalDays);
+      // (a) maks diisi -- perilaku SAMA dengan Catat Transaksi (NewBookingModal.tsx):
+      // selalu ditimpa ulang tiap Mulai Sewa berubah, bukan cuma kalau tidak valid.
+      endInput.value = endDateForDaysClient(startInput.value, maxRentalDays);
+      updateAvailConfirm();
+      return;
+    }
+    // (b)/(c): pertahankan tanggal kembali yang sudah diisi kalau masih
+    // valid untuk Mulai Sewa baru, isi ulang kalau tidak.
+    if (endInput.value && endInput.value >= minEnd) return;
+    endInput.value = minEnd;
+    updateAvailConfirm();
   });
 
   // Threshold "sisa sedikit" ini SENGAJA disalin dari LOW_STOCK_RATIO di

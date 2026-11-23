@@ -76,6 +76,17 @@ export function addDaysStr(dateStr: string, amount: number): string {
 
 export type RentalDayMode = 'per_malam' | 'per_hari_kalender';
 
+// Isi otomatis tanggal kembali sesuai min/maks hari (brief 23 Nov 2026) --
+// SATU helper, rumus SAMA dengan validasi min/maks yang sudah ada
+// (NewBookingModal.tsx sebelumnya menghitung nights = per_malam ? N :
+// N-1 inline, dua kali -- diekstrak ke sini supaya tidak diduplikasi lagi
+// saat Etalase (routes/etalase.ts, runtime JS terpisah, salinan sendiri)
+// ikut disamakan). days = JUMLAH HARI (bukan malam) yang mau dicapai.
+export function endDateForDays(startDate: string, days: number, mode: RentalDayMode | null): string {
+  const nights = mode === 'per_malam' ? days : days - 1;
+  return addDaysStr(startDate, Math.max(nights, mode === 'per_malam' ? 1 : 0));
+}
+
 // Cara hitung durasi sewa jadi pengaturan per rental (migration 049,
 // keputusan Andi 2 Nov 2026) — `mode` WAJIB diisi eksplisit oleh
 // pemanggil (tidak ada default diam-diam), supaya tidak ada pemanggil
