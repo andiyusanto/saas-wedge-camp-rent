@@ -6,7 +6,7 @@ import { useItems } from '../hooks/useItems';
 import type { Item, ItemInput } from '../hooks/useItems';
 import { useTeam } from '../hooks/useTeam';
 import { apiFetch } from '../lib/api';
-import { formatDateIndo, formatIDR, computeItemRentalPrice } from '../utils/formatters';
+import { formatDateIndo, formatIDR, computeItemRentalPrice, computePackageTierRates } from '../utils/formatters';
 import { resizeImageToDataUrl } from '../utils/imageResize';
 import { ScrollableRow } from './ScrollableRow';
 import { SelectOrAddField } from './SelectOrAddField';
@@ -344,14 +344,20 @@ function ItemFormModal({
                         // telat hari pertama Rp0 untuk paket < 5 hari. Harus
                         // diisi EKSPLISIT dengan tarif lewat paket yang sama
                         // dengan extra_day_rate, memutus rantai warisan itu.
-                        const over = templateOverRate.trim() === '' ? '0' : templateOverRate;
+                        //
+                        // Logikanya diekstrak ke computePackageTierRates()
+                        // (brief Pilih Skema Sewa 24 Nov 2026) supaya bisa
+                        // dipakai ulang oleh bulk-apply "Skema Sewa Kamu" --
+                        // tombol ini cuma memanggilnya, perilaku SAMA PERSIS.
+                        const over = Number(templateOverRate.trim() === '' ? '0' : templateOverRate);
+                        const tiers = computePackageTierRates(over, n);
                         setTierRaw((prev) => ({
                           ...prev,
-                          day2: '0',
-                          day3: n >= 3 ? '0' : over,
-                          day4: n >= 4 ? '0' : over,
-                          day5: n >= 5 ? '0' : over,
-                          extra: over,
+                          day2: String(tiers.day2_rate),
+                          day3: String(tiers.day3_rate),
+                          day4: String(tiers.day4_rate),
+                          day5: String(tiers.day5_rate),
+                          extra: String(tiers.extra_day_rate),
                         }));
                       }}
                       className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-white border border-[#DBD5C1] text-[#2B4739] hover:bg-[#E8EFEA]"

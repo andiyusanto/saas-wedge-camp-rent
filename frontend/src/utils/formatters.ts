@@ -204,6 +204,28 @@ export function computeItemRentalPrice(rates: ItemDayRates, days: number): numbe
   return total;
 }
 
+// Template "Paket N hari" (Tahap 1, brief 2026-11 — tombol per-alat di
+// ItemsScreen.tsx) -- diekstrak jadi fungsi murni (brief Pilih Skema
+// Sewa 24 Nov 2026) supaya bisa dipakai ULANG oleh bulk-apply "Skema
+// Sewa Kamu" DAN diuji paritas terhadap perilaku lama sebelum refactor.
+// Hari 2..N = 0 (sudah termasuk harga paket di `price_per_day`), hari
+// setelah paket (termasuk "hari ke-6 dst") = `overRate` -- SELALU
+// diisi eksplisit (bukan dibiarkan kosong), pola fix 10 Nov 2026: field
+// kosong akan mewarisi tingkat sebelumnya yang baru diisi 0, membuat
+// hari setelah paket diam-diam gratis untuk paket < 5 hari.
+export function computePackageTierRates(
+  overRate: number,
+  n: 2 | 3 | 4 | 5,
+): { day2_rate: number; day3_rate: number; day4_rate: number; day5_rate: number; extra_day_rate: number } {
+  return {
+    day2_rate: 0,
+    day3_rate: n >= 3 ? 0 : overRate,
+    day4_rate: n >= 4 ? 0 : overRate,
+    day5_rate: n >= 5 ? 0 : overRate,
+    extra_day_rate: overRate,
+  };
+}
+
 // Paket Alat Tahap 1 (brief 15 Nov 2026, migration 064) -- salinan
 // frontend dari backend/src/lib/pricing.ts allocateBundlePrice dkk
 // (satu definisi per runtime, pola sama computeItemRentalPrice di atas
