@@ -9,7 +9,7 @@ import {
   PRICING,
   pricingAnnounced,
   isFounderEligible,
-  isFounderPricing,
+  resolvePriceTier,
   type BillingPeriod,
 } from '../lib/subscriptionConfig';
 import { getWhatsAppShareUrl, formatIDR, formatDateIndo, todayStr, addDaysStr } from '../utils/formatters';
@@ -76,8 +76,16 @@ export function LanggananScreen({
   const today = todayStr();
   const periodStart = subscription && subscription.activeUntil > today ? addDaysStr(subscription.activeUntil, 1) : today;
   const founderEligible = isFounderEligible(businessCreatedAt, subscription?.founderOverride ?? null);
-  const isFounder = announced && isFounderPricing(founderEligible, subscription?.founderPriceUntil ?? null, periodStart);
-  const price = announced ? PRICING[isFounder ? 'founder' : 'normal'][period] : null;
+  const tier = announced
+    ? resolvePriceTier({
+        founderEligible,
+        founderPriceUntil: subscription?.founderPriceUntil ?? null,
+        perkenalanLockedForever: subscription?.perkenalanLockedForever ?? false,
+        perkenalanPriceUntil: subscription?.perkenalanPriceUntil ?? null,
+        periodStart,
+      })
+    : null;
+  const price = tier ? PRICING[tier][period] : null;
 
   const waUrl = getWhatsAppShareUrl(
     SUBSCRIPTION_CONFIG.supportWhatsApp,
@@ -146,21 +154,47 @@ export function LanggananScreen({
               ))}
             </div>
             <div>
-              <p className="text-xs text-[#6E6853]">Harga untukmu{isFounder && <span className="font-semibold text-[#2B4739]"> (Pendiri)</span>}</p>
+              {/* Brief 24 Nov 2026: angka BESAR = harga yang benar-benar
+                  berlaku untuk rental ini (39rb Pendiri / 49rb Perkenalan)
+                  -- harga Normal 69rb HANYA baris kecil pembanding di
+                  bawah, TIDAK pernah dicoret (bisa terkesan harga coret
+                  palsu) kalau yang berlaku memang Normal itu sendiri. */}
+              <p className="text-xs text-[#6E6853]">
+                Harga untukmu
+                {tier === 'founder' && <span className="font-semibold text-[#2B4739]"> (Pendiri)</span>}
+                {tier === 'perkenalan' && <span className="font-semibold text-[#2B4739]"> (Perkenalan)</span>}
+              </p>
               <p className="text-2xl font-extrabold text-[#2B4739] leading-tight">
                 {formatIDR(price as number)}
                 <span className="text-sm font-semibold text-[#6E6853]">/{period === 'monthly' ? 'bulan' : 'tahun'}</span>
               </p>
-              {isFounder && (
-                <p className="text-xs text-[#6E6853] mt-0.5">
+              {tier !== 'normal' && (
+                <p className="text-[11px] text-[#6E6853] mt-0.5">
+                  Harga normal {formatIDR(PRICING.normal[period])}/{period === 'monthly' ? 'bulan' : 'tahun'}.
+                </p>
+              )}
+              {tier === 'founder' && (
+                <p className="text-xs text-[#6E6853] mt-1">
                   {subscription?.founderPriceUntil
-                    ? `Berlaku sampai ${formatDateIndo(subscription.founderPriceUntil)}, setelah itu ${formatIDR(PRICING.normal[period])}/${period === 'monthly' ? 'bulan' : 'tahun'}.`
-                    : 'Berlaku 12 bulan sejak pembayaran pertama.'}
+                    ? `Berlaku sampai ${formatDateIndo(subscription.founderPriceUntil)}. Setelah 12 bulan, harga kamu tetap ${formatIDR(PRICING.perkenalan.monthly)}/bulan selama langganan tidak terputus.`
+                    : `Berlaku 12 bulan sejak pembayaran pertama. Setelah itu, harga kamu tetap ${formatIDR(PRICING.perkenalan.monthly)}/bulan selama langganan tidak terputus.`}
+                </p>
+              )}
+              {tier === 'perkenalan' && !subscription?.perkenalanLockedForever && subscription?.perkenalanPriceUntil && (
+                <p className="text-xs text-[#6E6853] mt-1">
+                  Berlaku sampai {formatDateIndo(subscription.perkenalanPriceUntil)}, setelah itu{' '}
+                  {formatIDR(PRICING.normal[period])}/{period === 'monthly' ? 'bulan' : 'tahun'}.
+                </p>
+              )}
+              {tier === 'perkenalan' && subscription?.perkenalanLockedForever && (
+                <p className="text-xs text-[#6E6853] mt-1">
+                  Harga ini berlaku selama langganan tidak pernah terputus lebih dari masa tenggang.
                 </p>
               )}
             </div>
             <p className="text-xs text-[#6E6853] leading-relaxed">
-              Pembayaran dikonfirmasi manual lewat WhatsApp, bukan otomatis.
+              Pembayaran dikonfirmasi manual lewat WhatsApp, bukan otomatis. Paket tahunan lebih hemat — pertimbangkan
+              kalau sudah yakin lanjut.
             </p>
           </div>
         ) : (

@@ -12,6 +12,9 @@ export type AdminBusinessRow = {
   // Harga Pendiri (migration 060) — lihat lib/subscriptionConfig.ts.
   founder_override: boolean | null;
   founder_price_until: string | null;
+  // 3 tingkat harga, Opsi B (migration 074) — lib/subscriptionConfig.ts resolvePriceTier().
+  perkenalan_price_until: string | null;
+  perkenalan_locked_forever: boolean;
 };
 
 // RPC admin_list_businesses (migration 045) — satu-satunya jalur lintas-

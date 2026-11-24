@@ -18,6 +18,12 @@ export type Subscription = {
   // isFounderEligible()/isFounderPricing().
   founderOverride: boolean | null;
   founderPriceUntil: string | null;
+  // 3 tingkat harga, Opsi B Pendiri->Perkenalan (migration 074) — lihat
+  // lib/subscriptionConfig.ts resolvePriceTier(). perkenalanLockedForever
+  // DATA tersimpan (bukan dihitung ulang dari tanggal), diubah hanya oleh
+  // record_subscription_payment()/koreksi admin.
+  perkenalanPriceUntil: string | null;
+  perkenalanLockedForever: boolean;
 };
 
 // todayStr() ala frontend/src/utils/formatters.ts — waktu LOKAL BROWSER
@@ -57,7 +63,7 @@ export function useSubscription(businessId: string | null) {
         const [{ data: subRow }, { data: writable }] = await Promise.all([
           supabase
             .from('subscriptions')
-            .select('plan, active_until, founder_override, founder_price_until')
+            .select('plan, active_until, founder_override, founder_price_until, perkenalan_price_until, perkenalan_locked_forever')
             .eq('business_id', businessId)
             .maybeSingle(),
           supabase.rpc('business_is_writable', { p_business_id: businessId }),
@@ -88,6 +94,8 @@ export function useSubscription(businessId: string | null) {
           daysUntilActiveUntil: diffDays,
           founderOverride: subRow?.founder_override ?? null,
           founderPriceUntil: subRow?.founder_price_until ?? null,
+          perkenalanPriceUntil: subRow?.perkenalan_price_until ?? null,
+          perkenalanLockedForever: subRow?.perkenalan_locked_forever ?? false,
         });
       } catch {
         // Jaringan putus total dkk — subscription tetap null (banner

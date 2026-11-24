@@ -7,7 +7,7 @@ import {
   PERIOD_DAYS,
   pricingAnnounced,
   isFounderEligible,
-  isFounderPricing,
+  resolvePriceTier,
   type BillingPeriod,
 } from '../lib/subscriptionConfig';
 import { todayStr, addDaysStr } from '../utils/formatters';
@@ -39,10 +39,18 @@ export function AdminPaymentModal({
   const periodStart =
     business.active_until && business.active_until > today ? addDaysStr(business.active_until, 1) : today;
   const founderEligible = isFounderEligible(business.signed_up_at, business.founder_override);
-  const founder = announced && isFounderPricing(founderEligible, business.founder_price_until, periodStart);
+  const tier = announced
+    ? resolvePriceTier({
+        founderEligible,
+        founderPriceUntil: business.founder_price_until,
+        perkenalanLockedForever: business.perkenalan_locked_forever,
+        perkenalanPriceUntil: business.perkenalan_price_until,
+        periodStart,
+      })
+    : 'normal';
 
   function applySuggestion(period: BillingPeriod) {
-    setAmount(String(PRICING[founder ? 'founder' : 'normal'][period]));
+    setAmount(String(PRICING[tier][period]));
     setPeriodDays(String(PERIOD_DAYS[period]));
   }
 
@@ -94,7 +102,8 @@ export function AdminPaymentModal({
                 className="flex-1 px-2 py-2 rounded-lg border border-[#2B4739]/30 bg-[#2B4739]/5 text-[#2B4739] text-xs font-semibold"
               >
                 Saran {PERIOD_LABEL[p]}
-                {founder && ' · Pendiri'}
+                {tier === 'founder' && ' · Pendiri'}
+                {tier === 'perkenalan' && ' · Perkenalan'}
               </button>
             ))}
           </div>

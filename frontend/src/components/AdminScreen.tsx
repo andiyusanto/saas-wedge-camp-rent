@@ -117,6 +117,26 @@ export function AdminScreen() {
     search(query);
   }
 
+  // Koreksi manual kunci "Perkenalan 49rb selamanya" (migration 074,
+  // Opsi B) — data tersimpan, bukan dihitung ulang dari tanggal, jadi
+  // butuh jalur koreksi admin kalau ada kesalahan (mis. putus seharusnya
+  // tidak terdeteksi, atau sebaliknya).
+  async function handlePerkenalanLockedForeverToggle(businessId: string, locked: boolean) {
+    if (!supabase) return;
+    setFounderSavingId(businessId);
+    setActionError(null);
+    const { error: err } = await supabase.rpc('set_perkenalan_locked_forever', {
+      p_business_id: businessId,
+      p_locked: locked,
+    });
+    setFounderSavingId(null);
+    if (err) {
+      setActionError(err.message);
+      return;
+    }
+    search(query);
+  }
+
   return (
     <div className="space-y-4">
       <div className="bg-[#FBFAF4] p-4 sm:p-5 rounded-2xl border border-[#DBD5C1] shadow-xs space-y-3">
@@ -227,6 +247,27 @@ export function AdminScreen() {
                     className="px-1.5 py-0.5 rounded border border-[#DBD5C1] text-[10px]"
                   />
                 </label>
+              </div>
+              {/* 3 tingkat harga Opsi B (migration 074) — kunci "Perkenalan
+                  49rb selamanya" DATA tersimpan, dicabut otomatis saat
+                  putus (lihat record_subscription_payment()), bisa
+                  dikoreksi manual di sini kalau perlu audit. */}
+              <div className="flex items-center gap-2 flex-wrap mt-1">
+                {row.perkenalan_locked_forever && (
+                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border bg-[#A65C2A]/10 text-[#A65C2A] border-[#A65C2A]/30">
+                    Perkenalan selamanya
+                  </span>
+                )}
+                {row.perkenalan_price_until && !row.perkenalan_locked_forever && (
+                  <span className="text-[10px] text-[#6E6853]">Perkenalan s/d {formatDateIndo(row.perkenalan_price_until)}</span>
+                )}
+                <button
+                  disabled={founderSavingId === row.business_id}
+                  onClick={() => handlePerkenalanLockedForeverToggle(row.business_id, !row.perkenalan_locked_forever)}
+                  className="text-[10px] font-semibold px-2 py-0.5 rounded-full border border-[#DBD5C1] text-[#6E6853] hover:bg-[#F1EEE2] transition disabled:opacity-50"
+                >
+                  {row.perkenalan_locked_forever ? 'Cabut kunci 49 selamanya' : 'Kunci 49 selamanya'}
+                </button>
               </div>
             </div>
 

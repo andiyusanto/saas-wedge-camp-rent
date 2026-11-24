@@ -23,13 +23,19 @@ export const SUBSCRIPTION_CONFIG = {
 } as const;
 
 export type BillingPeriod = 'monthly' | 'yearly';
+export type PriceTier = 'founder' | 'perkenalan' | 'normal';
 
-// Harga final satu tier (semua fitur) — keputusan Andi via -c1, 2 Nov
-// 2026. Pendiri = vendor yang daftar sebelum cutoff, berlaku SEPANJANG
-// 2027 saja (lihat isFounderPricing di bawah) — bukan "selamanya".
-export const PRICING: Record<'normal' | 'founder', Record<BillingPeriod, number>> = {
-  normal: { monthly: 49_000, yearly: 490_000 },
+// Tiga tingkat harga (keputusan Andi 24 Nov 2026, menggantikan skema 2
+// tingkat sebelumnya — lihat research/brief-langganan-harga-referral-
+// ulasan-2026-12.md dan memory project_pricing_decision_49k). Pendiri =
+// vendor yang daftar/ikut wawancara sampai batas 2026, Perkenalan =
+// lantai tengah untuk pendaftar sampai akhir 2027 (atau Pendiri yang
+// sudah lewat 12 bulan tapi SEDANG putus-comeback, lihat
+// resolvePriceTier di bawah), Normal = selain itu.
+export const PRICING: Record<PriceTier, Record<BillingPeriod, number>> = {
   founder: { monthly: 39_000, yearly: 390_000 },
+  perkenalan: { monthly: 49_000, yearly: 490_000 },
+  normal: { monthly: 69_000, yearly: 690_000 },
 };
 
 export const PERIOD_DAYS: Record<BillingPeriod, number> = {
@@ -37,34 +43,48 @@ export const PERIOD_DAYS: Record<BillingPeriod, number> = {
   yearly: 365,
 };
 
-// Batas eligibility OTOMATIS pendiri (keputusan Andi 12 Nov 2026) —
-// vendor yang daftar sebelum tanggal ini LANGSUNG eligible pendiri,
-// tanpa perlu ditandai admin. Peserta wawancara yang baru daftar
-// SETELAH tanggal ini (mis. Januari 2027) tidak otomatis eligible —
-// admin menandainya manual lewat Alat Admin (`founder_override`,
-// migration 060), ditolak kalau penandaan BARU dilakukan setelah 31 Jan
-// 2027 23:59 WIB (lihat `set_founder_override` di migration itu).
+// Batas eligibility OTOMATIS Pendiri (nilainya TIDAK berubah dari
+// migration 060 — brief 24 Nov 2026 cuma menegaskan ulang syarat yang
+// sama persis: "daftar ATAU ikut wawancara paling lambat 31 Des 2026",
+// TIDAK diperpanjang) — `< 2027-01-01 00:00 WIB` berarti "sampai dengan
+// akhir 31 Des 2026 WIB inklusif". Vendor yang daftar sebelum tanggal
+// ini LANGSUNG eligible Pendiri, tanpa perlu ditandai admin. Peserta
+// wawancara yang baru daftar SETELAH tanggal ini (mis. Januari 2027)
+// tidak otomatis eligible — admin menandainya manual lewat Alat Admin
+// (`founder_override`, migration 060/074, dipakai SEKALIGUS sebagai
+// flag "ikut wawancara" — TIDAK ada kolom terpisah). NOTE: literal
+// cutoff di sini HARUS disamakan manual dengan yang ada di
+// record_subscription_payment() (migration 074) kalau tanggalnya
+// diubah — dua sumber kebenaran, tidak ada satu tempat yang otomatis
+// sinkron (fungsi SQL tidak bisa import konstanta TS).
 export const FOUNDER_CUTOFF_ISO = '2027-01-01T00:00:00+07:00';
 
+// Batas eligibility Perkenalan (brief: "mulai berlangganan paling
+// lambat 31 Des 2027") — dibandingkan ke period_start pembayaran
+// (tanggal MULAI periode yang dibayar/disarankan), bukan tanggal daftar
+// business.
+export const PERKENALAN_CUTOFF_ISO = '2027-12-31T23:59:59+07:00';
+
 // Sebelum tanggal ini, app belum boleh menampilkan angka harga ATAU
-// status Pendiri sama sekali (review -c1: bisa membocorkan rencana
-// harga/skema Pendiri sebelum pengumuman resmi). Tetap tampilkan
-// kalimat "harga diumumkan sebelum 31 Desember" yang sudah ada.
-// Dibandingkan lewat Date lokal browser biasa (bukan helper
-// WIB-eksplisit) — disetujui -c1 2 Nov 2026: angka yang tampil di app
-// cuma display/saran, jam tangan browser yang salah tidak bisa membuat
+// status tingkat apa pun sama sekali (review -c1: bisa membocorkan
+// rencana harga sebelum pengumuman resmi). Tetap tampilkan kalimat
+// "harga diumumkan sebelum 20 Desember" yang sudah ada. Dibandingkan
+// lewat Date lokal browser biasa (bukan helper WIB-eksplisit) —
+// disetujui -c1 2 Nov 2026: angka yang tampil di app cuma
+// display/saran, jam tangan browser yang salah tidak bisa membuat
 // pembayaran sungguhan lebih murah karena satu-satunya jalur tulis
 // (record_subscription_payment) selalu diisi admin setelah verifikasi
-// manual transfer. Tanggal diupdate 12 Nov 2026 ke embargo final 4 Des
-// 2026 (sebelumnya 9 Des, placeholder lama).
-export const PRICING_ANNOUNCE_AT_ISO = '2026-12-04T00:00:00+07:00';
+// manual transfer. Tanggal diupdate 24 Nov 2026 ke 20 Des 2026 (brief
+// Post 31, pengumuman resmi), sebelumnya 4 Des 2026 placeholder lama.
+export const PRICING_ANNOUNCE_AT_ISO = '2026-12-20T00:00:00+07:00';
 
 export function pricingAnnounced(now: Date = new Date()): boolean {
   return now.getTime() >= new Date(PRICING_ANNOUNCE_AT_ISO).getTime();
 }
 
 // Eligibility pendiri: `founderOverride` non-null (ditandai/dibatalkan
-// manual admin, migration 060) SELALU menang atas aturan otomatis.
+// manual admin, migration 060 — SEKALIGUS flag "ikut wawancara", lihat
+// komentar FOUNDER_CUTOFF_ISO) SELALU menang atas aturan otomatis.
 // `founderOverride === null` (belum pernah disentuh admin) jatuh balik
 // ke aturan otomatis: `createdAt` (businesses.created_at) sebelum
 // FOUNDER_CUTOFF_ISO.
@@ -84,4 +104,46 @@ export function isFounderPricing(eligible: boolean, founderPriceUntil: string | 
   if (!eligible) return false;
   if (founderPriceUntil === null) return true;
   return periodStart <= founderPriceUntil;
+}
+
+// Tiga tingkat harga -- Opsi B (keputusan Andi 24 Nov 2026, lihat
+// migration 074): setelah masa Pendiri (founder_price_until) lewat,
+// business mendapat Perkenalan 49rb SELAMANYA selama langganannya tidak
+// pernah putus (`perkenalanLockedForever`, disimpan sebagai DATA oleh
+// record_subscription_payment() -- BUKAN dihitung ulang dari tanggal di
+// sini, cuma dibaca apa adanya). Kalau putus, kunci itu dicabut (oleh
+// backend) dan perkenalan_price_until di-reset -- business comeback
+// dievaluasi lagi dari awal via perkenalanPriceUntil (jendela 12 bulan
+// baru dari comeback) atau langsung Normal kalau sudah lewat batas 31
+// Des 2027.
+//
+// `periodStart` = tanggal yang sedang dievaluasi (biasanya HARI INI
+// untuk tampilan status berjalan, atau tanggal mulai periode berikutnya
+// untuk saran pembayaran) -- format YYYY-MM-DD.
+export function resolvePriceTier(params: {
+  founderEligible: boolean;
+  founderPriceUntil: string | null;
+  perkenalanLockedForever: boolean;
+  perkenalanPriceUntil: string | null;
+  periodStart: string;
+}): PriceTier {
+  const { founderEligible, founderPriceUntil, perkenalanLockedForever, perkenalanPriceUntil, periodStart } = params;
+
+  if (isFounderPricing(founderEligible, founderPriceUntil, periodStart)) {
+    return 'founder';
+  }
+  if (perkenalanLockedForever) {
+    return 'perkenalan';
+  }
+  if (perkenalanPriceUntil !== null) {
+    return periodStart <= perkenalanPriceUntil ? 'perkenalan' : 'normal';
+  }
+  // Belum pernah bayar SAMA SEKALI (perkenalanPriceUntil null) DAN bukan
+  // (lagi) Pendiri -- saran Perkenalan untuk pembayaran pertama selama
+  // masih sebelum batas eligibility-nya, pola sama isFounderPricing()
+  // untuk founderPriceUntil null.
+  if (founderPriceUntil === null) {
+    return periodStart <= PERKENALAN_CUTOFF_ISO.slice(0, 10) ? 'perkenalan' : 'normal';
+  }
+  return 'normal';
 }
