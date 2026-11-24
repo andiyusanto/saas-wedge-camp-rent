@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { CreditCard, MessageCircle, Receipt, QrCode, Info, Users, Copy, Check } from 'lucide-react';
+import { CreditCard, MessageCircle, Receipt, QrCode, Info, Users, Copy, Check, Star, MessageSquareQuote } from 'lucide-react';
 import type { Subscription, SubscriptionStatus } from '../hooks/useSubscription';
 import { useSubscriptionPayments } from '../hooks/useSubscriptionPayments';
 import type { SubscriptionPayment } from '../hooks/useSubscriptionPayments';
 import { usePricing } from '../hooks/usePricing';
 import { useReferrals } from '../hooks/useReferrals';
+import { useBusinessReview, type ConsentType } from '../hooks/useBusinessReview';
 import { SubscriptionReceiptModal } from './SubscriptionReceiptModal';
 import { SUBSCRIPTION_CONFIG, isFounderEligible, resolvePriceTier, type BillingPeriod } from '../lib/subscriptionConfig';
 import { getWhatsAppShareUrl, formatIDR, formatDateIndo, todayStr, addDaysStr } from '../utils/formatters';
@@ -76,10 +77,27 @@ export function LanggananScreen({
 }) {
   const { payments, loading } = useSubscriptionPayments(businessId);
   const { referrals, claimBonus } = useReferrals(businessId);
+  const { review, saving: savingReview, save: saveReview } = useBusinessReview(businessId);
   const [receiptTarget, setReceiptTarget] = useState<SubscriptionPayment | null>(null);
   const [period, setPeriod] = useState<BillingPeriod>('monthly');
   const [copied, setCopied] = useState(false);
   const [claimingId, setClaimingId] = useState<string | null>(null);
+  const [reviewText, setReviewText] = useState('');
+  const [reviewRating, setReviewRating] = useState<number | null>(null);
+  const [reviewConsent, setReviewConsent] = useState<ConsentType | null>(null);
+  const [reviewSavedAt, setReviewSavedAt] = useState<number | null>(null);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewInitialized, setReviewInitialized] = useState(false);
+
+  // Isi form sekali dari data tersimpan (SETELAH hook selesai memuat) —
+  // tidak boleh terus menimpa ulang tiap `review` berubah (mis. setelah
+  // Simpan sendiri), supaya ketikan yang sedang berjalan tidak direset.
+  if (review && !reviewInitialized) {
+    setReviewText(review.reviewText);
+    setReviewRating(review.rating);
+    setReviewConsent(review.consentType);
+    setReviewInitialized(true);
+  }
 
   // Gate pengumuman harga -- SEKARANG ditentukan BACKEND (GET /api/pricing,
   // waktu server WIB), bukan dihitung di klien -- `pricing` null berarti
@@ -307,6 +325,92 @@ export function LanggananScreen({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {!isDemoAccount && (
+        <div className="bg-[#FBFAF4] p-4 sm:p-5 rounded-2xl border border-[#DBD5C1] shadow-xs space-y-3">
+          <h3 className="text-sm font-bold text-[#26302B] flex items-center gap-2">
+            <MessageSquareQuote className="w-4 h-4 text-[#2B4739]" />
+            <span>Ulasan untuk Sewalog</span>
+          </h3>
+          <p className="text-xs text-[#6E6853] leading-relaxed">
+            Ulasan bisa dipakai di website/Instagram Sewalog sesuai izin yang kamu pilih. Izin bisa diubah atau
+            ditarik kapan saja — kalau ditarik, ulasan tidak dipakai di konten baru dan dihapus dari website dalam
+            ±7 hari.
+          </p>
+
+          <textarea
+            value={reviewText}
+            onChange={(e) => setReviewText(e.target.value.slice(0, 1000))}
+            maxLength={1000}
+            rows={3}
+            placeholder="Ceritakan pengalaman kamu pakai Sewalog..."
+            className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] text-sm focus:outline-none focus:ring-1 focus:ring-[#2B4739] resize-none"
+          />
+          <p className="text-[11px] text-[#6E6853] text-right -mt-1">{reviewText.length}/1000</p>
+
+          <div className="flex items-center gap-1">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setReviewRating(reviewRating === n ? null : n)}
+                title={`${n} bintang`}
+                className="p-0.5"
+              >
+                <Star
+                  className={`w-5 h-5 ${
+                    reviewRating !== null && n <= reviewRating ? 'fill-[#A65C2A] text-[#A65C2A]' : 'text-[#DBD5C1]'
+                  }`}
+                />
+              </button>
+            ))}
+            {reviewRating !== null && <span className="text-xs text-[#6E6853] ml-1">({reviewRating}/5, opsional)</span>}
+          </div>
+
+          <div className="space-y-1.5 pt-1 border-t border-[#E6E1D2]">
+            <p className="text-xs font-semibold text-[#26302B] pt-2">Boleh ditampilkan sebagai:</p>
+            {(
+              [
+                { value: 'named' as const, label: 'Dengan nama rental (dan kota)' },
+                { value: 'anonymized' as const, label: 'Nama disamarkan, mis. "Rental alat camping di {kota}"' },
+                { value: 'internal_only' as const, label: 'Hanya untuk tim Sewalog, jangan dipublikasikan' },
+              ]
+            ).map((opt) => (
+              <label key={opt.value} className="flex items-start gap-2 text-xs text-[#26302B] cursor-pointer">
+                <input
+                  type="radio"
+                  name="review-consent"
+                  checked={reviewConsent === opt.value}
+                  onChange={() => setReviewConsent(opt.value)}
+                  className="mt-0.5"
+                />
+                <span>{opt.label}</span>
+              </label>
+            ))}
+          </div>
+
+          {reviewError && <p className="text-xs text-[#A8412E]">{reviewError}</p>}
+          {reviewSavedAt !== null && !reviewError && (
+            <p className="text-xs text-[#2B4739] font-semibold">Tersimpan.</p>
+          )}
+
+          <button
+            type="button"
+            disabled={savingReview || !reviewConsent}
+            onClick={async () => {
+              if (!reviewConsent) return;
+              setReviewSavedAt(null);
+              const { error: err } = await saveReview(reviewText, reviewRating, reviewConsent);
+              setReviewError(err);
+              if (!err) setReviewSavedAt(Date.now());
+            }}
+            className="w-full px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-sm shadow-sm transition active:scale-95 disabled:opacity-60"
+          >
+            {savingReview ? 'Menyimpan...' : 'Simpan Ulasan'}
+          </button>
+          {!reviewConsent && <p className="text-[11px] text-[#6E6853]">Pilih salah satu izin di atas sebelum menyimpan.</p>}
         </div>
       )}
 
