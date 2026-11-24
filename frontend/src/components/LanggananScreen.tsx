@@ -1,17 +1,12 @@
 import { useState } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import { CreditCard, MessageCircle, Receipt, QrCode, Info } from 'lucide-react';
 import type { Subscription, SubscriptionStatus } from '../hooks/useSubscription';
 import { useSubscriptionPayments } from '../hooks/useSubscriptionPayments';
 import type { SubscriptionPayment } from '../hooks/useSubscriptionPayments';
+import { usePricing } from '../hooks/usePricing';
 import { SubscriptionReceiptModal } from './SubscriptionReceiptModal';
-import {
-  SUBSCRIPTION_CONFIG,
-  PRICING,
-  pricingAnnounced,
-  isFounderEligible,
-  resolvePriceTier,
-  type BillingPeriod,
-} from '../lib/subscriptionConfig';
+import { SUBSCRIPTION_CONFIG, isFounderEligible, resolvePriceTier, type BillingPeriod } from '../lib/subscriptionConfig';
 import { getWhatsAppShareUrl, formatIDR, formatDateIndo, todayStr, addDaysStr } from '../utils/formatters';
 
 const PERIOD_LABEL: Record<BillingPeriod, string> = { monthly: 'Bulanan', yearly: 'Tahunan' };
@@ -38,19 +33,24 @@ const METHOD_LABEL: Record<string, string> = {
 // Halaman "Langganan" owner-only — status, tanggal aktif, info rekening
 // pembayaran, tombol konfirmasi via WA, dan riwayat pembayaran (baca-saja,
 // satu-satunya jalur tulis adalah RPC admin record_subscription_payment).
-// Harga final sudah diputuskan (Rp49rb/bulan, Rp490rb/tahun, harga Pendiri
-// Rp39rb/Rp390rb berlaku 12 bulan dari pembayaran pertama — lihat
-// lib/subscriptionConfig.ts & migration 060) tapi TIDAK BOLEH ditampilkan
-// sama sekali (angka ATAU status Pendiri) sebelum PRICING_ANNOUNCE_AT_ISO
-// (4 Des 2026) — keputusan -c1, supaya tidak membocorkan skema sebelum
+// Tiga tingkat harga final (Pendiri/Perkenalan/Normal, lihat
+// lib/subscriptionConfig.ts & migration 074) TIDAK BOLEH ditampilkan
+// sama sekali (angka ATAU status tingkat) sebelum PRICING_ANNOUNCE_AT_ISO
+// (20 Des 2026) — keputusan Andi, supaya tidak membocorkan skema sebelum
 // pengumuman resmi. Sebelum itu tetap tampilkan teks "harga diumumkan".
+// Angka rupiah-nya sendiri diambil lewat usePricing() (GET /api/pricing)
+// -- TIDAK ADA konstanta harga di bundle frontend sama sekali (review
+// koordinator 24 Nov 2026: bundle JS kebaca siapa pun lewat DevTools
+// bahkan sebelum login/sebelum embargo).
 export function LanggananScreen({
+  session,
   businessId,
   businessName,
   businessCreatedAt,
   subscription,
   isDemoAccount = false,
 }: {
+  session: Session;
   businessId: string;
   businessName: string;
   businessCreatedAt: string;
@@ -64,10 +64,12 @@ export function LanggananScreen({
   const [receiptTarget, setReceiptTarget] = useState<SubscriptionPayment | null>(null);
   const [period, setPeriod] = useState<BillingPeriod>('monthly');
 
-  // Gate pengumuman harga (keputusan -c1 2 Nov 2026) — sebelum tanggalnya
-  // tidak boleh tampil angka ATAU status Pendiri sama sekali, supaya
-  // tidak membocorkan skema harga sebelum pengumuman resmi 9 Des 2026.
-  const announced = pricingAnnounced();
+  // Gate pengumuman harga -- SEKARANG ditentukan BACKEND (GET /api/pricing,
+  // waktu server WIB), bukan dihitung di klien -- `pricing` null berarti
+  // belum diumumkan (dan bukan admin), TIDAK BOLEH ditampilkan sama
+  // sekali (angka ATAU status tingkat), supaya tidak membocorkan skema
+  // harga sebelum pengumuman resmi 20 Des 2026.
+  const { pricing, announced } = usePricing(session);
 
   // Periode yang SEDANG dibayar mulai dari hari setelah active_until
   // kalau masih di masa depan, atau hari ini kalau sudah lewat/tenggang
@@ -76,7 +78,7 @@ export function LanggananScreen({
   const today = todayStr();
   const periodStart = subscription && subscription.activeUntil > today ? addDaysStr(subscription.activeUntil, 1) : today;
   const founderEligible = isFounderEligible(businessCreatedAt, subscription?.founderOverride ?? null);
-  const tier = announced
+  const tier = pricing
     ? resolvePriceTier({
         founderEligible,
         founderPriceUntil: subscription?.founderPriceUntil ?? null,
@@ -85,7 +87,7 @@ export function LanggananScreen({
         periodStart,
       })
     : null;
-  const price = tier ? PRICING[tier][period] : null;
+  const price = tier && pricing ? pricing[tier][period] : null;
 
   const waUrl = getWhatsAppShareUrl(
     SUBSCRIPTION_CONFIG.supportWhatsApp,
@@ -168,22 +170,22 @@ export function LanggananScreen({
                 {formatIDR(price as number)}
                 <span className="text-sm font-semibold text-[#6E6853]">/{period === 'monthly' ? 'bulan' : 'tahun'}</span>
               </p>
-              {tier !== 'normal' && (
+              {tier && tier !== 'normal' && (
                 <p className="text-[11px] text-[#6E6853] mt-0.5">
-                  Harga normal {formatIDR(PRICING.normal[period])}/{period === 'monthly' ? 'bulan' : 'tahun'}.
+                  Harga normal {formatIDR(pricing!.normal[period])}/{period === 'monthly' ? 'bulan' : 'tahun'}.
                 </p>
               )}
               {tier === 'founder' && (
                 <p className="text-xs text-[#6E6853] mt-1">
                   {subscription?.founderPriceUntil
-                    ? `Berlaku sampai ${formatDateIndo(subscription.founderPriceUntil)}. Setelah 12 bulan, harga kamu tetap ${formatIDR(PRICING.perkenalan.monthly)}/bulan selama langganan tidak terputus.`
-                    : `Berlaku 12 bulan sejak pembayaran pertama. Setelah itu, harga kamu tetap ${formatIDR(PRICING.perkenalan.monthly)}/bulan selama langganan tidak terputus.`}
+                    ? `Berlaku sampai ${formatDateIndo(subscription.founderPriceUntil)}. Setelah 12 bulan, harga kamu tetap ${formatIDR(pricing!.perkenalan.monthly)}/bulan selama langganan tidak terputus.`
+                    : `Berlaku 12 bulan sejak pembayaran pertama. Setelah itu, harga kamu tetap ${formatIDR(pricing!.perkenalan.monthly)}/bulan selama langganan tidak terputus.`}
                 </p>
               )}
               {tier === 'perkenalan' && !subscription?.perkenalanLockedForever && subscription?.perkenalanPriceUntil && (
                 <p className="text-xs text-[#6E6853] mt-1">
                   Berlaku sampai {formatDateIndo(subscription.perkenalanPriceUntil)}, setelah itu{' '}
-                  {formatIDR(PRICING.normal[period])}/{period === 'monthly' ? 'bulan' : 'tahun'}.
+                  {formatIDR(pricing!.normal[period])}/{period === 'monthly' ? 'bulan' : 'tahun'}.
                 </p>
               )}
               {tier === 'perkenalan' && subscription?.perkenalanLockedForever && (

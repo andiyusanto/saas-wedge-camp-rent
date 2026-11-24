@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import { Search, ShieldCheck, Wallet, Star } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { useAdminBusinesses } from '../hooks/useAdminBusinesses';
@@ -56,7 +57,7 @@ const STATUS_CLASS: Record<AdminBusinessRow['status'], string> = {
 // dicek Navbar via is_app_admin() SEBELUM tab ini bahkan dirender (lihat
 // App.tsx), RLS lintas-business sendiri ditegakkan di RPC
 // admin_list_businesses (migration 045), bukan di sini.
-export function AdminScreen() {
+export function AdminScreen({ session }: { session: Session }) {
   const { rows, loading, error, search } = useAdminBusinesses();
   const [query, setQuery] = useState('');
   const [paymentTarget, setPaymentTarget] = useState<AdminBusinessRow | null>(null);
@@ -304,6 +305,7 @@ export function AdminScreen() {
 
       {paymentTarget && (
         <AdminPaymentModal
+          session={session}
           business={paymentTarget}
           onClose={() => setPaymentTarget(null)}
           onSaved={() => {

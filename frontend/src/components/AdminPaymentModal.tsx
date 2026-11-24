@@ -1,15 +1,10 @@
 import { useState } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
 import { ModalBackdrop, ModalPanel } from './ModalShell';
 import type { AdminBusinessRow } from '../hooks/useAdminBusinesses';
-import {
-  PRICING,
-  PERIOD_DAYS,
-  pricingAnnounced,
-  isFounderEligible,
-  resolvePriceTier,
-  type BillingPeriod,
-} from '../lib/subscriptionConfig';
+import { usePricing } from '../hooks/usePricing';
+import { PERIOD_DAYS, isFounderEligible, resolvePriceTier, type BillingPeriod } from '../lib/subscriptionConfig';
 import { todayStr, addDaysStr } from '../utils/formatters';
 
 const PERIOD_LABEL: Record<BillingPeriod, string> = { monthly: 'Bulanan (30 hari)', yearly: 'Tahunan (365 hari)' };
@@ -18,11 +13,20 @@ const PERIOD_LABEL: Record<BillingPeriod, string> = { monthly: 'Bulanan (30 hari
 // + subscriptions.active_until, lewat RPC record_subscription_payment
 // (migration 044, is_app_admin() wajib di server, period math inklusif
 // sudah diperbaiki di sana — jangan hitung ulang active_until di sini).
+//
+// Angka rupiah diambil lewat usePricing() (GET /api/pricing, review
+// koordinator 24 Nov 2026) -- SENGAJA TIDAK digerbang embargo di sini
+// (beda dari LanggananScreen.tsx): backend mengembalikan angka ke
+// is_app_admin terlepas dari pricingAnnounced(), karena Alat Admin
+// (cuma Andi yang bisa membuka tab ini) butuh saran nominal kapan pun
+// untuk mencatat pembayaran manual sebelum pengumuman resmi.
 export function AdminPaymentModal({
+  session,
   business,
   onClose,
   onSaved,
 }: {
+  session: Session;
   business: AdminBusinessRow;
   onClose: () => void;
   onSaved: () => void;
@@ -34,12 +38,12 @@ export function AdminPaymentModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const announced = pricingAnnounced();
+  const { pricing } = usePricing(session);
   const today = todayStr();
   const periodStart =
     business.active_until && business.active_until > today ? addDaysStr(business.active_until, 1) : today;
   const founderEligible = isFounderEligible(business.signed_up_at, business.founder_override);
-  const tier = announced
+  const tier = pricing
     ? resolvePriceTier({
         founderEligible,
         founderPriceUntil: business.founder_price_until,
@@ -50,7 +54,8 @@ export function AdminPaymentModal({
     : 'normal';
 
   function applySuggestion(period: BillingPeriod) {
-    setAmount(String(PRICING[tier][period]));
+    if (!pricing) return;
+    setAmount(String(pricing[tier][period]));
     setPeriodDays(String(PERIOD_DAYS[period]));
   }
 
@@ -92,7 +97,7 @@ export function AdminPaymentModal({
           <p className="text-xs text-[#6E6853] truncate">{business.name} · {business.owner_email}</p>
         </div>
 
-        {announced && (
+        {pricing && (
           <div className="flex gap-2">
             {(['monthly', 'yearly'] as const).map((p) => (
               <button

@@ -24,6 +24,7 @@ export const SUBSCRIPTION_CONFIG = {
 
 export type BillingPeriod = 'monthly' | 'yearly';
 export type PriceTier = 'founder' | 'perkenalan' | 'normal';
+export type PricingTable = Record<PriceTier, Record<BillingPeriod, number>>;
 
 // Tiga tingkat harga (keputusan Andi 24 Nov 2026, menggantikan skema 2
 // tingkat sebelumnya — lihat research/brief-langganan-harga-referral-
@@ -32,11 +33,19 @@ export type PriceTier = 'founder' | 'perkenalan' | 'normal';
 // lantai tengah untuk pendaftar sampai akhir 2027 (atau Pendiri yang
 // sudah lewat 12 bulan tapi SEDANG putus-comeback, lihat
 // resolvePriceTier di bawah), Normal = selain itu.
-export const PRICING: Record<PriceTier, Record<BillingPeriod, number>> = {
-  founder: { monthly: 39_000, yearly: 390_000 },
-  perkenalan: { monthly: 49_000, yearly: 490_000 },
-  normal: { monthly: 69_000, yearly: 690_000 },
-};
+//
+// ANGKA RUPIAH-nya SENGAJA TIDAK ada di sini (review koordinator 24 Nov
+// 2026) — konstanta di bundle JS frontend kebaca siapa pun lewat
+// DevTools/view-source bahkan SEBELUM login/sebelum embargo
+// PRICING_ANNOUNCE_AT_ISO, yang berarti membocorkan skema harga lebih
+// awal dari pengumuman resmi. Angkanya SEKARANG diambil lewat
+// `GET /api/pricing` (backend/src/lib/pricingConfig.ts, backend/src/
+// routes/pricing.ts) via hook `usePricing()` (hooks/usePricing.ts) --
+// endpoint itu sendiri yang memutuskan kapan angka boleh dikirim
+// (announced OR is_app_admin), bukan lagi diputuskan di sini. Fungsi di
+// bawah (resolvePriceTier dkk) TETAP murni/testable -- cuma MENENTUKAN
+// tingkat (label), bukan ANGKANYA, jadi tidak perlu tahu rupiah sama
+// sekali.
 
 export const PERIOD_DAYS: Record<BillingPeriod, number> = {
   monthly: 30,

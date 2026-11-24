@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import { LogOut } from 'lucide-react';
 import { supabase } from './lib/supabaseClient';
 import { useAuth } from './hooks/useAuth';
@@ -128,7 +129,7 @@ function clearInviteCode() {
 // tetap jatuh ke app biasa dengan tab Alat Admin seperti sebelumnya
 // (lihat guard `!business` di App() di bawah, cuma berlaku kalau business
 // benar-benar null).
-function AdminOnlyView({ onLogout }: { onLogout: () => void }) {
+function AdminOnlyView({ session, onLogout }: { session: Session; onLogout: () => void }) {
   return (
     <div className="min-h-screen bg-[#F1EEE2] text-[#26302B] flex flex-col">
       <header className="sticky top-0 z-30 bg-[#2B4739] text-white shadow-md border-b border-[#1E3429]">
@@ -165,7 +166,7 @@ function AdminOnlyView({ onLogout }: { onLogout: () => void }) {
         </div>
       </header>
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
-        <AdminScreen />
+        <AdminScreen session={session} />
       </main>
     </div>
   );
@@ -408,7 +409,7 @@ function App() {
     // selesai (race dua loading independen, lihat useIsAppAdmin.ts).
     if (isAppAdminLoading) return null;
     if (isAppAdmin) {
-      return <AdminOnlyView onLogout={() => { clearAllBookingDraftsOnLogout(); supabase?.auth.signOut(); }} />;
+      return <AdminOnlyView session={session} onLogout={() => { clearAllBookingDraftsOnLogout(); supabase?.auth.signOut(); }} />;
     }
     return <OnboardingScreen onCreated={refreshBusiness} />;
   }
@@ -560,9 +561,10 @@ function App() {
         )}
         {tab === 'toko-online' && role === 'owner' && <OnlineStoreScreen businessName={business.name} />}
         {tab === 'panduan' && <GuideScreen businessName={business.name} />}
-        {tab === 'admin' && isAppAdmin && <AdminScreen />}
+        {tab === 'admin' && isAppAdmin && <AdminScreen session={session} />}
         {tab === 'langganan' && role === 'owner' && (
           <LanggananScreen
+            session={session}
             businessId={business.id}
             businessName={business.name}
             businessCreatedAt={business.created_at}
