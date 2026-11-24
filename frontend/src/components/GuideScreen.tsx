@@ -346,6 +346,13 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         </Note>
         <LateFeeIllustration />
         <Note>
+          Di layar <Ui>Kembalikan</Ui>, saran denda keterlambatan bisa ditekan <Ui>Bebaskan denda</Ui> (mis. kalau
+          pelanggan sudah mengabari telat duluan) — nominalnya jadi Rp0, lalu alasan WAJIB diisi (ada 3 pilihan cepat
+          atau tulis bebas). Bisa dibatalkan sebelum disimpan (kembali ke saran semula). Denda kerusakan/kehilangan
+          TIDAK ikut terpengaruh. Pembebasan tercatat di kartu Riwayat ("Denda telat dibebaskan (Rp X) — alasan") dan
+          kolom <Ui>Denda Dibebaskan</Ui> di Laporan — TIDAK muncul di struk/Nota pelanggan.
+        </Note>
+        <Note>
           Untuk transaksi dengan lebih dari satu alat, denda kerusakan/kehilangan bisa ditautkan ke alat spesifik
           mana yang kena (muncul sebagai pilihan dropdown di <Ui>Tambah Denda</Ui> dan di layar <Ui>Kembalikan</Ui>)
           — nama alatnya lalu ikut tampil di rincian denda, struk WA, dan Nota Sewa. Untuk transaksi satu alat,
@@ -431,6 +438,11 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         <Note>
           Pembayaran tidak bisa melebihi sisa tagihan — sistem menolaknya. Riwayat pembayaran (termasuk DP awal)
           bisa dilihat di Nota (<Ui>Cetak Nota</Ui>) bersama status LUNAS/Sisa/Lebih Bayar.
+        </Note>
+        <Note>
+          Kalau transaksi ini berasal dari Pesanan Online yang memilih <Ui>Rencana Bayar</Ui> (<SectionLink id="g-etalase">bagian 8</SectionLink>),
+          cara bayar di dialog pembayaran manapun otomatis terisi sesuai rencana itu — tetap bisa diganti kalau
+          pelanggan akhirnya bayar dengan cara lain.
         </Note>
 
         <p className="font-bold text-xs mt-2">Batalkan (bukan hapus)</p>
@@ -1170,6 +1182,12 @@ export function GuideScreen({ businessName }: { businessName: string }) {
               <Ui>Hapus</Ui> (minta konfirmasi dulu) kalau sudah tidak dipakai. Semua rekening aktif akan ditampilkan
               ke pelanggan sebagai kartu terpisah (masing-masing punya tombol <Ui>Salin nomor</Ui> sendiri) di halaman
               status pesanannya setelah kamu Konfirmasi.
+            </>,
+            <>
+              Kalau cara bayar yang aktif lebih dari satu, pelanggan WAJIB memilih <strong>Rencana Bayar</strong>{' '}
+              (Transfer/QRIS/Tunai) sendiri di formulir pesanan — kalau cuma satu cara bayar aktif, otomatis
+              terpilih. Pilihan ini cuma rencana awal (bukan pembayaran sungguhan), ditampilkan di kartu "Pesanan
+              masuk" dan ikut terisi otomatis saat kamu Konfirmasi (masih bisa diubah).
             </>,
             <>
               Isi <strong>Nomor WA admin untuk pesanan online</strong> — sampai 3 nomor (label tetap <Ui>Admin
