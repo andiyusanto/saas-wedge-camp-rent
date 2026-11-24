@@ -75,7 +75,7 @@ export function LanggananScreen({
   // dari akun ini. Deteksi dari email auth, lihat utils/demo.ts.
   isDemoAccount?: boolean;
 }) {
-  const { payments, loading } = useSubscriptionPayments(businessId);
+  const { payments, loading, error: paymentsError } = useSubscriptionPayments(businessId);
   const { referrals, claimBonus } = useReferrals(businessId);
   const { review, saving: savingReview, save: saveReview } = useBusinessReview(businessId);
   const [receiptTarget, setReceiptTarget] = useState<SubscriptionPayment | null>(null);
@@ -465,7 +465,12 @@ export function LanggananScreen({
         </h3>
 
         {loading && <p className="text-xs text-[#6E6853]">Memuat...</p>}
-        {!loading && payments.length === 0 && <p className="text-xs text-[#6E6853]">Belum ada pembayaran tercatat.</p>}
+        {!loading && paymentsError && (
+          <p className="text-xs text-[#A8412E]">Gagal memuat riwayat pembayaran. Coba muat ulang halaman.</p>
+        )}
+        {!loading && !paymentsError && payments.length === 0 && (
+          <p className="text-xs text-[#6E6853]">Belum ada pembayaran tercatat.</p>
+        )}
 
         {payments.map((p) => (
           <button
