@@ -4,6 +4,7 @@ import { createAnonClient } from '../lib/supabaseClient.js';
 import { todayInTz, tzOffsetIso, rentalDuration } from '../lib/dates.js';
 import { computeItemRentalPrice } from '../lib/pricing.js';
 import { normalizePhone } from '../lib/phone.js';
+import { isPaymentMethodActiveForPage } from '../lib/paymentPlan.js';
 import { sendPushToBusiness, buildNewOrderPayload } from '../lib/webPush.js';
 import {
   MAX_ITEMS_PER_REQUEST,
@@ -222,12 +223,7 @@ router.post('/public/booking-requests/:slug', perIpLimiter, async (req, res) => 
     return;
   }
 
-  if (
-    (payment_method === 'transfer' && !page.pay_transfer_enabled) ||
-    (payment_method === 'qris' && !page.pay_qris_enabled) ||
-    (payment_method === 'cash' && !page.pay_cash_enabled) ||
-    !['transfer', 'qris', 'cash'].includes(payment_method)
-  ) {
+  if (!isPaymentMethodActiveForPage(payment_method, page)) {
     res.status(400).json({ error: 'Cara bayar yang dipilih tidak tersedia di toko ini.' });
     return;
   }

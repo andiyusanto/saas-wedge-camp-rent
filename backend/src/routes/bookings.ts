@@ -8,6 +8,7 @@ import { getCustomerPhotoSignedUrl } from '../lib/r2.js';
 import { computeBundleComponentRatesSnapshot } from '../lib/pricing.js';
 import { mergeDuplicateSaleItemRequests } from '../lib/saleItems.js';
 import { validateDpPaid } from '../lib/validation.js';
+import { sanitizePaymentPlan } from '../lib/paymentPlan.js';
 import { findCustomerIdByPhone } from '../lib/customerPhoneMatch.js';
 
 const router = Router();
@@ -407,7 +408,7 @@ router.post('/bookings', async (req, res) => {
     p_sale_items: mergedSaleItems,
     p_actor_name: actorData.user?.email ?? actorData.user?.id ?? 'tidak diketahui',
     p_apply_customer_discount: apply_discount !== false,
-    p_payment_plan: ['transfer', 'qris', 'cash'].includes(payment_plan) ? payment_plan : null,
+    p_payment_plan: sanitizePaymentPlan(payment_plan),
   });
 
   if (rpcError) {
