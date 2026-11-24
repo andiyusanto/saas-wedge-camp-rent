@@ -6,6 +6,7 @@ import type { TeamInvite, TeamMember } from '../hooks/useTeam';
 import type { Business, BusinessUpdateInput } from '../hooks/useBusiness';
 import { ConfirmModal } from './ConfirmModal';
 import { BusinessInfoSection } from './BusinessInfoSection';
+import { RentalSchemeCard } from './RentalSchemeCard';
 import { CustomerTypesSection } from './CustomerTypesSection';
 import { formatDateIndo } from '../utils/formatters';
 
@@ -61,6 +62,8 @@ export function TeamScreen({
 
   return (
     <div className="space-y-6">
+      <RentalSchemeCard businessId={businessId} business={business} onSave={onSaveBusiness} />
+
       <BusinessInfoSection
         session={session}
         businessId={businessId}

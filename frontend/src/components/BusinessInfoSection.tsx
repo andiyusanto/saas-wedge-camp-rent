@@ -11,6 +11,7 @@ import { apiFetch } from '../lib/api';
 import { resizeImageToDataUrl } from '../utils/imageResize';
 import { usePrinterSettings } from '../hooks/usePrinterSettings';
 import { PrinterSetupWizard } from './PrinterSetupWizard';
+import { AdvancedSettingsSection } from './AdvancedSettingsSection';
 
 export function BusinessInfoSection({
   session,
@@ -276,17 +277,6 @@ export function BusinessInfoSection({
               {ownerEmail ?? '-'}
             </p>
           </div>
-          <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
-            Toleransi telat (jam)
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={toleranceHours}
-              onChange={(e) => setToleranceHours(e.target.value)}
-              className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] font-bold focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
-            />
-          </label>
         </div>
         <label className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
           Alamat usaha
@@ -301,9 +291,25 @@ export function BusinessInfoSection({
             Ikut tercetak di struk WhatsApp dan Nota Sewa cetak/PDF kalau diisi.
           </span>
         </label>
-        <p className="text-[11px] text-[#6E6853]">
-          Toleransi telat: berapa jam setelah janji kembali sebelum transaksi dianggap terlambat dan mulai kena denda.
-        </p>
+
+        <AdvancedSettingsSection>
+        <div className="flex flex-col gap-1.5 text-sm text-[#6E6853]">
+          <label className="flex flex-col gap-1.5">
+            Toleransi telat (jam)
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={toleranceHours}
+              onChange={(e) => setToleranceHours(e.target.value)}
+              className="w-full max-w-[12rem] px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] font-bold focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+            />
+          </label>
+          <p className="text-[11px] text-[#6E6853]">
+            Isi 2 → pelanggan yang kembali kurang dari 2 jam dari jadwal TIDAK dianggap terlambat. Berapa jam setelah
+            janji kembali sebelum transaksi dianggap terlambat dan mulai kena denda.
+          </p>
+        </div>
 
         <div className="flex flex-col gap-2 pt-2 border-t border-[#E6E1D2]">
           <p className="text-sm font-semibold text-[#26302B]">Batas Jam Kembali</p>
@@ -416,6 +422,67 @@ export function BusinessInfoSection({
         </div>
 
         <div className="flex flex-col gap-2 pt-2 border-t border-[#E6E1D2]">
+          {/* min-w-0 di label + w-full di input -- tanpa ini, lebar bawaan
+              <input type="number"> (tidak otomatis menyusut) melebarkan baris
+              flex ini sampai terpotong di HP (360-390px), dilaporkan Andi dari
+              HP Android 12 Nov 2026 (scrollWidth 501/360). Label "Maksimal
+              hari (paket)" juga diperpendek jadi "Maksimal hari" -- kata
+              "paket" sudah dijelaskan di teks bantuan di bawah. */}
+          <p className="text-sm font-semibold text-[#26302B]">Paket Minimal/Maksimal Hari Sewa</p>
+          <div className="flex gap-3">
+            <label className="flex-1 min-w-0 flex flex-col gap-1 text-sm text-[#6E6853]">
+              <span>Minimal hari</span>
+              <input
+                type="number"
+                min={1}
+                value={minRentalDays}
+                onChange={(e) => setMinRentalDays(e.target.value)}
+                placeholder="Tanpa batas"
+                className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+              />
+            </label>
+            <label className="flex-1 min-w-0 flex flex-col gap-1 text-sm text-[#6E6853]">
+              <span>Maksimal hari</span>
+              <input
+                type="number"
+                min={1}
+                value={maxRentalDays}
+                onChange={(e) => setMaxRentalDays(e.target.value)}
+                placeholder="Tanpa batas"
+                className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+              />
+            </label>
+          </div>
+          <p className="text-[11px] text-[#6E6853]">
+            <strong>Minimal</strong> = batas KERAS di semua jalur (Catat Transaksi dan Pesanan Online sama-sama tidak
+            bisa memilih kurang dari ini). <strong>Maksimal</strong> = cuma membatasi Pesanan Online dari Etalase —
+            walk-in (Catat Transaksi) boleh melewatinya, cuma dapat peringatan, dan tanggal kembali otomatis terisi
+            sesuai paket (masih bisa diubah manual). Kosongkan salah satu/keduanya untuk tanpa batas.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2 pt-2 border-t border-[#E6E1D2]">
+          <label className="flex flex-col gap-1 text-sm text-[#6E6853]">
+            <span className="font-semibold text-[#26302B]">Ubah Jadwal paling lambat H-berapa</span>
+            <input
+              type="number"
+              min={0}
+              value={rescheduleDeadlineDays}
+              onChange={(e) => setRescheduleDeadlineDays(e.target.value)}
+              placeholder="Kapan saja (tanpa batas)"
+              className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+            />
+          </label>
+          <p className="text-[11px] text-[#6E6853]">
+            Isi 3 → kalau pelanggan minta ganti tanggal kurang dari 3 hari sebelum Mulai Sewa, kamu akan diberi
+            peringatan (tetap bisa diubah). Kosongkan kalau tidak perlu. Cuma PERINGATAN, bukan penolakan — owner
+            maupun karyawan tetap bisa Ubah Jadwal setelah batas ini lewat, asal kolom "Alasan perubahan" diisi.
+            Tidak berlaku untuk Perpanjang (alat sudah diambil).
+          </p>
+        </div>
+        </AdvancedSettingsSection>
+
+        <div className="flex flex-col gap-2 pt-2 border-t border-[#E6E1D2]">
           <p className="text-sm font-semibold text-[#26302B]">Cara Hitung Durasi Sewa</p>
           <label className="flex items-start gap-2 text-sm text-[#26302B]">
             <input
@@ -490,64 +557,6 @@ export function BusinessInfoSection({
               berubah. 1 hari tetap ditulis "1 hari" biasa (tidak ada "1H0M").
             </p>
           </div>
-        </div>
-
-        <div className="flex flex-col gap-2 pt-2 border-t border-[#E6E1D2]">
-          <p className="text-sm font-semibold text-[#26302B]">Paket Minimal/Maksimal Hari Sewa</p>
-          {/* min-w-0 di label + w-full di input -- tanpa ini, lebar bawaan
-              <input type="number"> (tidak otomatis menyusut) melebarkan baris
-              flex ini sampai terpotong di HP (360-390px), dilaporkan Andi dari
-              HP Android 12 Nov 2026 (scrollWidth 501/360). Label "Maksimal
-              hari (paket)" juga diperpendek jadi "Maksimal hari" -- kata
-              "paket" sudah dijelaskan di teks bantuan di bawah. */}
-          <div className="flex gap-3">
-            <label className="flex-1 min-w-0 flex flex-col gap-1 text-sm text-[#6E6853]">
-              <span>Minimal hari</span>
-              <input
-                type="number"
-                min={1}
-                value={minRentalDays}
-                onChange={(e) => setMinRentalDays(e.target.value)}
-                placeholder="Tanpa batas"
-                className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
-              />
-            </label>
-            <label className="flex-1 min-w-0 flex flex-col gap-1 text-sm text-[#6E6853]">
-              <span>Maksimal hari</span>
-              <input
-                type="number"
-                min={1}
-                value={maxRentalDays}
-                onChange={(e) => setMaxRentalDays(e.target.value)}
-                placeholder="Tanpa batas"
-                className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
-              />
-            </label>
-          </div>
-          <p className="text-[11px] text-[#6E6853]">
-            Minimal diterapkan ketat di Catat Transaksi dan Pesanan Online. Maksimal cuma batas paket — Catat
-            Transaksi otomatis mengisi tanggal kembali sesuai paket (masih bisa diubah, ada peringatan kalau
-            melebihi), tapi Pesanan Online dari Etalase tidak bisa melebihi paket. Kosongkan untuk tanpa batas.
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-2 pt-2 border-t border-[#E6E1D2]">
-          <label className="flex flex-col gap-1 text-sm text-[#6E6853]">
-            <span className="font-semibold text-[#26302B]">Ubah Jadwal paling lambat H-berapa</span>
-            <input
-              type="number"
-              min={0}
-              value={rescheduleDeadlineDays}
-              onChange={(e) => setRescheduleDeadlineDays(e.target.value)}
-              placeholder="Kapan saja (tanpa batas)"
-              className="px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
-            />
-          </label>
-          <p className="text-[11px] text-[#6E6853]">
-            Hari sebelum tanggal ambil. Cuma PERINGATAN — owner maupun karyawan tetap bisa Ubah Jadwal setelah batas
-            ini lewat, tapi wajib isi "Alasan perubahan". Tidak berlaku untuk Perpanjang (alat sudah diambil).
-            Kosongkan untuk tanpa batas (boleh ubah jadwal kapan saja sebelum diambil).
-          </p>
         </div>
 
         <div className="flex flex-col gap-2 pt-2 border-t border-[#E6E1D2]">

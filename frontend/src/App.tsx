@@ -16,6 +16,7 @@ import { loadActiveTab, saveActiveTab } from './lib/tabStorage';
 import { AuthScreen } from './components/AuthScreen';
 import { ResetPasswordScreen } from './components/ResetPasswordScreen';
 import { OnboardingScreen } from './components/OnboardingScreen';
+import { RentalSchemeCard } from './components/RentalSchemeCard';
 import { InviteConfirmScreen } from './components/RedeemInviteScreen';
 import { ItemsScreen } from './components/ItemsScreen';
 import { CalendarScreen } from './components/CalendarScreen';
@@ -357,6 +358,12 @@ function App() {
 
   const [inviteCode, setInviteCode] = useState<string | null>(readInviteCode);
   const [referralCode] = useState<string | null>(readReferralCode);
+  // Langkah opsional "Pilih skema sewa" pasca-onboarding (brief Pilih
+  // Skema Sewa 24 Nov 2026, bagian C) -- ditampilkan SEKALI tepat
+  // setelah business baru dibuat, sebelum masuk ke app utama. Dipakai
+  // komponen RentalSchemeCard yang SAMA dengan Kelola Usaha, bukan
+  // duplikasi. Bisa dilewati (onSkip).
+  const [showSchemeStepAfterOnboarding, setShowSchemeStepAfterOnboarding] = useState(false);
   const [forceDaftar] = useState<boolean>(readForceDaftar);
   const [signupSource] = useState<string | null>(readSignupSource);
   // Ditampilkan/tidak ditampilkan lagi untuk SESI INI setelah pengguna
@@ -448,7 +455,34 @@ function App() {
     if (isAppAdmin) {
       return <AdminOnlyView session={session} onLogout={() => { clearAllBookingDraftsOnLogout(); supabase?.auth.signOut(); }} />;
     }
-    return <OnboardingScreen referralCode={referralCode} onCreated={refreshBusiness} />;
+    return (
+      <OnboardingScreen
+        referralCode={referralCode}
+        onCreated={async () => {
+          await refreshBusiness();
+          setShowSchemeStepAfterOnboarding(true);
+        }}
+      />
+    );
+  }
+
+  if (showSchemeStepAfterOnboarding) {
+    return (
+      <main className="min-h-screen flex items-center justify-center p-4 bg-[#F1EEE2]">
+        <div className="w-full max-w-sm space-y-3">
+          <p className="text-sm text-[#6E6853] text-center">
+            Satu langkah opsional lagi — pilih skema sewa yang paling cocok dengan usahamu (bisa dilewati dan diatur
+            lagi kapan saja lewat Kelola Usaha).
+          </p>
+          <RentalSchemeCard
+            businessId={business.id}
+            business={business}
+            onSave={updateBusiness}
+            onSkip={() => setShowSchemeStepAfterOnboarding(false)}
+          />
+        </div>
+      </main>
+    );
   }
 
   // Brief 14 Nov 2026 (CLS SubscriptionBanner, Cloudflare Web Analytics)
