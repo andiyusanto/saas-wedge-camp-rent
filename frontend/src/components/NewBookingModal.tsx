@@ -228,6 +228,10 @@ export type BookingRequestPrefill = {
   // "harga diubah vendor setelah pesanan masuk" — estimasi lama tidak
   // valid dijadikan harga final).
   estimatedPrice: number;
+  // Rencana bayar (brief rencana-bayar-bebaskan-denda 24 Nov 2026) --
+  // dari booking_requests.payment_method, cuma PRAFILL untuk field
+  // Rencana Bayar di bawah -- staf tetap bisa mengubahnya sebelum Simpan.
+  paymentPlan: 'transfer' | 'qris' | 'cash' | null;
 };
 
 export function NewBookingModal({
@@ -342,6 +346,10 @@ export function NewBookingModal({
   // trigger log_initial_dp_payment() sudah siap (migration 067). '' =
   // tidak dicatat, pola sama baris lama sebelum fitur ini ada.
   const [dpMethod, setDpMethod] = useState('');
+  // Rencana bayar (brief rencana-bayar-bebaskan-denda 24 Nov 2026) --
+  // opsional, prefill dari requestPrefill.paymentPlan kalau dari
+  // Konfirmasi Pesanan Online, tetap bisa diubah/dikosongkan manual.
+  const [paymentPlan, setPaymentPlan] = useState<'' | 'transfer' | 'qris' | 'cash'>('');
   const [autoOpenWA, setAutoOpenWA] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -437,6 +445,7 @@ export function NewBookingModal({
           : null,
       );
       setCustomerName(requestPrefill.customerName);
+      setPaymentPlan(requestPrefill.paymentPlan ?? '');
       // Review -c1 (tahap 4, poin 2): customer_phone dari booking_requests
       // tersimpan dalam bentuk kanonik "628xxx" (lihat normalizePhone() di
       // backend/src/routes/bookingRequests.ts) — vendor biasa mengetik dan
@@ -787,6 +796,7 @@ export function NewBookingModal({
     noDepositConfirmed,
     dpPaid,
     dpMethod,
+    paymentPlan,
     autoOpenWA,
     customerPhotoKey,
   ]);
@@ -1009,6 +1019,7 @@ export function NewBookingModal({
           total_price: totalPrice,
           dp_paid: Number(dpPaid) || 0,
           dp_method: dpMethod || null,
+          payment_plan: paymentPlan || null,
           ...(pickedUpNow ? { picked_up_now: true } : {}),
           // Pelanggan + Member/Diskon (brief 23 Nov 2026) -- RPC yang
           // membaca persen sungguhan dari customer_types, nilai ini cuma
@@ -1860,6 +1871,19 @@ export function NewBookingModal({
                   </select>
                 </div>
               )}
+              <div>
+                <label className="block font-semibold text-[#6E6853] mb-1">Rencana Bayar (opsional)</label>
+                <select
+                  value={paymentPlan}
+                  onChange={(e) => setPaymentPlan(e.target.value as typeof paymentPlan)}
+                  className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
+                >
+                  <option value="">Tidak ditentukan</option>
+                  <option value="transfer">Transfer Bank</option>
+                  <option value="qris">QRIS</option>
+                  <option value="cash">Tunai saat ambil</option>
+                </select>
+              </div>
               <div>
                 <label className="block font-semibold text-[#6E6853] mb-1">Sisa Bayar Saat Ambil</label>
                 <div className="px-3 py-2 rounded-lg bg-[#FAF0EE] border border-[#A8412E]/30 text-[#A8412E] font-extrabold text-sm">

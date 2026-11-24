@@ -42,6 +42,15 @@ export type MonthlyReportRow = {
   // ada transaksi berdiskon di bulan itu (diskon=0 -> kolom disembunyikan,
   // regresi aman untuk rental tanpa fitur ini).
   diskon: number;
+  // Bebaskan denda telat (brief rencana-bayar-bebaskan-denda 24 Nov
+  // 2026, migration 077) -- MURNI INFORMASI (berapa kali + berapa
+  // nilai saran denda yang dibebaskan), TIDAK ikut rumus totalPemasukan
+  // apa pun (denda yang dibebaskan memang tidak pernah tercatat sebagai
+  // penalties, jadi tidak pernah ikut dendaTelat di atas -- tidak ada
+  // risiko dobel hitung). Kolom cuma muncul di LaporanScreen.tsx kalau
+  // ada minimal satu transaksi berisi pembebasan (pola sama diskon).
+  dendaDibebaskanJumlah: number;
+  dendaDibebaskanNilai: number;
   jumlahTransaksi: number;
   rataRata: number | null; // null kalau jumlahTransaksi 0
   // null = tidak ada pembanding (Januari -- bulan sebelumnya di luar
@@ -99,6 +108,8 @@ export function buildMonthlyReport(
     let dendaTelat = 0;
     let dendaKerusakan = 0;
     let diskon = 0;
+    let dendaDibebaskanJumlah = 0;
+    let dendaDibebaskanNilai = 0;
 
     for (const b of bookings) {
       // b.total_price adalah gabungan sewa+barang jual sejak Barang Jual
@@ -118,6 +129,10 @@ export function buildMonthlyReport(
       dendaTelat += bookingPenaltyByType(b, 'keterlambatan');
       dendaKerusakan += bookingPenaltyByType(b, 'kerusakan-kehilangan');
       diskon += b.discount_amount ?? 0;
+      if (b.late_fee_waived_amount != null && b.late_fee_waived_amount > 0) {
+        dendaDibebaskanJumlah += 1;
+        dendaDibebaskanNilai += b.late_fee_waived_amount;
+      }
     }
 
     const totalPemasukan = pendapatanSewa + pendapatanBarangJual + dendaTelat + dendaKerusakan;
@@ -140,6 +155,8 @@ export function buildMonthlyReport(
       piutang,
       uangDiterima: uangDiterimaByMonth.get(month) ?? 0,
       diskon,
+      dendaDibebaskanJumlah,
+      dendaDibebaskanNilai,
       jumlahTransaksi,
       rataRata,
       perubahanPersenVsBulanLalu,

@@ -22,16 +22,22 @@ export function PaymentModal({
   onClose,
   remaining,
   mode = 'bayar',
+  // Rencana bayar (brief rencana-bayar-bebaskan-denda 24 Nov 2026) --
+  // cara bayar default = rencana bayar booking ini (bisa diganti staf).
+  // 'cash' (vocabulary payment_plan) dipetakan ke 'tunai' (vocabulary
+  // method di sini) -- dua field beda arti, labelnya memang sama.
+  defaultMethod,
   onSubmit,
 }: {
   isOpen: boolean;
   onClose: () => void;
   remaining: number;
   mode?: 'bayar' | 'refund';
+  defaultMethod?: 'transfer' | 'qris' | 'cash' | null;
   onSubmit: (body: { amount: number; method: string | null; note: string | null; kind: 'pelunasan' | 'koreksi' }) => Promise<{ error: string | null }>;
 }) {
   const [amount, setAmount] = useState('');
-  const [method, setMethod] = useState<string>('tunai');
+  const [method, setMethod] = useState<string>(defaultMethod === 'cash' ? 'tunai' : defaultMethod || 'tunai');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,10 +45,11 @@ export function PaymentModal({
   useEffect(() => {
     if (isOpen) {
       setAmount(mode === 'refund' ? String(Math.round(Math.abs(remaining))) : remaining > 0 ? String(Math.round(remaining)) : '');
-      setMethod('tunai');
+      setMethod(defaultMethod === 'cash' ? 'tunai' : defaultMethod || 'tunai');
       setNote('');
       setError(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, remaining, mode]);
 
   if (!isOpen) return null;

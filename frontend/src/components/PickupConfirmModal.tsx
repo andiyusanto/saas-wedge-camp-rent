@@ -61,7 +61,9 @@ export function PickupConfirmModal({
     setConfirmed(false);
     setError(null);
     setLunasiSekarang(false);
-    setPayMethod('tunai');
+    // Rencana bayar (brief rencana-bayar-bebaskan-denda 24 Nov 2026) --
+    // default cara bayar = rencana bayar booking ini (bisa diganti).
+    setPayMethod(booking.payment_plan === 'cash' ? 'tunai' : booking.payment_plan || 'tunai');
     setInitialisedFor(booking.id);
   }
 

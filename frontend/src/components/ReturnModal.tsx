@@ -43,6 +43,13 @@ export function ReturnModal({
   // bukan cuma denda yang sudah ada di booking.penalties.
   const [lunasiSekarang, setLunasiSekarang] = useState(false);
   const [payMethod, setPayMethod] = useState('tunai');
+  // Bebaskan denda telat (brief rencana-bayar-bebaskan-denda 24 Nov 2026,
+  // wawancara 15-23 Nov: 9 vendor membebaskan denda kalau pelanggan
+  // sudah mengabari). Bisa dibatalkan sebelum Simpan (kembali ke saran
+  // lewat preWaivedAmount). Denda kerusakan/kehilangan TIDAK terpengaruh.
+  const [feeWaived, setFeeWaived] = useState(false);
+  const [waiveReason, setWaiveReason] = useState('');
+  const [preWaivedAmount, setPreWaivedAmount] = useState('0');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initialisedFor, setInitialisedFor] = useState<string | null>(null);
@@ -65,6 +72,12 @@ export function ReturnModal({
     setLossDesc('');
     setLossItemId(booking.items.length === 1 ? booking.items[0].item_id : '');
     setReturnDeposit(booking.deposits.some((d) => d.status === 'ditahan'));
+    // Rencana bayar (brief 24 Nov 2026) -- default cara bayar lunasi
+    // sekarang = rencana bayar booking ini (bisa diganti).
+    setPayMethod(booking.payment_plan === 'cash' ? 'tunai' : booking.payment_plan || 'tunai');
+    setFeeWaived(false);
+    setWaiveReason('');
+    setPreWaivedAmount('0');
     setError(null);
     setInitialisedFor(booking.id);
   }
@@ -93,6 +106,10 @@ export function ReturnModal({
     }
     if (Number(lossAmount) > 0 && needsItemChoice && !lossItemId) {
       setError('Pilih alat yang hilang');
+      return;
+    }
+    if (feeWaived && waiveReason.trim().length === 0) {
+      setError('Alasan pembebasan denda wajib diisi');
       return;
     }
 
@@ -128,6 +145,9 @@ export function ReturnModal({
           extra_penalties: extraPenalties,
           return_deposits: hasDeposit && returnDeposit,
           payment: willPay ? { amount: remainingAfterReturn, method: payMethod } : undefined,
+          ...(feeWaived
+            ? { late_fee_waived_amount: Number(preWaivedAmount) || 0, late_fee_waived_reason: waiveReason.trim() }
+            : {}),
         }),
       });
     } catch (err) {
@@ -262,6 +282,65 @@ export function ReturnModal({
                 className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-[#26302B] font-bold focus:outline-none focus:ring-1 focus:ring-[#2B4739]"
               />
             </div>
+            {/* Bebaskan denda telat (brief 24 Nov 2026) -- tombol tidak
+                tampil kalau mode tanpa_denda (saran sudah Rp0, tidak ada
+                apa pun untuk dibebaskan). */}
+            {!lateFeeDisabled && !feeWaived && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPreWaivedAmount(lateFee);
+                  setLateFee('0');
+                  setFeeWaived(true);
+                }}
+                className="text-xs font-semibold text-[#A65C2A] underline underline-offset-2"
+              >
+                Bebaskan denda
+              </button>
+            )}
+            {feeWaived && (
+              <div className="p-3 rounded-lg bg-white border border-[#A65C2A]/40 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-[#A65C2A]">
+                    Denda dibebaskan (sebelumnya Rp{Number(preWaivedAmount).toLocaleString('id-ID')})
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLateFee(preWaivedAmount);
+                      setFeeWaived(false);
+                      setWaiveReason('');
+                    }}
+                    className="text-[11px] font-semibold text-[#6E6853] underline underline-offset-2"
+                  >
+                    Batalkan
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {['Pelanggan sudah mengabari', 'Cuaca/kendala di jalan', 'Pelanggan langganan'].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setWaiveReason(preset)}
+                      className={`text-[11px] px-2 py-1 rounded-full border transition ${
+                        waiveReason === preset
+                          ? 'bg-[#A65C2A] text-white border-[#A65C2A]'
+                          : 'bg-white text-[#6E6853] border-[#DBD5C1] hover:bg-[#F1EEE2]'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  value={waiveReason}
+                  onChange={(e) => setWaiveReason(e.target.value)}
+                  placeholder="Alasan pembebasan denda (wajib)"
+                  className="w-full px-3 py-2 rounded-lg bg-white border border-[#DBD5C1] text-xs"
+                />
+              </div>
+            )}
           </div>
 
           <div className="space-y-3 bg-[#F1EEE2] p-4 rounded-xl border border-[#DBD5C1]">

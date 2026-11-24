@@ -68,6 +68,9 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
   // Pelanggan + Member/Diskon (brief 23 Nov 2026) -- kolom HANYA tampil
   // kalau ada transaksi berdiskon di tahun ini (pola sama Barang Jual).
   const hasDiscountDataMonthly = monthlyRows.some((r) => r.diskon > 0);
+  // Bebaskan denda telat (brief rencana-bayar-bebaskan-denda 24 Nov 2026)
+  // -- kolom HANYA tampil kalau pernah ada pembebasan di tahun ini.
+  const hasWaivedFeeDataMonthly = monthlyRows.some((r) => r.dendaDibebaskanJumlah > 0);
   const maxTotalPemasukan = Math.max(1, ...monthlyRows.map((r) => r.totalPemasukan));
   const defaultHighlightMonth = year === currentYear ? new Date().getMonth() + 1 : 12;
   const [highlightMonth, setHighlightMonth] = useState(defaultHighlightMonth);
@@ -296,6 +299,7 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
                       {hasDiscountDataMonthly && <th className="p-2.5 font-semibold text-right">Diskon</th>}
                       <th className="p-2.5 font-semibold text-right">Denda Telat</th>
                       <th className="p-2.5 font-semibold text-right">Denda Rusak/Hilang</th>
+                      {hasWaivedFeeDataMonthly && <th className="p-2.5 font-semibold text-right">Denda Dibebaskan</th>}
                       <th className="p-2.5 font-semibold text-right">Total Pemasukan</th>
                       <th className="p-2.5 font-semibold text-right">Sudah Diterima</th>
                       <th className="p-2.5 font-semibold text-right">Belum Lunas</th>
@@ -313,6 +317,13 @@ export function LaporanScreen({ businessId }: { businessId: string }) {
                         {hasDiscountDataMonthly && <td className="p-2.5 text-right text-[#A65C2A]">{formatIDR(row.diskon)}</td>}
                         <td className="p-2.5 text-right">{formatIDR(row.dendaTelat)}</td>
                         <td className="p-2.5 text-right">{formatIDR(row.dendaKerusakan)}</td>
+                        {hasWaivedFeeDataMonthly && (
+                          <td className="p-2.5 text-right text-[#A65C2A]">
+                            {row.dendaDibebaskanJumlah > 0
+                              ? `${row.dendaDibebaskanJumlah}x (${formatIDR(row.dendaDibebaskanNilai)})`
+                              : '-'}
+                          </td>
+                        )}
                         <td className="p-2.5 text-right font-bold text-[#26302B]">{formatIDR(row.totalPemasukan)}</td>
                         <td className="p-2.5 text-right">{formatIDR(row.sudahDiterima)}</td>
                         <td className="p-2.5 text-right">{formatIDR(row.piutang)}</td>

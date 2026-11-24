@@ -107,3 +107,33 @@ test('generateWhatsAppReceipt: sewa+barang+denda digabung benar ke Total Tagihan
   assert.match(text, /Total Tagihan.*Rp\s?55\.000/); // 20.000 + 20.000 + 15.000
   assert.match(text, /Sisa Tagihan.*Rp\s?55\.000/);
 });
+
+// Rencana bayar (brief rencana-bayar-bebaskan-denda 24 Nov 2026).
+test('generateWhatsAppReceipt: "Rencana bayar" tampil kalau diisi dan belum LUNAS', () => {
+  const text = generateWhatsAppReceipt(
+    receipt({
+      items: [item({ subtotal: 20_000 })],
+      totalPrice: 20_000,
+      dpPaid: 0,
+      paymentPlan: 'qris',
+    }),
+  );
+  assert.match(text, /Rencana bayar: QRIS/);
+});
+
+test('generateWhatsAppReceipt: "Rencana bayar" TIDAK tampil kalau sudah LUNAS', () => {
+  const text = generateWhatsAppReceipt(
+    receipt({
+      items: [item({ subtotal: 20_000 })],
+      totalPrice: 20_000,
+      dpPaid: 20_000,
+      paymentPlan: 'qris',
+    }),
+  );
+  assert.ok(!text.includes('Rencana bayar'));
+});
+
+test('generateWhatsAppReceipt: tanpa paymentPlan, baris "Rencana bayar" tidak muncul (regresi)', () => {
+  const text = generateWhatsAppReceipt(receipt({ items: [item({ subtotal: 20_000 })], totalPrice: 20_000, dpPaid: 0 }));
+  assert.ok(!text.includes('Rencana bayar'));
+});

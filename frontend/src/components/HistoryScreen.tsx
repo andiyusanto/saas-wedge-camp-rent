@@ -156,6 +156,7 @@ export function HistoryScreen({
       discountTypeName: b.discount_type_name,
       discountPercent: b.discount_percent,
       discountAmount: b.discount_amount,
+      paymentPlan: b.payment_plan,
     });
   }
 
@@ -467,7 +468,15 @@ export function HistoryScreen({
                     <td className="p-3 text-[#6E6853] whitespace-nowrap">
                       {formatDateIndo(b.start_date, false)} – {formatDateIndo(b.end_date, false)}
                     </td>
-                    <td className="p-3 text-[#6E6853]">{b.items.map((i) => `${i.name} (${i.quantity}x)`).join(', ')}</td>
+                    <td className="p-3 text-[#6E6853]">
+                      {b.items.map((i) => `${i.name} (${i.quantity}x)`).join(', ')}
+                      {b.late_fee_waived_amount != null && b.late_fee_waived_amount > 0 && (
+                        <p className="text-[10px] text-[#A65C2A] italic mt-0.5">
+                          Denda telat dibebaskan ({formatIDR(b.late_fee_waived_amount)})
+                          {b.late_fee_waived_reason ? ` — ${b.late_fee_waived_reason}` : ''}
+                        </p>
+                      )}
+                    </td>
                     <td className="p-3 text-right font-bold text-[#26302B] whitespace-nowrap">
                       {formatIDR(totalTagihan)}
                       {totalFines > 0 && <p className="text-[10px] font-normal text-[#6E6853]">termasuk denda {formatIDR(totalFines)}</p>}
@@ -591,6 +600,7 @@ export function HistoryScreen({
             ? 'refund'
             : 'bayar'
         }
+        defaultMethod={paymentTarget?.payment_plan ?? null}
         onSubmit={async (body) => {
           try {
             await apiFetch(session, `/api/bookings/${paymentTarget!.id}/payments`, {

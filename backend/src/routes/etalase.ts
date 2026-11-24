@@ -2316,8 +2316,16 @@ document.addEventListener('keydown', function (e) {
     if (paymentMethods.transfer) options.push({ value: 'transfer', label: 'Transfer Bank' });
     if (paymentMethods.qris) options.push({ value: 'qris', label: 'QRIS' });
     if (paymentMethods.cash) options.push({ value: 'cash', label: 'Tunai saat ambil' });
+    // Rencana bayar (brief rencana-bayar-bebaskan-denda 24 Nov 2026) --
+    // auto-check HANYA kalau cuma ada SATU cara bayar aktif (brief:
+    // "Kalau hanya 1, terpilih otomatis"). Dengan >1 opsi, TIDAK ADA
+    // yang auto-check -- pelanggan WAJIB memilih sendiri, supaya
+    // validasi "Pilih cara bayar dulu" di bawah benar-benar bisa
+    // terpicu (sebelumnya opsi pertama selalu auto-check apa pun
+    // jumlah opsinya, jadi validasi itu tidak pernah nyala).
+    var autoCheckSingle = options.length === 1;
     container.innerHTML = options.map(function (opt, i) {
-      return '<label class="pay-option"><input type="radio" name="order-payment-method" value="' + opt.value + '"' + (i === 0 ? ' checked' : '') + ' /> ' + opt.label + '</label>';
+      return '<label class="pay-option"><input type="radio" name="order-payment-method" value="' + opt.value + '"' + (autoCheckSingle && i === 0 ? ' checked' : '') + ' /> ' + opt.label + '</label>';
     }).join('');
   }
 

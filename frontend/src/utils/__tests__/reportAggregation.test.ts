@@ -303,3 +303,26 @@ test('buildMonthlyReport: uangDiterima dari payments terpisah -- DP Desember unt
   assert.equal(rows[11].uangDiterima, 75_000);
   assert.equal(rows[11].jumlahTransaksi, 0); // booking-nya sendiri tidak ada di tahun ini
 });
+
+// Bebaskan denda telat (brief rencana-bayar-bebaskan-denda 24 Nov 2026).
+test('buildMonthlyReport: denda dibebaskan dihitung sebagai INFORMASI, tidak ikut totalPemasukan', () => {
+  const bookings = [
+    booking({ id: 'b1', start_date: '2026-05-05', total_price: 100_000, dp_paid: 100_000, late_fee_waived_amount: 20_000, late_fee_waived_reason: 'Pelanggan sudah mengabari' }),
+    booking({ id: 'b2', start_date: '2026-05-06', total_price: 50_000, dp_paid: 50_000, late_fee_waived_amount: 15_000, late_fee_waived_reason: 'Cuaca/kendala di jalan' }),
+    booking({ id: 'b3', start_date: '2026-05-07', total_price: 50_000, dp_paid: 50_000 }),
+  ];
+  const rows = buildMonthlyReport(bookings, new Map());
+  const mei = rows[4]; // bulan 5 (index 4)
+  assert.equal(mei.dendaDibebaskanJumlah, 2);
+  assert.equal(mei.dendaDibebaskanNilai, 35_000);
+  // totalPemasukan TIDAK berubah oleh pembebasan -- denda yang
+  // dibebaskan tidak pernah tercatat sebagai penalties sama sekali.
+  assert.equal(mei.totalPemasukan, 200_000);
+});
+
+test('buildMonthlyReport: tanpa pembebasan, dendaDibebaskanJumlah/Nilai nol (regresi)', () => {
+  const bookings = [booking({ id: 'b1', start_date: '2026-06-05', total_price: 10_000, dp_paid: 10_000 })];
+  const rows = buildMonthlyReport(bookings, new Map());
+  assert.equal(rows[5].dendaDibebaskanJumlah, 0);
+  assert.equal(rows[5].dendaDibebaskanNilai, 0);
+});

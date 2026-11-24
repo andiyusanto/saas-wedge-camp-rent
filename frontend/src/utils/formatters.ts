@@ -382,6 +382,14 @@ export type ReceiptData = {
   discountTypeName?: string | null;
   discountPercent?: number | null;
   discountAmount?: number;
+  // Rencana bayar (brief rencana-bayar-bebaskan-denda 24 Nov 2026) --
+  // snapshot bookings.payment_plan. Opsional, default kosong/undefined
+  // supaya struk tanpa field ini tetap identik seperti sebelum fitur
+  // ini ada (regresi). Baris "Rencana bayar: X" di struk HANYA tampil
+  // kalau diisi DAN transaksi belum LUNAS (lihat computeRemainingBalance)
+  // -- sekali sudah ada pembayaran sungguhan, cara bayar RIIL dari
+  // riwayat pembayaran (payments) yang relevan, bukan rencana awal.
+  paymentPlan?: 'transfer' | 'qris' | 'cash' | null;
 };
 
 // Baris "Diambil: {tanggal jam}" (brief 23 Nov 2026 bagian A) -- CUMA
@@ -447,6 +455,19 @@ export const PAYMENT_METHOD_LABEL: Record<string, string> = {
   tunai: 'Tunai',
   transfer: 'Transfer',
   qris: 'QRIS',
+};
+
+// Rencana bayar (brief rencana-bayar-bebaskan-denda 24 Nov 2026) --
+// vocabulary 'transfer'/'qris'/'cash' SAMA PERSIS booking_requests.
+// payment_method (migration 037) dan bookings.payment_plan (077) --
+// SENGAJA map label TERPISAH dari PAYMENT_METHOD_LABEL di atas, yang
+// vocabulary-nya 'tunai' (dp_method/booking_payments.method) -- dua
+// field beda arti (rencana vs pembayaran sungguhan sudah terjadi),
+// jangan dicampur jadi satu map walau labelnya mirip.
+export const PAYMENT_PLAN_LABEL: Record<string, string> = {
+  transfer: 'Transfer Bank',
+  qris: 'QRIS',
+  cash: 'Tunai saat ambil',
 };
 
 export const PAYMENT_KIND_LABEL: Record<string, string> = {
@@ -589,7 +610,7 @@ ${
   finesText ? `${finesText}\n` : ''
 }Total Tagihan: *${formatIDR(totalTagihan)}*
 Total Dibayar: ${formatIDR(data.dpPaid)}
-${
+${data.paymentPlan && remaining > 0 ? `Rencana bayar: ${PAYMENT_PLAN_LABEL[data.paymentPlan]}\n` : ''}${
   paymentsText
     ? `\n*RIWAYAT PEMBAYARAN:*\n${paymentsText}\n`
     : ''

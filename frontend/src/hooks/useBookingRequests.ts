@@ -26,6 +26,11 @@ export type BookingRequest = {
   created_at: string;
   confirmation_token: string;
   items: BookingRequestItem[];
+  // Rencana bayar (brief rencana-bayar-bebaskan-denda 24 Nov 2026) --
+  // SELALU terisi (payment_method wajib saat pesan, lihat
+  // bookingRequests.ts), bukan opsional -- tapi tetap diketik nullable
+  // untuk baris dari sebelum migration 037 (kalau pernah ada).
+  payment_method: 'transfer' | 'qris' | 'cash' | null;
 };
 
 type RawRow = {
@@ -40,6 +45,7 @@ type RawRow = {
   expires_at: string;
   created_at: string;
   confirmation_token: string;
+  payment_method: 'transfer' | 'qris' | 'cash' | null;
   booking_request_items: {
     item_id: string;
     quantity: number;
@@ -52,7 +58,7 @@ type RawRow = {
 };
 
 const SELECT_FIELDS =
-  'id, status, customer_name, customer_phone, note, start_date, end_date, estimated_price, expires_at, created_at, confirmation_token, booking_request_items(item_id, quantity, items(name), bundle_id, bundle_instance_id, bundle_name, bundle_quantity)';
+  'id, status, customer_name, customer_phone, note, start_date, end_date, estimated_price, expires_at, created_at, confirmation_token, payment_method, booking_request_items(item_id, quantity, items(name), bundle_id, bundle_instance_id, bundle_name, bundle_quantity)';
 
 function mapRow(row: RawRow): BookingRequest {
   return {
@@ -67,6 +73,7 @@ function mapRow(row: RawRow): BookingRequest {
     expires_at: row.expires_at,
     created_at: row.created_at,
     confirmation_token: row.confirmation_token,
+    payment_method: row.payment_method,
     items: (row.booking_request_items ?? []).map((bri) => ({
       item_id: bri.item_id,
       quantity: bri.quantity,

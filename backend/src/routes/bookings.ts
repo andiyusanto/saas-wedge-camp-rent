@@ -70,6 +70,10 @@ router.post('/bookings', async (req, res) => {
     // otomatis diterapkan kalau pelanggan punya jenis) kalau field ini
     // tidak dikirim sama sekali (klien lama/belum update).
     apply_discount,
+    // Rencana bayar (brief rencana-bayar-bebaskan-denda 24 Nov 2026) --
+    // snapshot opsional, diisi dari booking_requests.payment_method
+    // saat Konfirmasi (prefill), atau manual untuk walk-in.
+    payment_plan,
   } = req.body ?? {};
 
   const requestedItems = items as BookingItemInput[] | undefined;
@@ -403,6 +407,7 @@ router.post('/bookings', async (req, res) => {
     p_sale_items: mergedSaleItems,
     p_actor_name: actorData.user?.email ?? actorData.user?.id ?? 'tidak diketahui',
     p_apply_customer_discount: apply_discount !== false,
+    p_payment_plan: ['transfer', 'qris', 'cash'].includes(payment_plan) ? payment_plan : null,
   });
 
   if (rpcError) {

@@ -61,6 +61,11 @@ export type HistoryBooking = {
   discount_type_name: string | null;
   discount_percent: number | null;
   discount_amount: number;
+  // Rencana bayar (migration 077) -- snapshot, null = tidak diisi.
+  payment_plan: 'transfer' | 'qris' | 'cash' | null;
+  // Bebaskan denda telat (migration 077) -- null = tidak pernah dibebaskan.
+  late_fee_waived_amount: number | null;
+  late_fee_waived_reason: string | null;
 };
 
 // subtotal/price_at_booking (migration 034), penalties.item_id (migration
@@ -70,7 +75,7 @@ export type HistoryBooking = {
 // persis InvoiceModal.tsx (baris lama sebelum migration 034, tidak
 // di-backfill).
 const SELECT_FIELDS =
-  'id, booking_number, status, start_date, end_date, total_price, dp_paid, rental_day_mode, discount_type_name, discount_percent, discount_amount, customers(name, phone), booking_items(quantity, subtotal, price_at_booking, bundle_id, bundle_instance_id, bundle_name, items(id, name, category, variant, size, color, total_units)), booking_sale_items(sale_item_id, name, quantity, price_at_booking, subtotal), penalties(type, amount, item_id), booking_payments(amount, paid_at, kind)';
+  'id, booking_number, status, start_date, end_date, total_price, dp_paid, rental_day_mode, discount_type_name, discount_percent, discount_amount, payment_plan, late_fee_waived_amount, late_fee_waived_reason, customers(name, phone), booking_items(quantity, subtotal, price_at_booking, bundle_id, bundle_instance_id, bundle_name, items(id, name, category, variant, size, color, total_units)), booking_sale_items(sale_item_id, name, quantity, price_at_booking, subtotal), penalties(type, amount, item_id), booking_payments(amount, paid_at, kind)';
 
 type RawBooking = {
   id: string;
@@ -84,6 +89,9 @@ type RawBooking = {
   discount_type_name: string | null;
   discount_percent: number | null;
   discount_amount: number;
+  payment_plan: 'transfer' | 'qris' | 'cash' | null;
+  late_fee_waived_amount: number | null;
+  late_fee_waived_reason: string | null;
   customers: { name: string; phone: string | null } | null;
   booking_items:
     | {
@@ -122,6 +130,9 @@ function mapBooking(row: RawBooking): HistoryBooking {
     discount_type_name: row.discount_type_name,
     discount_percent: row.discount_percent,
     discount_amount: row.discount_amount,
+    payment_plan: row.payment_plan,
+    late_fee_waived_amount: row.late_fee_waived_amount,
+    late_fee_waived_reason: row.late_fee_waived_reason,
     customer: row.customers,
     items: (row.booking_items ?? []).map((bi) => ({
       item_id: bi.items?.id ?? null,

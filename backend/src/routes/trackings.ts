@@ -169,7 +169,7 @@ router.get('/trackings', async (req, res) => {
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select(
-      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_key, rental_day_mode, duration_label_style, min_rental_days, max_rental_days, return_deadline_time, return_deadline_next_day, late_fee_mode, late_fee_per_hour, late_fee_per_hour_cap_enabled, discount_type_name, discount_percent, discount_amount, customer_id, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, bundle_id, bundle_instance_id, bundle_name, bundle_quantity, items(name)), booking_sale_items(sale_item_id, name, price_at_booking, quantity, subtotal), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_payments(id, amount, method, kind, note, paid_at, created_by_name), booking_status_history(status, changed_by_name, created_at, reason), booking_reschedules(action, old_start_date, old_end_date, new_start_date, new_end_date, reason, past_deadline, changed_by_name, created_at), booking_item_changes(old_items, new_items, old_total_price, new_total_price, reason, changed_by_name, created_at)',
+      'id, booking_number, start_date, end_date, status, total_price, dp_paid, created_at, picked_up_at, customer_photo_key, rental_day_mode, duration_label_style, min_rental_days, max_rental_days, return_deadline_time, return_deadline_next_day, late_fee_mode, late_fee_per_hour, late_fee_per_hour_cap_enabled, discount_type_name, discount_percent, discount_amount, payment_plan, late_fee_waived_amount, late_fee_waived_reason, late_fee_waived_by_name, late_fee_waived_at, customer_id, customers(name, phone, address), booking_items(item_id, quantity, price_at_booking, subtotal, day2_rate_at_booking, day3_rate_at_booking, day4_rate_at_booking, day5_rate_at_booking, extra_day_rate_at_booking, bundle_id, bundle_instance_id, bundle_name, bundle_quantity, items(name)), booking_sale_items(sale_item_id, name, price_at_booking, quantity, subtotal), deposits(id, type, amount, note, status), penalties(id, type, amount, description, item_id, items(name)), booking_payments(id, amount, method, kind, note, paid_at, created_by_name), booking_status_history(status, changed_by_name, created_at, reason), booking_reschedules(action, old_start_date, old_end_date, new_start_date, new_end_date, reason, past_deadline, changed_by_name, created_at), booking_item_changes(old_items, new_items, old_total_price, new_total_price, reason, changed_by_name, created_at)',
     )
     .in('status', ['dipesan', 'aktif'])
     .order('end_date');
@@ -357,6 +357,15 @@ router.get('/trackings', async (req, res) => {
       discount_percent: b.discount_percent,
       discount_amount: b.discount_amount,
       customer_id: b.customer_id,
+      // Rencana bayar (migration 077) -- snapshot, null = tidak diisi
+      // (regresi aman, tidak ada baris "Rencana bayar" di struk).
+      payment_plan: b.payment_plan,
+      // Bebaskan denda telat (migration 077) -- null = tidak pernah
+      // dibebaskan (regresi aman).
+      late_fee_waived_amount: b.late_fee_waived_amount,
+      late_fee_waived_reason: b.late_fee_waived_reason,
+      late_fee_waived_by_name: b.late_fee_waived_by_name,
+      late_fee_waived_at: b.late_fee_waived_at,
     };
   });
 
@@ -393,7 +402,8 @@ router.post('/bookings/:id/return', async (req, res) => {
   }
 
   const { id } = req.params;
-  const { late_fee_amount, extra_penalties, return_deposits, payment } = req.body ?? {};
+  const { late_fee_amount, extra_penalties, return_deposits, payment, late_fee_waived_amount, late_fee_waived_reason } =
+    req.body ?? {};
 
   const supabase = createRequestClient(req);
 
@@ -513,6 +523,28 @@ router.post('/bookings/:id/return', async (req, res) => {
       actorData.user.id,
       actorData.user.email ?? actorData.user.id,
     );
+  }
+
+  // Bebaskan denda telat (brief rencana-bayar-bebaskan-denda 24 Nov
+  // 2026, migration 077) -- audit snapshot, owner DAN karyawan boleh
+  // (aturan 044, pengembalian = menyelesaikan transaksi berjalan, TIDAK
+  // digerbang business_is_writable). Hanya ditulis kalau ada nominal
+  // yang dibebaskan (>0) -- front-end cuma mengirim field ini kalau
+  // staf menekan "Bebaskan denda", jadi amount>0 sudah cukup sebagai
+  // penanda (tidak ada baris penalties Rp0 yang dibuat untuk ini).
+  if (Number(late_fee_waived_amount) > 0) {
+    const waiverActorName = actorData.user
+      ? await resolveActorName(supabase, booking.business_id, actorData.user.id, actorData.user.email ?? actorData.user.id)
+      : 'Konfirmasi Pengembalian';
+    await supabase
+      .from('bookings')
+      .update({
+        late_fee_waived_amount: Number(late_fee_waived_amount),
+        late_fee_waived_reason: typeof late_fee_waived_reason === 'string' ? late_fee_waived_reason.trim() : null,
+        late_fee_waived_by_name: waiverActorName,
+        late_fee_waived_at: now.toISOString(),
+      })
+      .eq('id', id);
   }
 
   // "Lunasi sekarang" di ReturnModal (brief 17 Nov 2026) -- LANGKAH

@@ -56,6 +56,7 @@ import {
   generateWhatsAppReceipt,
   getWhatsAppShareUrl,
   groupReceiptItemsByBundle,
+  PAYMENT_PLAN_LABEL,
 } from '../utils/formatters';
 
 export type StatusFilter = 'all' | 'overdue' | 'active' | 'pending_pickup';
@@ -390,6 +391,9 @@ export function TrackingScreen({
                     <p className="text-xs text-[#6E6853]">
                       {formatDateIndo(r.start_date)} s/d {formatDateIndo(r.end_date)} · {formatIDR(r.estimated_price)}
                     </p>
+                    {r.payment_method && (
+                      <p className="text-xs text-[#6E6853]">Rencana bayar: {PAYMENT_PLAN_LABEL[r.payment_method]}</p>
+                    )}
                     {r.note && <p className="text-xs text-[#6E6853] italic">"{r.note}"</p>}
                   </div>
                   <button
@@ -548,6 +552,7 @@ export function TrackingScreen({
             ? 'refund'
             : 'bayar'
         }
+        defaultMethod={paymentTarget?.payment_plan ?? null}
         onSubmit={(body) => addPayment(paymentTarget!.id, body)}
       />
 
@@ -651,6 +656,7 @@ export function TrackingScreen({
               bundleQuantity: i.bundle_quantity,
             })),
             estimatedPrice: confirmPrefillTarget.estimated_price,
+            paymentPlan: confirmPrefillTarget.payment_method,
           }}
           onSaved={handleBookingSavedForRequest}
           writable={writable}
@@ -1118,6 +1124,14 @@ function BookingCard({
                   </div>
                 ))}
               </div>
+            )}
+            {/* Bebaskan denda telat (migration 077) -- hanya tampil kalau
+                pernah dibebaskan, TIDAK membuat baris penalties apa pun. */}
+            {b.late_fee_waived_amount != null && b.late_fee_waived_amount > 0 && (
+              <p className="text-[10px] text-[#A65C2A] italic">
+                Denda telat dibebaskan ({formatIDR(b.late_fee_waived_amount)})
+                {b.late_fee_waived_reason ? ` — ${b.late_fee_waived_reason}` : ''}
+              </p>
             )}
           </div>
         </div>

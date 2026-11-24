@@ -109,6 +109,13 @@ export type TrackingBooking = {
   discount_percent: number | null;
   discount_amount: number;
   customer_id: string;
+  // Rencana bayar (migration 077) -- snapshot, null = tidak diisi.
+  payment_plan: 'transfer' | 'qris' | 'cash' | null;
+  // Bebaskan denda telat (migration 077) -- null = tidak pernah dibebaskan.
+  late_fee_waived_amount: number | null;
+  late_fee_waived_reason: string | null;
+  late_fee_waived_by_name: string | null;
+  late_fee_waived_at: string | null;
 };
 
 type TrackingsResponse = {
@@ -174,6 +181,7 @@ export function buildReceiptData(
     discountTypeName: b.discount_type_name,
     discountPercent: b.discount_percent,
     discountAmount: b.discount_amount,
+    paymentPlan: b.payment_plan,
   };
 }
 
