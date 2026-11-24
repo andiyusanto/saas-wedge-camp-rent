@@ -11,11 +11,15 @@ import { SUBSCRIPTION_CONFIG, isFounderEligible, resolvePriceTier, type BillingP
 import { getWhatsAppShareUrl, formatIDR, formatDateIndo, todayStr, addDaysStr } from '../utils/formatters';
 import { REFERRAL_STATUS_LABEL } from '../lib/referralLabels';
 
-// Link ajakan (brief 24 Nov 2026) -- domain LANDING, bukan app.sewalog.com
-// (`?daftar=1` dibaca AuthScreen.tsx lewat App.tsx readForceDaftar(),
-// `?ref=` lewat readReferralCode() -- keduanya dibaca dari URL app yang
-// sama, landing cukup redirect/link langsung ke sini kalau perlu).
-const REFERRAL_LINK_BASE = 'https://sewalog.com/?daftar=1';
+// Link ajakan (brief 24 Nov 2026, diperbaiki setelah review koordinator
+// 24 Nov 2026) -- domain LANDING (bukan langsung app.sewalog.com), TANPA
+// `daftar=1` (parameter itu tidak bermakna apa pun di landing, cuma
+// dibaca AuthScreen.tsx lewat App.tsx readForceDaftar() di app). Landing
+// (sesi lain) meneruskan `ref` ke link daftarnya sendiri
+// (app.sewalog.com/?daftar=1&ref=KODE&src=...) -- App.tsx readReferralCode()
+// membaca `ref` dari URL app APA PUN parameter lain yang menyertainya,
+// jadi tidak perlu berubah di sisi ini.
+const REFERRAL_LINK_BASE = 'https://sewalog.com/';
 
 const PERIOD_LABEL: Record<BillingPeriod, string> = { monthly: 'Bulanan', yearly: 'Tahunan' };
 
@@ -255,7 +259,7 @@ export function LanggananScreen({
           <a
             href={getWhatsAppShareUrl(
               '',
-              `Halo! Aku pakai Sewalog buat kelola rental alat camping — gratis coba dulu. Daftar lewat link ini ya, kode ajakanku otomatis terisi: ${REFERRAL_LINK_BASE}&ref=${referralCode}`,
+              `Halo! Aku pakai Sewalog buat kelola rental alat camping — gratis coba dulu. Daftar lewat link ini ya, kode ajakanku otomatis terisi: ${REFERRAL_LINK_BASE}?ref=${referralCode}`,
             )}
             target="_blank"
             rel="noopener noreferrer"
