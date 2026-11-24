@@ -46,6 +46,9 @@ export type Business = {
   late_fee_mode: 'bertahap_12jam' | 'per_hari_24jam' | 'per_jam' | 'tanpa_denda';
   late_fee_per_hour: number | null;
   late_fee_per_hour_cap_enabled: boolean;
+  // Ajak Rental Lain / referral (migration 074) — dibuat otomatis saat
+  // business dibuat (trigger), tidak pernah null untuk business baru.
+  referral_code: string;
   created_at: string;
 };
 
@@ -92,7 +95,7 @@ export function useBusiness(session: Session | null) {
     // RLS (members_select_own_business) sudah membatasi ke baris milik user ini.
     const { data, error: queryError } = await supabase
       .from('businesses')
-      .select('id, name, owner_name, phone, address, regency_id, district_id, late_tolerance_hours, logo_url, rental_day_mode, duration_label_style, timezone, min_rental_days, max_rental_days, reschedule_deadline_days, return_deadline_time, return_deadline_next_day, late_fee_mode, late_fee_per_hour, late_fee_per_hour_cap_enabled, created_at')
+      .select('id, name, owner_name, phone, address, regency_id, district_id, late_tolerance_hours, logo_url, rental_day_mode, duration_label_style, timezone, min_rental_days, max_rental_days, reschedule_deadline_days, return_deadline_time, return_deadline_next_day, late_fee_mode, late_fee_per_hour, late_fee_per_hour_cap_enabled, referral_code, created_at')
       .maybeSingle();
 
     // PENTING: error di sini (mis. PGRST116 "multiple rows" kalau akun ini

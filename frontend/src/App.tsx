@@ -93,6 +93,42 @@ function readForceDaftar(): boolean {
   return new URLSearchParams(window.location.search).get('daftar') === '1';
 }
 
+// Kode ajakan (brief 24 Nov 2026, Ajak Rental Lain) -- parameter `ref`
+// dari link `https://sewalog.com/?daftar=1&ref=KODE` disimpan sementara
+// (localStorage, try/catch) supaya BERTAHAN dari landing sampai form
+// daftar diisi (bisa beberapa klik/reload di antaranya, mis. baca
+// halaman lain dulu) -- pola SAMA readInviteCode() di atas (TTL 24 jam,
+// alasan sama: device bisa dipakai gantian). Dipakai mengisi otomatis
+// field "Kode ajakan (opsional)" di OnboardingScreen.tsx, TETAP bisa
+// diubah manual oleh pendaftar.
+const REFERRAL_STORAGE_KEY = 'sewalog_pending_referral';
+const REFERRAL_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+function readReferralCode(): string | null {
+  const fromUrl = new URLSearchParams(window.location.search).get('ref');
+  if (fromUrl) {
+    try {
+      localStorage.setItem(REFERRAL_STORAGE_KEY, JSON.stringify({ code: fromUrl, storedAt: Date.now() }));
+    } catch {
+      // Private browsing/storage diblokir -- tidak fatal, field kode
+      // ajakan cuma tidak terisi otomatis, tetap bisa diketik manual.
+    }
+    return fromUrl;
+  }
+  try {
+    const raw = localStorage.getItem(REFERRAL_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { code: string; storedAt: number };
+    if (Date.now() - parsed.storedAt > REFERRAL_MAX_AGE_MS) {
+      localStorage.removeItem(REFERRAL_STORAGE_KEY);
+      return null;
+    }
+    return parsed.code;
+  } catch {
+    return null;
+  }
+}
+
 // Parameter sumber pendaftaran (mis. "landing-hero") -- disimpan ke metadata
 // signup Supabase (options.data.signup_source) buat metrik, BUKAN data
 // pribadi. Whitelist pendek: huruf/angka/strip/underscore saja, maks 40
@@ -320,6 +356,7 @@ function App() {
   const draftCount = business ? listBookingDrafts(business.id).length : 0;
 
   const [inviteCode, setInviteCode] = useState<string | null>(readInviteCode);
+  const [referralCode] = useState<string | null>(readReferralCode);
   const [forceDaftar] = useState<boolean>(readForceDaftar);
   const [signupSource] = useState<string | null>(readSignupSource);
   // Ditampilkan/tidak ditampilkan lagi untuk SESI INI setelah pengguna
@@ -411,7 +448,7 @@ function App() {
     if (isAppAdmin) {
       return <AdminOnlyView session={session} onLogout={() => { clearAllBookingDraftsOnLogout(); supabase?.auth.signOut(); }} />;
     }
-    return <OnboardingScreen onCreated={refreshBusiness} />;
+    return <OnboardingScreen referralCode={referralCode} onCreated={refreshBusiness} />;
   }
 
   // Brief 14 Nov 2026 (CLS SubscriptionBanner, Cloudflare Web Analytics)
@@ -568,6 +605,7 @@ function App() {
             businessId={business.id}
             businessName={business.name}
             businessCreatedAt={business.created_at}
+            referralCode={business.referral_code}
             subscription={subscription}
             isDemoAccount={isDemoAccount}
           />

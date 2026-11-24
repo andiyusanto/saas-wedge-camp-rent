@@ -1,13 +1,21 @@
 import { useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { CreditCard, MessageCircle, Receipt, QrCode, Info } from 'lucide-react';
+import { CreditCard, MessageCircle, Receipt, QrCode, Info, Users, Copy, Check } from 'lucide-react';
 import type { Subscription, SubscriptionStatus } from '../hooks/useSubscription';
 import { useSubscriptionPayments } from '../hooks/useSubscriptionPayments';
 import type { SubscriptionPayment } from '../hooks/useSubscriptionPayments';
 import { usePricing } from '../hooks/usePricing';
+import { useReferrals } from '../hooks/useReferrals';
 import { SubscriptionReceiptModal } from './SubscriptionReceiptModal';
 import { SUBSCRIPTION_CONFIG, isFounderEligible, resolvePriceTier, type BillingPeriod } from '../lib/subscriptionConfig';
 import { getWhatsAppShareUrl, formatIDR, formatDateIndo, todayStr, addDaysStr } from '../utils/formatters';
+import { REFERRAL_STATUS_LABEL } from '../lib/referralLabels';
+
+// Link ajakan (brief 24 Nov 2026) -- domain LANDING, bukan app.sewalog.com
+// (`?daftar=1` dibaca AuthScreen.tsx lewat App.tsx readForceDaftar(),
+// `?ref=` lewat readReferralCode() -- keduanya dibaca dari URL app yang
+// sama, landing cukup redirect/link langsung ke sini kalau perlu).
+const REFERRAL_LINK_BASE = 'https://sewalog.com/?daftar=1';
 
 const PERIOD_LABEL: Record<BillingPeriod, string> = { monthly: 'Bulanan', yearly: 'Tahunan' };
 
@@ -47,6 +55,7 @@ export function LanggananScreen({
   businessId,
   businessName,
   businessCreatedAt,
+  referralCode,
   subscription,
   isDemoAccount = false,
 }: {
@@ -54,6 +63,7 @@ export function LanggananScreen({
   businessId: string;
   businessName: string;
   businessCreatedAt: string;
+  referralCode: string;
   subscription: Subscription | null;
   // Akun demo publik (landing page) — review -c1: pengunjung tidak boleh
   // bisa tidak sengaja kirim WA konfirmasi-bayar ke nomor resmi Sewalog
@@ -61,8 +71,11 @@ export function LanggananScreen({
   isDemoAccount?: boolean;
 }) {
   const { payments, loading } = useSubscriptionPayments(businessId);
+  const { referrals, claimBonus } = useReferrals(businessId);
   const [receiptTarget, setReceiptTarget] = useState<SubscriptionPayment | null>(null);
   const [period, setPeriod] = useState<BillingPeriod>('monthly');
+  const [copied, setCopied] = useState(false);
+  const [claimingId, setClaimingId] = useState<string | null>(null);
 
   // Gate pengumuman harga -- SEKARANG ditentukan BACKEND (GET /api/pricing,
   // waktu server WIB), bukan dihitung di klien -- `pricing` null berarti
@@ -206,6 +219,92 @@ export function LanggananScreen({
           </p>
         )}
       </div>
+
+      {!isDemoAccount && (
+        <div className="bg-[#FBFAF4] p-4 sm:p-5 rounded-2xl border border-[#DBD5C1] shadow-xs space-y-3">
+          <h3 className="text-sm font-bold text-[#26302B] flex items-center gap-2">
+            <Users className="w-4 h-4 text-[#2B4739]" />
+            <span>Ajak Rental Lain</span>
+          </h3>
+          <p className="text-xs text-[#6E6853] leading-relaxed">
+            Bagikan kode ajakanmu ke rental lain — begitu mereka mulai berlangganan, kamu dapat bonus{' '}
+            <strong>+30 hari</strong> masa aktif gratis.
+          </p>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 px-3 py-2.5 rounded-xl bg-[#F1EEE2] border border-[#DBD5C1] font-mono font-bold text-sm text-[#26302B] tracking-wider text-center">
+              {referralCode}
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(referralCode);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                } catch {
+                  // Clipboard API tidak tersedia (http non-secure/browser
+                  // lama) — diamkan, kode tetap kelihatan buat disalin manual.
+                }
+              }}
+              className="shrink-0 p-2.5 rounded-xl border border-[#DBD5C1] hover:bg-[#F1EEE2] transition"
+              title="Salin kode"
+            >
+              {copied ? <Check className="w-4 h-4 text-[#2B4739]" /> : <Copy className="w-4 h-4 text-[#6E6853]" />}
+            </button>
+          </div>
+          <a
+            href={getWhatsAppShareUrl(
+              '',
+              `Halo! Aku pakai Sewalog buat kelola rental alat camping — gratis coba dulu. Daftar lewat link ini ya, kode ajakanku otomatis terisi: ${REFERRAL_LINK_BASE}&ref=${referralCode}`,
+            )}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-bold text-sm shadow-sm transition active:scale-95"
+          >
+            <MessageCircle className="w-4 h-4" />
+            Bagikan ke WA
+          </a>
+
+          {referrals.length > 0 && (
+            <div className="pt-2 border-t border-[#E6E1D2] space-y-2">
+              <p className="text-xs font-bold text-[#26302B]">Daftar Ajakan</p>
+              {referrals.every((r) => r.status === 'terdaftar') && (
+                <p className="text-[11px] text-[#6E6853]">
+                  Bonus muncul setelah rental yang kamu ajak mulai berlangganan.
+                </p>
+              )}
+              {referrals.map((r) => (
+                <div
+                  key={r.id}
+                  className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-[#F1EEE2] border border-[#DBD5C1] text-xs"
+                >
+                  <div className="min-w-0">
+                    <p className="font-semibold text-[#26302B] truncate">{r.referred_business_name}</p>
+                    <p className="text-[#6E6853]">
+                      {REFERRAL_STATUS_LABEL[r.status] ?? r.status}
+                      {r.status === 'diklaim' && r.claimed_at ? ` · ${formatDateIndo(r.claimed_at.slice(0, 10))}` : ''}
+                    </p>
+                  </div>
+                  {r.status === 'siap_diklaim' && (
+                    <button
+                      type="button"
+                      disabled={claimingId === r.id}
+                      onClick={async () => {
+                        setClaimingId(r.id);
+                        await claimBonus(r.id);
+                        setClaimingId(null);
+                      }}
+                      className="shrink-0 px-3 py-1.5 rounded-lg bg-[#2B4739] hover:bg-[#1E3429] text-white font-semibold text-[11px] transition disabled:opacity-60"
+                    >
+                      {claimingId === r.id ? 'Memproses...' : 'Klaim +30 hari'}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="bg-[#FBFAF4] p-4 sm:p-5 rounded-2xl border border-[#DBD5C1] shadow-xs space-y-3">
         <h3 className="text-sm font-bold text-[#26302B] flex items-center gap-2">
