@@ -1,12 +1,19 @@
 import { useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { Search, ShieldCheck, Wallet, Star } from 'lucide-react';
+import { Search, ShieldCheck, Wallet, Star, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { useAdminBusinesses } from '../hooks/useAdminBusinesses';
 import type { AdminBusinessRow } from '../hooks/useAdminBusinesses';
+import { useAdminConfig } from '../hooks/useAdminConfig';
 import { AdminPaymentModal } from './AdminPaymentModal';
-import { formatDateIndo } from '../utils/formatters';
+import { formatDateIndo, formatIDR } from '../utils/formatters';
 import { FOUNDER_CUTOFF_ISO, isFounderEligible } from '../lib/subscriptionConfig';
+import { buildAdminBusinessesCsv, downloadCsv } from '../utils/adminCsv';
+
+function currentMonthValue(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
 
 // Paket final (keputusan Andi 3 Nov 2026) — ganti nama lama "Trial"/
 // "Dasar" yang tidak pernah jadi harga sungguhan (lihat subscriptionConfig.ts:
@@ -58,12 +65,23 @@ const STATUS_CLASS: Record<AdminBusinessRow['status'], string> = {
 // App.tsx), RLS lintas-business sendiri ditegakkan di RPC
 // admin_list_businesses (migration 045), bukan di sini.
 export function AdminScreen({ session }: { session: Session }) {
-  const { rows, loading, error, search } = useAdminBusinesses();
+  const { rows, loading, error, search, totalCount, page, pageSize, goToPage } = useAdminBusinesses();
+  const { showTxnValue } = useAdminConfig(session);
   const [query, setQuery] = useState('');
+  // Bulan DAFTAR (filter businesses.created_at) dan bulan TRANSAKSI
+  // (kolom Transaksi/Nilai transaksi) SENGAJA terpisah (brief) -- bulan
+  // transaksi default bulan berjalan, bulan daftar default kosong
+  // (tanpa filter, tampilkan semua).
+  const [signupMonth, setSignupMonth] = useState('');
+  const [metricsMonth, setMetricsMonth] = useState(currentMonthValue());
   const [paymentTarget, setPaymentTarget] = useState<AdminBusinessRow | null>(null);
   const [planSavingId, setPlanSavingId] = useState<string | null>(null);
   const [founderSavingId, setFounderSavingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  function applyFilters() {
+    search(query, { signupMonth: signupMonth || null, metricsMonth: metricsMonth || null, page: 0 });
+  }
 
   async function handlePlanChange(businessId: string, plan: string) {
     if (!supabase) return;
@@ -147,6 +165,7 @@ export function AdminScreen({ session }: { session: Session }) {
         </h2>
         <p className="text-xs text-[#6E6853]">
           Cari business lintas-vendor, catat pembayaran langganan, dan ubah paket. Alat ini cuma kelihatan untuk akun admin.
+          Akun demo tidak ditampilkan.
         </p>
 
         <div className="flex gap-2">
@@ -156,16 +175,61 @@ export function AdminScreen({ session }: { session: Session }) {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && search(query)}
+              onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
               placeholder="Cari nama usaha atau email pemilik..."
               className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white border border-[#DBD5C1] text-sm"
             />
           </div>
           <button
-            onClick={() => search(query)}
+            onClick={applyFilters}
             className="px-4 py-2.5 rounded-xl bg-[#2B4739] hover:bg-[#1E3429] text-white font-semibold text-sm shadow-sm transition"
           >
             Cari
+          </button>
+        </div>
+
+        {/* Dua filter bulan TERPISAH (brief): bulan DAFTAR (businesses.
+            created_at) vs bulan TRANSAKSI (kolom Transaksi/Nilai
+            transaksi) -- tidak saling memengaruhi. */}
+        <div className="flex gap-2 flex-wrap items-end">
+          <label className="flex flex-col gap-1 text-[11px] text-[#6E6853]">
+            Bulan daftar
+            <input
+              type="month"
+              value={signupMonth}
+              onChange={(e) => setSignupMonth(e.target.value)}
+              onBlur={applyFilters}
+              className="px-2.5 py-2 rounded-lg bg-white border border-[#DBD5C1] text-xs"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-[11px] text-[#6E6853]">
+            Bulan transaksi
+            <input
+              type="month"
+              value={metricsMonth}
+              onChange={(e) => setMetricsMonth(e.target.value)}
+              onBlur={applyFilters}
+              className="px-2.5 py-2 rounded-lg bg-white border border-[#DBD5C1] text-xs"
+            />
+          </label>
+          {signupMonth && (
+            <button
+              onClick={() => {
+                setSignupMonth('');
+                search(query, { signupMonth: null, metricsMonth: metricsMonth || null, page: 0 });
+              }}
+              className="text-[11px] font-semibold text-[#6E6853] underline underline-offset-2"
+            >
+              Hapus filter bulan daftar
+            </button>
+          )}
+          <button
+            onClick={() => downloadCsv(buildAdminBusinessesCsv(rows, showTxnValue), `rental-admin-${metricsMonth || 'semua'}.csv`)}
+            disabled={rows.length === 0}
+            className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#DBD5C1] text-[#26302B] font-semibold text-xs hover:bg-[#F1EEE2] transition disabled:opacity-50"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Unduh CSV
           </button>
         </div>
 
@@ -206,6 +270,16 @@ export function AdminScreen({ session }: { session: Session }) {
               <p className="text-xs text-[#6E6853]">
                 Aktif sampai {row.active_until ? formatDateIndo(row.active_until) : '-'} · sejak {formatDateIndo(row.signed_up_at.slice(0, 10))}
               </p>
+              {/* Metrik per rental (migration 076, brief admin-metrik-rental) --
+                  "Nilai transaksi" ikut gerbang showTxnValue, konsisten CSV. */}
+              <p className="text-xs text-[#6E6853]">
+                {row.active_items_count} alat aktif · {row.txn_count_month} transaksi bulan ini
+                {showTxnValue && ` (${formatIDR(row.txn_value_month)})`}
+                {row.last_active_date && ` · terakhir aktif ${formatDateIndo(row.last_active_date)}`}
+              </p>
+              {row.referred_by_name && (
+                <p className="text-[11px] text-[#6E6853]">Diajak oleh: {row.referred_by_name}</p>
+              )}
               {/* Harga Pendiri (migration 060) — badge eligibility + kontrol
                   override manual admin, dan tanggal masa berlaku kalau sudah
                   pernah bayar (null = belum, masih saran pembayaran pertama). */}
@@ -302,6 +376,28 @@ export function AdminScreen({ session }: { session: Session }) {
           </div>
         ))}
       </div>
+
+      {totalCount > pageSize && (
+        <div className="flex items-center justify-center gap-3 text-xs text-[#6E6853]">
+          <button
+            disabled={page === 0 || loading}
+            onClick={() => goToPage(page - 1)}
+            className="p-2 rounded-lg border border-[#DBD5C1] disabled:opacity-40"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <span>
+            Halaman {page + 1} dari {Math.ceil(totalCount / pageSize)} ({totalCount} business)
+          </span>
+          <button
+            disabled={(page + 1) * pageSize >= totalCount || loading}
+            onClick={() => goToPage(page + 1)}
+            className="p-2 rounded-lg border border-[#DBD5C1] disabled:opacity-40"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {paymentTarget && (
         <AdminPaymentModal

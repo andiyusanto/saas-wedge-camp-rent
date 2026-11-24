@@ -15,6 +15,7 @@ import bookingRequestsRouter from './routes/bookingRequests.js';
 import pushRouter from './routes/push.js';
 import pricingRouter from './routes/pricing.js';
 import referralsRouter from './routes/referrals.js';
+import adminConfigRouter from './routes/adminConfig.js';
 
 // Node global fetch (dipakai @supabase/supabase-js) nyimpen koneksi
 // keep-alive lebih lama dari idle timeout sisi Supabase/Cloudflare — begitu
@@ -53,6 +54,7 @@ app.use('/api', bookingRequestsRouter);
 app.use('/api', pushRouter);
 app.use('/api', pricingRouter);
 app.use('/api', referralsRouter);
+app.use('/api', adminConfigRouter);
 // Bukan di bawah /api — ini halaman HTML publik (/toko/{slug}), bukan
 // endpoint JSON, lihat komentar arsitektur di routes/etalase.ts.
 app.use(etalaseRouter);
