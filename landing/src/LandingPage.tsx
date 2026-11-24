@@ -147,8 +147,55 @@ const APP_URL = import.meta.env.VITE_APP_URL || 'http://localhost:5173';
 
 // Buka form daftar di web app langsung (param dibaca app, commit 760bcea).
 // `src` menandai posisi tombol di landing untuk tracking, huruf/angka/strip saja.
-function daftarUrl(src: string): string {
-  return `${APP_URL}/?daftar=1&src=${src}`;
+// `ref` (opsional) meneruskan kode ajakan program Ajak Rental Lain ke app.
+function daftarUrl(src: string, ref: string | null): string {
+  return `${APP_URL}/?daftar=1&src=${src}${ref ? `&ref=${ref}` : ''}`;
+}
+
+// Kode ajakan program "Ajak Rental Lain" — ?ref=KODE di URL landing, disimpan
+// di localStorage (bukan cuma session) supaya tetap terbawa walau pengunjung
+// pindah ke /blog/ lalu kembali lain hari, kedaluwarsa 30 hari. Format ringan
+// huruf/angka 4-16 karakter, dinormalisasi ke uppercase — validasi NAMA rental
+// sungguhan sengaja tidak dilakukan di landing (butuh panggilan API ke app).
+const REFERRAL_STORAGE_KEY = 'sewalog_referral_v1';
+const REFERRAL_CODE_PATTERN = /^[A-Z0-9]{4,16}$/;
+const REFERRAL_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+function readStoredReferralCode(): string | null {
+  try {
+    const raw = window.localStorage.getItem(REFERRAL_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { code?: string; expiresAt?: number };
+    if (!parsed.code || !parsed.expiresAt || Date.now() > parsed.expiresAt) {
+      window.localStorage.removeItem(REFERRAL_STORAGE_KEY);
+      return null;
+    }
+    return parsed.code;
+  } catch {
+    return null;
+  }
+}
+
+// Dipanggil sekali saat halaman dimuat — baca ?ref= dari URL kalau ada dan
+// valid, simpan dengan kedaluwarsa baru; kalau tidak ada/tidak valid, pakai
+// kode yang sudah tersimpan dari kunjungan sebelumnya (kalau belum kedaluwarsa).
+function captureReferralCode(): string | null {
+  try {
+    const raw = new URLSearchParams(window.location.search).get('ref');
+    if (raw) {
+      const code = raw.trim().toUpperCase();
+      if (REFERRAL_CODE_PATTERN.test(code)) {
+        window.localStorage.setItem(
+          REFERRAL_STORAGE_KEY,
+          JSON.stringify({ code, expiresAt: Date.now() + REFERRAL_TTL_MS }),
+        );
+        return code;
+      }
+    }
+    return readStoredReferralCode();
+  } catch {
+    return null;
+  }
 }
 
 // Klip video (demo utama + klip fitur pendek) — MP4 + poster JPG di R2
@@ -589,6 +636,10 @@ function useScrollReveal() {
 
 export function LandingPage() {
   useScrollReveal();
+  const [referralCode, setReferralCode] = useState<string | null>(null);
+  useEffect(() => {
+    setReferralCode(captureReferralCode());
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#F1EEE2] text-[#26302B] flex flex-col">
@@ -607,7 +658,7 @@ export function LandingPage() {
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             <a
-              href={daftarUrl('landing-header')}
+              href={daftarUrl('landing-header', referralCode)}
               className="inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 active:scale-95 transition text-white text-sm font-semibold px-3 py-2 rounded-xl border border-white/25"
             >
               Daftar
@@ -637,7 +688,7 @@ export function LandingPage() {
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <a
-                href={daftarUrl('landing-hero')}
+                href={daftarUrl('landing-hero', referralCode)}
                 className="inline-flex items-center justify-center gap-2 bg-[#A65C2A] hover:bg-[#9E5524] active:scale-95 transition text-white font-semibold px-6 py-3.5 rounded-xl shadow-md"
               >
                 Daftar Gratis
@@ -653,6 +704,11 @@ export function LandingPage() {
               </a>
             </div>
             <p className="text-xs text-[#6E6853] mt-3">Gratis sampai 31 Desember 2026, tanpa kartu kredit.</p>
+            {referralCode && (
+              <p className="text-xs text-[#2B4739] font-medium mt-1.5">
+                Kamu diajak rental lain — kode {referralCode} otomatis terpakai saat daftar.
+              </p>
+            )}
           </div>
           <div className="mt-12 lg:mt-0 lg:flex-1 flex justify-center">
             <HeroPreview />
@@ -818,7 +874,7 @@ export function LandingPage() {
                   <p className="text-sm text-[#6E6853]">{step.desc}</p>
                   {i === 2 && (
                     <a
-                      href={daftarUrl('landing-caramulai')}
+                      href={daftarUrl('landing-caramulai', referralCode)}
                       className="inline-block mt-1.5 text-sm font-semibold text-[#2B4739] hover:underline"
                     >
                       Daftar sekarang →
@@ -840,7 +896,7 @@ export function LandingPage() {
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-3">
               <a
-                href={daftarUrl('landing-coba')}
+                href={daftarUrl('landing-coba', referralCode)}
                 className="inline-flex items-center justify-center gap-2 bg-[#A65C2A] hover:bg-[#9E5524] active:scale-95 transition text-white font-semibold px-5 py-2.5 rounded-xl shadow-xs"
               >
                 Daftar Gratis
@@ -876,7 +932,7 @@ export function LandingPage() {
             </a>
             <p className="text-sm text-[#6E6853] mt-4">
               atau{' '}
-              <a href={daftarUrl('landing-penutup')} className="font-semibold text-[#2B4739] hover:underline">
+              <a href={daftarUrl('landing-penutup', referralCode)} className="font-semibold text-[#2B4739] hover:underline">
                 langsung daftar di sini
               </a>
             </p>
