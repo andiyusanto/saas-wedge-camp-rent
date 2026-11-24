@@ -948,6 +948,27 @@ export function GuideScreen({ businessName }: { businessName: string }) {
         </Note>
       </Section>
       <Section id="g-kelola-usaha" num="7" title="Kelola Usaha" kicker="Info usaha dan kelola staf, digabung jadi satu tab karena sama-sama urusan admin sesekali, bukan dipakai harian.">
+        <p className="font-bold text-xs">Skema Sewa Kamu</p>
+        <p>
+          Kartu PALING ATAS di tab ini (owner-only) — pilih salah satu dari 3 cara simpel: <Ui>Per hari</Ui>, <Ui>Per
+          malam</Ui>, atau <Ui>Paket N hari</Ui> (N 2-5, dengan pilihan "Maksimal tanpa batas" atau "Hanya paket, N
+          hari"). Pilihan ini cuma meringkas kombinasi pengaturan <Ui>Cara Hitung Durasi Sewa</Ui>, <Ui>Label Lama
+          Sewa</Ui>, dan <Ui>Paket Minimal/Maksimal Hari Sewa</Ui> di bawah (lihat masing-masing di bagian ini) —
+          kalau kombinasi usahamu sekarang tidak cocok dengan salah satu dari ketiganya, kartu menampilkan "Kustom"
+          dan tetap bisa diatur manual lewat pengaturan di bawah seperti biasa. Ada kotak <Ui>Yang akan diatur</Ui>
+          sebelum Simpan supaya jelas apa yang berubah.
+        </p>
+        <p>
+          Memilih <Ui>Paket N hari</Ui> menampilkan kartu tambahan opsional <Ui>Terapkan harga paket ke semua alat?</Ui>{' '}
+          — kalau diisi, kamu akan ditanya dulu arti harga di Katalog sekarang ("Harga katalog = harga 1 paket (N
+          hari)" atau "Harga katalog = harga per hari, harga paket = harga × N") supaya tidak salah kali/bagi, lalu
+          isi persentase <Ui>Tarif lewat paket</Ui> (default 50%, dibulatkan ke Rp500 terdekat) — pratinjau menampilkan
+          harga paket lama → baru PER ALAT sebelum ditekan Terapkan. Paket dengan harga <Ui>sendiri</Ui> (bukan ikut
+          harga alat, lihat Paket Alat di <SectionLink id="g-katalog">bagian 5</SectionLink>) dilewati — tetap
+          harus diatur manual lewat Katalog. Penerapannya atomik (satu per satu alat, atau tidak sama sekali) — kalau
+          ada alat yang gagal, tidak ada satu pun harga yang berubah dan aplikasi memberi tahu alat mana yang gagal.
+          Harga tiap alat tetap bisa diubah lagi satu-satu di Katalog &amp; Stok Alat sesudahnya.
+        </p>
         <p>
           Bagian <Ui>Info Usaha</Ui> di paling atas tab ini untuk ubah nama usaha, nama pemilik, no. telepon, alamat
           usaha, dan toleransi telat (lihat <SectionLink id="g-setup">bagian 1</SectionLink>). Alamat di sini ikut tercetak otomatis di struk WhatsApp dan
@@ -977,6 +998,16 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           baru (koreksi ke arah benar, selisih 1-2 jam), tapi denda yang sudah tercatat tidak berubah. Rental lama
           tetap WIB sampai pemiliknya sendiri menggantinya.
         </Note>
+        <p className="font-bold text-xs mt-2">Pengaturan Lanjutan</p>
+        <p>
+          <Ui>Toleransi telat</Ui>, <Ui>Batas Jam Kembali</Ui>, <Ui>Cara Hitung Denda Telat</Ui>, <Ui>Paket
+          Minimal/Maksimal Hari Sewa</Ui>, dan <Ui>Ubah Jadwal paling lambat H-berapa</Ui> (<SectionLink id="g-transaksi-aktif">bagian 3</SectionLink>) dikumpulkan di
+          bawah kartu <Ui>Pengaturan Lanjutan</Ui> yang bisa dilipat/dibuka (tombol di bawah Alamat usaha) — jarang
+          disentuh sehari-hari, jadi tersembunyi dulu supaya tidak membingungkan saat pertama kali buka Kelola Usaha.
+          <Ui>Cara Hitung Durasi Sewa</Ui> dan <Ui>Label Lama Sewa</Ui> tetap tampil langsung di luar kartu ini (lebih
+          sering relevan, dan sudah terwakili oleh kartu <Ui>Skema Sewa Kamu</Ui> di atas). Status terbuka/tertutup
+          diingat per perangkat (default TERTUTUP di perangkat baru), tidak memengaruhi perangkat/staf lain.
+        </p>
         <p className="font-bold text-xs mt-2">Batas Jam Kembali</p>
         <p>
           Di bawah Toleransi telat — pilih <Ui>Ikuti jam ambil</Ui> (default, sama seperti sekarang) atau{' '}
