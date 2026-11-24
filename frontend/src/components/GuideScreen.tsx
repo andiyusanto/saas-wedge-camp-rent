@@ -168,6 +168,8 @@ const TOC: { id: string; num: string; title: string }[] = [
   // sekarang dipakai Langganan supaya urutan Panduan sinkron dengan Navbar.
   { id: 'g-toko', num: '8d', title: 'Toko Online' },
   { id: 'g-langganan', num: '9', title: 'Langganan' },
+  { id: 'g-langganan-referral', num: '9b', title: 'Ajak Rental Lain' },
+  { id: 'g-langganan-ulasan', num: '9c', title: 'Ulasan untuk Sewalog' },
   { id: 'g-catatan', num: 'A', title: 'Catatan Penting' },
 ];
 
@@ -1342,10 +1344,11 @@ export function GuideScreen({ businessName }: { businessName: string }) {
       )}
 
       {/* TODO 4 Des 2026: update bagian ini begitu harga berlangganan resmi diumumkan -- JANGAN diubah sebelum tanggal itu. */}
-      <Section id="g-langganan" num="9" title="Langganan" kicker="Status masa aktif usahamu dan cara konfirmasi pembayaran — belum dikenakan biaya sampai 31 Desember 2026.">
+      <Section id="g-langganan" num="9" title="Langganan" kicker="Status masa aktif usahamu, tingkat harga, dan cara konfirmasi pembayaran — belum dikenakan biaya sampai 31 Desember 2026.">
         <p>
-          Sewalog <strong>gratis sampai 31 Desember 2026</strong>. Harga setelahnya belum diputuskan — akan
-          diumumkan sebelum tanggal itu, jadi tab ini belum menampilkan angka apa pun untuk saat ini.
+          Sewalog <strong>gratis sampai 31 Desember 2026</strong>. Harga sesudahnya baru diumumkan mulai 20 Desember
+          2026 — sebelum tanggal itu, tab ini belum menampilkan angka apa pun untuk usaha yang belum pernah
+          berlangganan.
         </p>
         <FieldsTable
           rows={[
@@ -1365,7 +1368,75 @@ export function GuideScreen({ businessName }: { businessName: string }) {
           Bayar via WA</Ui> di tab ini membuka chat ke Sewalog. Info rekening pembayaran (kalau sudah tersedia) dan
           riwayat pembayaran yang sudah tercatat juga ada di tab ini.
         </p>
+        <p>
+          Ada tiga tingkat harga: <strong>Pendiri</strong> (untuk yang gabung atau ikut wawancara paling lambat 31
+          Desember 2026), <strong>Perkenalan</strong> (untuk yang mulai berlangganan paling lambat 31 Desember 2027),
+          dan <strong>Normal</strong> (sesudahnya). Tingkat Pendiri lanjut ke harga Perkenalan (bukan langsung Normal)
+          setelah 12 bulan pertama, dan kalau langganan tidak pernah terputus lebih dari masa tenggang, harga itu
+          berlaku <strong>selamanya</strong> — terputus dan berlangganan lagi membuatnya mengikuti jendela Perkenalan
+          yang masih berlaku seperti pelanggan baru. Angka pastinya tampil di tab ini begitu diumumkan.
+        </p>
         <Note>Sama seperti Kelola Usaha, tab ini cuma terlihat dan bisa diakses oleh pemilik.</Note>
+      </Section>
+
+      <Section
+        id="g-langganan-referral"
+        num="9b"
+        title="Ajak Rental Lain"
+        kicker="Bagikan kode ajakanmu — begitu rental lain mulai berlangganan, kamu dapat bonus +30 hari masa aktif gratis."
+      >
+        <p>
+          Tiap usaha punya <strong>kode ajakan</strong> sendiri (dibuat otomatis dari nama usaha), ditampilkan di tab{' '}
+          <Ui>Langganan</Ui> lengkap dengan tombol <Ui>Salin</Ui> dan <Ui>Bagikan ke WA</Ui> — pesannya sudah berisi
+          link daftar dengan kode ajakanmu terisi otomatis.
+        </p>
+        <Steps
+          items={[
+            <>Bagikan kode atau link ke pemilik rental lain yang belum pakai Sewalog.</>,
+            <>Mereka mendaftar lewat link itu (atau mengetik kode manual di form daftar) — kode cuma bisa dipakai SAAT
+              mendaftar, tidak bisa ditambahkan belakangan.</>,
+            <>Begitu rental yang diajak <strong>membayar langganan untuk pertama kalinya</strong>, ajakan itu
+              berubah jadi <strong>&quot;Bonus siap diklaim&quot;</strong> di daftar ajakanmu.</>,
+            <>Tekan <Ui>Klaim +30 hari</Ui> — masa aktif usahamu langsung bertambah 30 hari. Kalau langganan sedang
+              terkunci, klaim langsung mengaktifkannya lagi.</>,
+          ]}
+        />
+        <p>
+          Rental yang diajak juga dapat <strong>+30 hari otomatis</strong> saat pembayaran pertamanya berhasil — tidak
+          perlu klaim manual di sisi mereka. Bonus <strong>tidak hangus</strong> dan tidak ada batas jumlah ajakan
+          per tahun.
+        </p>
+        <Note>
+          Satu usaha hanya bisa diajak satu kali, dan tidak bisa mengajak/diajak dirinya sendiri. Daftar ajakan di
+          tab ini hanya menampilkan nama rental yang kamu ajak, bukan data lain milik mereka.
+        </Note>
+      </Section>
+
+      <Section
+        id="g-langganan-ulasan"
+        num="9c"
+        title="Ulasan untuk Sewalog"
+        kicker="Ceritakan pengalaman pakai Sewalog — boleh dipakai di website/Instagram Sewalog sesuai izin yang kamu pilih."
+      >
+        <p>
+          Kartu <Ui>Ulasan untuk Sewalog</Ui> di tab <Ui>Langganan</Ui> punya kotak teks (maks 1.000 karakter) dan
+          bintang 1–5 (opsional) — bisa diubah kapan saja lewat tombol <Ui>Simpan Ulasan</Ui>.
+        </p>
+        <p>Setiap kali menyimpan, kamu wajib memilih salah satu izin publikasi:</p>
+        <FieldsTable
+          rows={[
+            { label: 'Dengan nama', desc: 'Ulasan boleh ditampilkan dengan nama rental dan kota kamu.' },
+            {
+              label: 'Disamarkan',
+              desc: 'Ulasan boleh ditampilkan, tapi nama rental disamarkan — mis. "Rental alat camping di {kota}".',
+            },
+            { label: 'Internal saja', desc: 'Ulasan tidak dipublikasikan, hanya dibaca tim Sewalog.' },
+          ]}
+        />
+        <Note>
+          Izin bisa diubah atau ditarik kapan saja. Kalau ditarik, ulasan tidak dipakai di konten baru dan dihapus
+          dari website dalam ±7 hari.
+        </Note>
       </Section>
 
       <Section id="g-catatan" num="A." title="Catatan Penting">
